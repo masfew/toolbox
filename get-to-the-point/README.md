@@ -1,6 +1,6 @@
 # Get to the Point
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 1.0.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -148,6 +148,7 @@ This removes the style from `~/.claude/output-styles`, and `~/.claude/tools/get-
 | A change to `get-to-the-point.md`, or a `git pull`, doesn't show up | The style is a copy, not a link (Windows without Developer Mode) | Rerun `python install.py`. Turning on Windows Developer Mode and rerunning makes it a link |
 | **FAILED: ... settings.json isn't valid JSON** | `~/.claude/settings.json` has a syntax error | Fix the file (the message says where), then rerun. Nothing was changed |
 | `... exists but isn't this tool` | Something else is already at `~/.claude/tools/get-to-the-point` | Move it elsewhere, then rerun |
+| `couldn't delete ~/.claude/tools/get-to-the-point` after `--remove` | A terminal or another program was open in that folder, so it was emptied but not deleted | Nothing else is left behind. Close it; the next `python install.py` or `--remove` deletes the empty folder |
 | **FAILED: this is the installed copy** | `install.py` was run from `~/.claude/tools/get-to-the-point` | Run it from the folder you cloned or unzipped. From the installed copy, only `--remove` works |
 | `left outputStyle as "..."` after `--remove` | You'd switched to another style since the install | Nothing to do: your choice is kept |
 
@@ -157,4 +158,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.0.1: A `--remove` run from the installed copy, in a terminal open in that folder, could leave `~/.claude/tools/get-to-the-point` behind empty on Windows, and the next install then stopped with "exists but isn't this tool". Installs and `--remove` now delete that empty folder.
 - 1.0.0: First public version. Installs through `~/.claude/tools/get-to-the-point` with an install record, adds `--copy` and `--link`, and `--remove` puts back the output style you had before.
