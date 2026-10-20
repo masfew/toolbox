@@ -88,6 +88,7 @@ def backup(path):
 # --- 1. Dependencies -------------------------------------------------------
 
 def check_dependencies():
+    # differs from _template: the tool needs no programs, so there's no PROGRAMS list to check
     if sys.version_info < MIN_PYTHON:
         need = ".".join(map(str, MIN_PYTHON))
         fail(f"Python {need} or newer is needed (this is {sys.version.split()[0]}). "
@@ -279,6 +280,7 @@ def is_style_copy(path):
 
 
 def install_file(rel_src, rel_dst):
+    # differs from _template: an older copy of this style (is_style_copy) is replaced without a backup
     """Links (or copies) STABLE_DIR/rel_src to ~/.claude/rel_dst.
     Returns "link" or "copy", and the parent folders it had to create."""
     src, dst = STABLE_DIR / rel_src, CLAUDE_DIR / rel_dst
@@ -301,12 +303,14 @@ def install_file(rel_src, rel_dst):
         shutil.copy2(src, dst)
     print(f"copied {src} -> {dst}")
     print("  The system didn't allow a link, so rerun this script after each update.")
-    if os.name == "nt":
+    if os.name == "nt" and src.is_file():
+        # Folders use junctions, which need no Developer Mode; file links do.
         print("  Turning on Windows Developer Mode and rerunning makes it a link.")
     return "copy", made
 
 
 def remove_file(rel_dst, rel_src, old_source=None, made_dirs=()):
+    # differs from _template: also removes an older copy of this style (is_style_copy)
     """Removes ~/.claude/rel_dst if it's this tool's link or copy of rel_src,
     then the parent folders the install created for it, if they're empty."""
     dst = CLAUDE_DIR / rel_dst
@@ -407,6 +411,7 @@ def read_record():
 
 
 def write_record(mode, files, previous, settings_created):
+    # differs from _template: records the output style it replaced instead of hooks
     record = {
         "format": RECORD_FORMAT,
         "tool": TOOL_NAME,
@@ -422,6 +427,7 @@ def write_record(mode, files, previous, settings_created):
 # --- Install and remove ----------------------------------------------------
 
 def install(mode):
+    # differs from _template: sets the output style instead of adding hooks and a config file
     if not is_link(STABLE_DIR) and same_path(os.path.realpath(STABLE_DIR), TOOL_DIR):
         fail(f"this is the installed copy at {STABLE_DIR}. Run install.py from the tool's own "
              "folder (a clone or an unzipped release) instead. To uninstall, run it here with --remove.")
@@ -448,6 +454,7 @@ def install(mode):
 
 
 def remove():
+    # differs from _template: restores the earlier output style instead of removing hooks
     os.chdir(Path.home())  # so this script's own folder can be deleted if it's the installed copy
     record = read_record()
     if record:
