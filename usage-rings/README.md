@@ -1,6 +1,6 @@
 # Usage Rings
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 2.0.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -51,7 +51,7 @@ There are two ways to install it. Both install the mod for your user, so it load
 
 ### From GitHub (no clone)
 
-Run the [Quick Start](#quick-start) command. It adds this repo as a plugin marketplace named `ai-toolkit` (a list of plugins Claude Code can install from), then installs `usage-rings@toolbox` from it. In the `/plugin` form, Claude Code asks you to confirm adding the marketplace and to pick a scope: choose user.
+Run the [Quick Start](#quick-start) command. It adds this repo as a plugin marketplace named `toolbox` (a list of plugins Claude Code can install from), then installs `usage-rings@toolbox` from it. In the `/plugin` form, Claude Code asks you to confirm adding the marketplace and to pick a scope: choose user.
 
 ### From a clone of the repo
 
@@ -66,12 +66,12 @@ Use this to install the exact version you have checked out, or to change the mod
 2. Run the installer from the `usage-rings` folder (PowerShell, or bash with `python3` on macOS and Linux):
 
    ```bash
-   cd ai-toolkit/usage-rings
+   cd toolbox/usage-rings
    python install.py
    ```
 
    It's safe to rerun, and it:
-   - adds the clone as the `ai-toolkit` marketplace, unless you already have a marketplace of that name (for example from the GitHub install, which it then uses as it is). If the clone has moved since an earlier install, it replaces the old entry.
+   - adds the clone as the `toolbox` marketplace, unless you already have a marketplace of that name (for example from the GitHub install, which it then uses as it is). If the clone has moved since an earlier install, it replaces the old entry.
    - refreshes the marketplace, then installs `usage-rings@toolbox` at the user scope, or updates it if it's already installed.
 
    It ends with **Setup complete**, or with **FAILED:** and what to do. Fix that and rerun.
@@ -119,8 +119,8 @@ What the install changes, all through Claude Code's own plugin commands:
 
 | Path | What it is |
 |---|---|
-| `~/.claude/settings.json` | The `ai-toolkit` marketplace under `extraKnownMarketplaces`, and `"usage-rings@toolbox": true` under `enabledPlugins` |
-| `~/.claude/plugins/` | Claude Code's records of marketplaces and installed plugins, and its copy of the mod under `cache/ai-toolkit/usage-rings/<version>` |
+| `~/.claude/settings.json` | The `toolbox` marketplace under `extraKnownMarketplaces`, and `"usage-rings@toolbox": true` under `enabledPlugins` |
+| `~/.claude/plugins/` | Claude Code's records of marketplaces and installed plugins, and its copy of the mod under `cache/toolbox/usage-rings/<version>` |
 
 ## Updating
 
@@ -129,7 +129,7 @@ Read the [changes](#changes) first for anything that needs you to do something.
 If you installed from GitHub (PowerShell or bash):
 
 ```bash
-claude plugin marketplace update ai-toolkit
+claude plugin marketplace update toolbox
 claude plugin update usage-rings@toolbox
 ```
 
@@ -162,16 +162,16 @@ If you installed from a clone, from the `usage-rings` folder (PowerShell, or bas
 python install.py --remove
 ```
 
-This uninstalls the mod. It also removes the `ai-toolkit` marketplace if it points at this clone and no other plugin from it is installed.
+This uninstalls the mod. It also removes the `toolbox` marketplace if it points at this clone and no other plugin from it is installed.
 
 If you installed from GitHub (PowerShell or bash):
 
 ```bash
 claude plugin uninstall usage-rings@toolbox
-claude plugin marketplace remove ai-toolkit
+claude plugin marketplace remove toolbox
 ```
 
-Skip the second command if you use other plugins from the `ai-toolkit` marketplace. Sessions that are already open keep the rings until they restart.
+Skip the second command if you use other plugins from the `toolbox` marketplace. Sessions that are already open keep the rings until they restart.
 
 Whichever way you installed, `claude plugin uninstall usage-rings@toolbox` removes the mod itself.
 
@@ -186,7 +186,7 @@ Whichever way you installed, `claude plugin uninstall usage-rings@toolbox` remov
 | A change to `hooks/register.tsx` doesn't show up | Claude Code runs its own copy, and only updates it when the version goes up | Bump `version` in `.claude-plugin/plugin.json`, rerun `python install.py`, then `/reload-plugins` |
 | **FAILED: can't find the claude command** | Claude Code's terminal command isn't installed or isn't on PATH | Install Claude Code from [claude.com/claude-code](https://claude.com/claude-code), open a new terminal, then rerun |
 | **FAILED: no .claude-plugin/marketplace.json in any folder above this one** | `install.py` was run from a release zip or a copied folder, not a clone | Use the [Quick Start](#quick-start) command, or run it from a clone |
-| `using the ai-toolkit marketplace you already have, from ...` | You'd already added the marketplace another way, such as from GitHub | Nothing to do: it installs from that one. To use the clone instead, run `claude plugin marketplace remove ai-toolkit` and rerun |
+| `using the toolbox marketplace you already have, from ...` | You'd already added the marketplace another way, such as from GitHub | Nothing to do: it installs from that one. To use the clone instead, run `claude plugin marketplace remove toolbox` and rerun |
 
 ## Developing
 
@@ -210,4 +210,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.0.0: The repo and its plugin marketplace were renamed from `ai-toolkit` to `toolbox`, so the mod is now `usage-rings@toolbox`. If you installed 1.0.0, remove it first with `claude plugin uninstall usage-rings` and `claude plugin marketplace remove ai-toolkit`, then install again with the [Quick Start](#quick-start) command or `python install.py` from a new clone.
 - 1.0.0: First public version, installed from the repo's `ai-toolkit` plugin marketplace.

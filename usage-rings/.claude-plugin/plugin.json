@@ -1,9 +1,9 @@
 {
   "name": "usage-rings",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Ring gauges by the prompt box for context, 5-hour and 7-day usage",
   "author": {
-    "name": "ai-toolkit",
+    "name": "toolbox",
     "url": "https://github.com/masfew/toolbox"
   },
   "homepage": "https://github.com/masfew/toolbox#usage-rings",

@@ -8,19 +8,19 @@ Installs the usage-rings mod for Claude Code from a clone of this repo. Safe to 
 usage-rings is a Claude Code plugin, so this script hands the work to Claude
 Code's own plugin commands rather than linking files under ~/.claude like the
 other tools here. Without a clone, the README's one-line install
-(/plugin install usage-rings --marketplace <owner>/ai-toolkit) does the same.
+(/plugin install usage-rings --marketplace <owner>/toolbox) does the same.
 
 What it does:
 1. Checks that Python is new enough and finds the claude command.
 2. Finds the repo's marketplace file (.claude-plugin/marketplace.json in a
    folder above this one), and adds that folder to Claude Code as the
-   ai-toolkit marketplace, unless a marketplace of that name is already there.
+   toolbox marketplace, unless a marketplace of that name is already there.
    One added from an older location of the clone is replaced.
 3. Refreshes the marketplace, then installs usage-rings from it at the user
    scope, or updates it if it's already installed. Claude Code keeps its own
    copy under ~/.claude/plugins/cache, so this folder can move afterwards.
 
---remove uninstalls usage-rings, then removes the ai-toolkit marketplace if
+--remove uninstalls usage-rings, then removes the toolbox marketplace if
 this script would have added it (it points at this clone) and no other plugin
 from it is still installed.
 
@@ -37,7 +37,7 @@ from pathlib import Path
 
 TOOL_NAME = "usage-rings"
 MIN_PYTHON = (3, 9)
-MARKETPLACE = "ai-toolkit"
+MARKETPLACE = "toolbox"
 
 # Programs the tool needs: (command, how to install it). claude is found by find_claude().
 PROGRAMS = []
