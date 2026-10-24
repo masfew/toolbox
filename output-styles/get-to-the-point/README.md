@@ -20,8 +20,6 @@ After:
 
 In the desktop app, the Safari gap becomes a question in the app's next-step box, with buttons to answer it.
 
-> **Setting this up?** Open Claude Code and say: *"Set up the tool in `<path to this folder>`. Follow its README."* Claude: follow [Install](#install) from top to bottom (skip step 1 if the folder is already there), then report what happened.
-
 ## Requirements
 
 - Claude Code: the desktop app or the terminal CLI. In the desktop app, Claude asks you to decide things through the app's question cards and next-step box. In the CLI, it asks numbered questions instead, so you can answer "1 yes, 2 B".
@@ -38,6 +36,21 @@ python install.py
 ```
 
 It ends with **Setup complete**. New Claude Code sessions use the style from then on. On Windows without Developer Mode (the default), it also says the system didn't allow a link: the style is then a copy, so rerun `python install.py` after each update.
+
+## Install with Claude Code
+
+Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install get-to-the-point."* With a clone already there, open Claude Code in it and say *"Install get-to-the-point."* Claude follows the repo's install rules: it does the steps under Claude does, and reads out the steps under You do one at a time, waiting for each.
+
+**Claude does:**
+
+1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 2.
+2. Tells you the install makes Get to the Point the default output style for every new session, in every project, and runs it once you agree.
+3. Runs `python install.py` from `output-styles/get-to-the-point`, and checks it ends with **Setup complete**.
+
+**You do:**
+
+1. Nothing during the install.
+2. Start a new Claude Code session. It uses the style.
 
 ## Install
 

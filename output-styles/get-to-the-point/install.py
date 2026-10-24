@@ -477,6 +477,7 @@ def remove():
 
 
 def main():
+    # differs from the template: no Startup entries or CLAUDE.md lines, so no rerun outside the app's package and no --instructions
     p = argparse.ArgumentParser(description=f"Install or remove {TOOL_NAME}.")
     action = p.add_mutually_exclusive_group()
     action.add_argument("--copy", action="store_const", const="copy", dest="action",

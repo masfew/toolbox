@@ -20,8 +20,6 @@ In the terminal they're coloured text bars in the hint line under the prompt box
 ▰▱▱▱▱ Context 17% · 84k / 500k  ▰▰▰▰▱ 5-hour 75% · 2h 10m left  ▰▰▰▰▰ 7-day 93% · resets in 3d 0h
 ```
 
-> **Setting this up?** Open Claude Code and say: *"Set up the tool in `<path to this folder>`. Follow its README."* Claude: follow [Install](#install) from top to bottom, then report what happened.
-
 ## Requirements
 
 - Claude Code 2.1.275 or newer, with its `claude` command available in a terminal. The mod shows in both the desktop app (Code tab) and the terminal CLI once it's installed.
@@ -44,6 +42,20 @@ Or at the prompt of a Claude Code session in the terminal:
 ```
 
 New sessions show the rings. In a session that's already open, run `/reload-plugins`.
+
+## Install with Claude Code
+
+Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install usage-rings."* With a clone already there, open Claude Code in it and say *"Install usage-rings."* Claude follows the repo's install rules: it does the steps under Claude does, and reads out the steps under You do one at a time, waiting for each.
+
+**Claude does:**
+
+1. Checks `claude --version` is 2.1.275 or newer. If it's older, it stops and tells you to update Claude Code.
+2. Runs `python install.py` from `mods/usage-rings` (the [From a clone](#from-a-clone-of-the-repo) install), and checks it ends with **Setup complete**. Asked to install it without a clone, it runs the [Quick Start](#quick-start) command instead.
+
+**You do:**
+
+1. Nothing during the install.
+2. Start a new Claude Code session, or run `/reload-plugins` in an open one. The rings show next to the prompt box.
 
 ## Install
 
