@@ -33,7 +33,7 @@ In the desktop app, the Safari gap becomes a question in the app's next-step box
 From the root of the cloned repo (PowerShell, or bash with `python3` on macOS and Linux):
 
 ```bash
-cd get-to-the-point
+cd output-styles/get-to-the-point
 python install.py
 ```
 
@@ -109,7 +109,7 @@ From the root of the cloned repo, pull the new version, then rerun the install (
 
 ```bash
 git pull
-cd get-to-the-point
+cd output-styles/get-to-the-point
 python install.py
 ```
 
@@ -120,9 +120,11 @@ To stay on a version, check out its tag instead, then rerun the install (PowerSh
 ```bash
 git fetch --tags
 git checkout get-to-the-point-v1.0.0
-cd get-to-the-point
+cd output-styles/get-to-the-point
 python install.py
 ```
+
+Releases up to get-to-the-point-v1.0.1 have the tool's folder at the root of the repo, so after checking out one of those, it's `cd get-to-the-point` instead.
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. If you installed from a release zip instead, unzip the new release and run `python install.py` from its `get-to-the-point` folder: it replaces the earlier copy.
 

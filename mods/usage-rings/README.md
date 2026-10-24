@@ -66,7 +66,7 @@ Use this to install the exact version you have checked out, or to change the mod
 2. Run the installer from the `usage-rings` folder (PowerShell, or bash with `python3` on macOS and Linux):
 
    ```bash
-   cd toolbox/usage-rings
+   cd toolbox/mods/usage-rings
    python install.py
    ```
 
@@ -137,7 +137,7 @@ If you installed from a clone, from the root of the clone (PowerShell, or bash w
 
 ```bash
 git pull
-cd usage-rings
+cd mods/usage-rings
 python install.py
 ```
 
@@ -148,9 +148,11 @@ To stay on a version, check out its tag in a clone, then rerun the install (Powe
 ```bash
 git fetch --tags
 git checkout usage-rings-v1.0.0
-cd usage-rings
+cd mods/usage-rings
 python install.py
 ```
+
+Releases up to usage-rings-v2.0.0 have the tool's folder at the root of the repo, so after checking out one of those, it's `cd usage-rings` instead.
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install.
 

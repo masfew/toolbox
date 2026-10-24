@@ -165,7 +165,7 @@ def installed_version(claude):
 # --- Install and remove ----------------------------------------------------
 
 def install():
-    # differs from _template: installs through Claude Code's plugin commands, which keep their own copy
+    # differs from the template: installs through Claude Code's plugin commands, which keep their own copy
     check_dependencies()
     claude = find_claude()
     repo = find_repo()
@@ -191,7 +191,7 @@ def install():
 
 
 def remove():
-    # differs from _template: uninstalls through Claude Code's plugin commands
+    # differs from the template: uninstalls through Claude Code's plugin commands
     claude = find_claude()
     if installed_version(claude) is None:
         print(f"ok: {PLUGIN_ID} isn't installed")
@@ -218,7 +218,7 @@ def remove():
 
 
 def main():
-    # differs from _template: a plugin has no --copy or --link choice, since Claude Code always copies it
+    # differs from the template: a plugin has no --copy or --link choice, since Claude Code always copies it
     # claude prints ticks and other symbols a Windows console code page can't encode.
     sys.stdout.reconfigure(errors="replace")
     sys.stderr.reconfigure(errors="replace")
