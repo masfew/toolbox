@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Read every <code>.md</code> file in the recipes folder into a recipe: title, servings, ingredients and steps.</p>\n<h5>How</h5>\n<ul>\n  <li>A file watcher reloads a recipe when its file changes.</li>\n  <li>A file that can't be read shows as a card with the reason, never as a crash.</li>\n</ul>",
+  "kind": "step",
+  "name": "Recipe Files",
+  "phase": "p-recipe-store",
+  "sort": 1000,
+  "status": "done"
+}

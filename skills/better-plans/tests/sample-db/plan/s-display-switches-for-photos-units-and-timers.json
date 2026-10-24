@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Switches that hide or show parts of the screen.</p>\n<h5>How</h5>\n<ul>\n  <li>Timer cards ({{F:cooking-timers}}): hide or show the stack.</li>\n  <li>Pantry gauge ({{F:pantry-gauge}}): hide or show the gauge.</li>\n</ul>\n<h5>Depends On</h5>\n<p>{{F:settings-menu}}.1, {{F:pantry-gauge}} (the gauge) and {{F:cooking-timers}} (the cards).</p>",
+  "kind": "step",
+  "name": "Display Switches for Photos, Units and Timers",
+  "phase": "p-settings-menu",
+  "sort": 2000,
+  "status": "todo"
+}

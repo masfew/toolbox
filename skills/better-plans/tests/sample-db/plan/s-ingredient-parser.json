@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Turn lines such as <em>2 cups flour, sifted</em> into an amount, a unit and an item.</p>\n<h5>How</h5>\n<ul>\n  <li>A table of about 40 units and their short forms.</li>\n  <li>Words after a comma become a note on the item.</li>\n  <li>A line it can't read goes on the list as it is.</li>\n</ul>\n<h5>Done When</h5>\n<p>All 120 sample recipes parse with no line dropped.</p>",
+  "kind": "step",
+  "name": "Ingredient Parser",
+  "phase": "p-shopping-list",
+  "sort": 2000,
+  "status": "done"
+}

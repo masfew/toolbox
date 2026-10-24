@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Read store receipts (CSV exports) into a pantry stock list.</p>\n<h5>How</h5>\n<ul>\n  <li>Item names are matched to ingredients with the same table as the parser.</li>\n  <li>Checked with {{F:unit-picker}}: amounts convert the same way in both units.</li>\n  <li>{{F:pantry-gauge}}.2 shows the result.</li>\n</ul>",
+  "kind": "step",
+  "name": "Stock Data from Receipts",
+  "phase": "p-pantry-gauge",
+  "sort": 1000,
+  "status": "done"
+}

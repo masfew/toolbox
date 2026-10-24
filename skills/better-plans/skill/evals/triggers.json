@@ -1,0 +1,22 @@
+[
+  {"query": "make a plan for the dark mode feature in my notes app and publish it", "should_trigger": true},
+  {"query": "mark 2.3 done and 2.4 in progress on the onboarding plan", "should_trigger": true},
+  {"query": "i've updated my future ideas on the website redesign plan, add the ones i accepted", "should_trigger": true},
+  {"query": "add a future idea to the plan: calendar sync for the booking page", "should_trigger": true},
+  {"query": "read the plan and build step F8.1, link is in the last message", "should_trigger": true},
+  {"query": "rename step 4.2 to Settings Menu and add an outcome to 3.2 on the recipe app build plan", "should_trigger": true},
+  {"query": "write up a plan for moving the checkout flow to the new api, im in plan mode", "should_trigger": true},
+  {"query": "make a light plan for this session so i can clear in between", "should_trigger": true},
+  {"query": "save state before i /clear, we're mid-way through the search rework", "should_trigger": true},
+  {"query": "the plan page looks out of date for my friend who cant sign in, save a snapshot", "should_trigger": true},
+  {"query": "turn the approved game design doc for my tycoon game into board cards", "should_trigger": false},
+  {"query": "write a game design doc for my obby game with a checkpoint system", "should_trigger": false},
+  {"query": "audit my skills and tell me which ones are bloated", "should_trigger": false},
+  {"query": "write the release notes for the new drill timer update in my game", "should_trigger": false},
+  {"query": "how much of my usage limit is left on my plan this week", "should_trigger": false},
+  {"query": "set up a scheduled task that reminds me to check the leaderboard every monday", "should_trigger": false},
+  {"query": "fix the build error in training_helper.verse, it says unknown identifier", "should_trigger": false},
+  {"query": "move the sniper tracking script into a subfolder without breaking the level's devices", "should_trigger": false},
+  {"query": "update the hub leaderboard from the new xlsx export", "should_trigger": false},
+  {"query": "make a ui style guide for the shop popup and recreate it from this screenshot", "should_trigger": false}
+]

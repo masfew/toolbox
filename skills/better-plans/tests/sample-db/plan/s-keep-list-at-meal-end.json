@@ -1,0 +1,8 @@
+{
+  "body": "<div class=\"note\">\n  <span class=\"note-label\">Recommendation</span>\n  Build this first. It covers most cases on its own. {{F:leftovers}}.2 follows for the case it can't cover.\n</div>\n<h5>What</h5>\n<p>When a week ends, the items bought but not used go on a leftovers list.</p>\n<h5>How</h5>\n<ul>\n  <li><strong>List:</strong> worked out from the shopping list minus what the cooked recipes used.</li>\n  <li><strong>Fresh food:</strong> items with a short shelf life are dropped after their days are up.</li>\n</ul>\n<h5>Depends On</h5>\n<p>3.6 (the findings) and 3.2 (the counts).</p>\n<h5>Risks</h5>\n<p>Recipes cooked but not marked as cooked make the list too long; {{F:leftovers}}.2 covers that case.</p>",
+  "kind": "step",
+  "name": "Keep List at Meal End",
+  "phase": "p-leftovers",
+  "sort": 1000,
+  "status": "todo"
+}

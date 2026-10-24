@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Items that appear in several recipes add up into one line, with units converted where they can be.</p>",
+  "kind": "step",
+  "name": "Automatic Totals",
+  "phase": "p-shopping-list",
+  "sort": 3000,
+  "status": "done"
+}

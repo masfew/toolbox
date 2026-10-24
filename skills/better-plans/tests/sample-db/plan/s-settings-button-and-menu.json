@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A gear button that opens the menu. Photo, unit and timer switches are added in {{F:settings-menu}}.2.</p>\n<h5>How</h5>\n<p><strong>Saving:</strong> one settings file, as the collapsed cuisines ({{F:recipes-grouped-by-cuisine}}) and the unit choice ({{F:unit-picker}}) do.</p>",
+  "kind": "step",
+  "name": "Settings Button and Menu",
+  "phase": "p-settings-menu",
+  "sort": 1000,
+  "status": "todo"
+}

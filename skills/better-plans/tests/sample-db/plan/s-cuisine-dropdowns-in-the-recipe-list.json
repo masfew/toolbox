@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Recipes grouped under their cuisine, taken from a <code>cuisine:</code> line in the file.</p>\n<h5>How</h5>\n<ul>\n  <li>A recipe with no cuisine goes under <strong>Other</strong>.</li>\n  <li>For {{F:cook-log}}: clicking a row opens the recipe, not its log.</li>\n</ul>",
+  "kind": "step",
+  "name": "Cuisine Dropdowns in the Recipe List",
+  "phase": "p-recipes-grouped-by-cuisine",
+  "sort": 1000,
+  "status": "done"
+}

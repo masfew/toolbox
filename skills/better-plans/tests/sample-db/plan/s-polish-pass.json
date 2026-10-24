@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Spacing, focus rings, keyboard order and empty states on every screen.</p>\n<h5>Outcome</h5>\n<p>Done, plus a <s>splash screen</s> faster first paint instead.</p>",
+  "kind": "step",
+  "name": "Polish Pass",
+  "phase": "p-polish",
+  "sort": 1000,
+  "status": "done"
+}

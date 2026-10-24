@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"table-wrap\">\n  <table class=\"table\">\n  <thead><tr><th>Part</th><th>Choice</th><th>Why</th></tr></thead>\n  <tbody>\n  <tr><td>Shell</td><td>Electron</td><td>One build for every desktop</td></tr>\n  <tr><td>Language</td><td>TypeScript</td><td>Types for the recipe model</td></tr>\n  <tr><td>Search</td><td>A small in-memory index</td><td>No database to install</td></tr>\n  </tbody>\n  </table>\n</div>",
+  "id": "stack",
+  "kind": "section",
+  "name": "Tech Stack",
+  "sort": 3000
+}

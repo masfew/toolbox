@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"diagram\">\n<svg viewBox=\"0 0 420 120\" role=\"img\" aria-label=\"Files feed the store, which feeds the window\">\n  <defs><marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"6\" markerHeight=\"6\" orient=\"auto\"><path d=\"M0 0 L10 5 L0 10 z\"/></marker></defs>\n  <g>\n    <rect x=\"10\" y=\"40\" width=\"110\" height=\"40\" rx=\"6\"/>\n    <text x=\"65\" y=\"65\" text-anchor=\"middle\">Recipe files</text>\n    <rect x=\"155\" y=\"40\" width=\"110\" height=\"40\" rx=\"6\"/>\n    <text x=\"210\" y=\"65\" text-anchor=\"middle\">Store</text>\n    <rect x=\"300\" y=\"40\" width=\"110\" height=\"40\" rx=\"6\"/>\n    <text x=\"355\" y=\"65\" text-anchor=\"middle\">Window</text>\n    <path d=\"M120 60 H150\" marker-end=\"url(#arrow)\"/>\n    <path d=\"M265 60 H295\" marker-end=\"url(#arrow)\"/>\n  </g>\n</svg>\n</div>\n<div class=\"prose\">\n  <p>The store is the only part that reads or writes files; the window asks it for recipes and weeks.</p>\n</div>",
+  "id": "architecture",
+  "kind": "section",
+  "name": "Architecture",
+  "sort": 2000
+}

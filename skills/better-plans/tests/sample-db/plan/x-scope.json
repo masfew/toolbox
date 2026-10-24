@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"prose\">\n  <p>A recipe box that works offline, keeps recipes as files anyone can edit, and turns a week's plan into a shopping list.</p>\n  <h4>Not in Version One</h4>\n  <ul>\n    <li>Sharing between households.</li>\n    <li>Nutrition data.</li>\n  </ul>\n</div>",
+  "id": "scope",
+  "kind": "section",
+  "name": "Goal and MVP Scope",
+  "sort": 1000
+}

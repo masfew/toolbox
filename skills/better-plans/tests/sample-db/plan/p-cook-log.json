@@ -1,0 +1,8 @@
+{
+  "desc": "A log of what was cooked and when, kept across restarts.",
+  "feature": "cook-log",
+  "kind": "phase",
+  "name": "Cook Log",
+  "short": "Cook Log",
+  "sort": 5000
+}

@@ -1,0 +1,10 @@
+{
+  "bakedAt": "",
+  "created": "2026-10-14",
+  "kind": "plan",
+  "styles": "",
+  "summary": "Larder is a desktop recipe box: recipes stored as plain files, a shopping list built from them, and a week planner that says what to cook. Version one is built with Electron and TypeScript, and its recipes live in <code>~/Larder/recipes</code>. All four phases are built, including the two follow-ups from the health check (fast search for recent recipes and crash recovery), and the first six of eight planned features, the unit picker, the pantry gauge, the cooking timers, the cuisine groups, the cook log and pinned recipes, are done.",
+  "title": "Larder Build Plan",
+  "updated": "2026-10-19",
+  "version": "9.1"
+}

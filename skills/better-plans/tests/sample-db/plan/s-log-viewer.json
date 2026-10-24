@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A page that lists the log by month, using {{F:cook-log}}.1's saved entries.</p>\n<h5>Done When</h5>\n<p>A year of entries opens in under a second.</p>",
+  "kind": "step",
+  "name": "Log Viewer",
+  "phase": "p-cook-log",
+  "sort": 2000,
+  "status": "done"
+}

@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Group the list by store section (produce, dairy, bakery and so on), in the order the person walks the store.</p>\n<h5>How</h5>\n<ul>\n  <li>Each item's section comes from a small built-in table, and the person can move an item to another section once.</li>\n  <li>The order is dragged into place in the settings.</li>\n</ul>",
+  "kind": "step",
+  "name": "Store Sections",
+  "phase": "p-shopping-list",
+  "sort": 4000,
+  "status": "done"
+}

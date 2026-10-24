@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Earlier weeks stay readable from a list under the grid, newest first.</p>\n<h5>How</h5>\n<ul>\n  <li>Each week is saved as one small JSON file.</li>\n  <li>A past week can be copied into the current one.</li>\n</ul>",
+  "kind": "step",
+  "name": "Past Weeks",
+  "phase": "p-meal-planner",
+  "sort": 4000,
+  "status": "done"
+}

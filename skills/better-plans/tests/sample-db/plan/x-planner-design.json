@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"table-wrap\">\n  <table class=\"table\">\n  <thead><tr><th>Slot</th><th>Shows</th></tr></thead>\n  <tbody>\n  <tr><td>Breakfast</td><td>One recipe or a note</td></tr>\n  <tr><td>Lunch</td><td>Up to two recipes</td></tr>\n  <tr><td>Dinner</td><td>Up to three recipes</td></tr>\n  </tbody>\n  </table>\n</div>",
+  "id": "planner-design",
+  "kind": "section",
+  "name": "Meal Planner Design",
+  "sort": 6000
+}

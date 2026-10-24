@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Two people planning the same week from two computers.</p>\n<p>Skipped: it needs a server, and version one is a local app.</p>",
+  "kind": "step",
+  "name": "Shared Households",
+  "phase": "p-meal-planner",
+  "sort": 5000,
+  "status": "skipped"
+}

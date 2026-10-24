@@ -1,0 +1,8 @@
+{
+  "desc": "Keep track of what's left after a week and suggest meals that use it up.",
+  "feature": "leftovers",
+  "kind": "phase",
+  "name": "Leftovers",
+  "short": "Leftovers",
+  "sort": 7000
+}

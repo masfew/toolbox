@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Every recipe marked as cooked is logged with the date and a rating.</p>\n<p>{{F:cook-log}}.2 is the optional bigger step.</p>",
+  "kind": "step",
+  "name": "Log Across Restarts",
+  "phase": "p-cook-log",
+  "sort": 1000,
+  "status": "done"
+}

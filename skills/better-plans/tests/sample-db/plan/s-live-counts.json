@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Each day shows its servings and cooking time as recipes are added.</p>\n<h5>How</h5>\n<ul>\n  <li>The counts update as soon as a recipe file changes.</li>\n  <li>A day over two hours of cooking turns its count amber.</li>\n</ul>\n<h5>Why</h5>\n<p>So a busy day is easy to spot before the week starts.</p>",
+  "kind": "step",
+  "name": "Live Counts",
+  "phase": "p-meal-planner",
+  "sort": 2000,
+  "status": "done"
+}

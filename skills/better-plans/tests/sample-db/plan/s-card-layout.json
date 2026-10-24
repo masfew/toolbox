@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Each recipe as a card with its photo, title and cooking time, in a grid that reflows from one to four columns.</p>",
+  "kind": "step",
+  "name": "Card Layout",
+  "phase": "p-recipe-store",
+  "sort": 2000,
+  "status": "done"
+}

@@ -1,0 +1,8 @@
+{
+  "desc": "Recipes pinned to the top of the list stay there until unpinned.",
+  "feature": "pinned-recipes",
+  "kind": "phase",
+  "name": "Pinned Recipes",
+  "short": "Pinned Recipes",
+  "sort": 6000
+}

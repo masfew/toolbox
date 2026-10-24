@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Suggest recipes that use what's on the leftovers list, with the same list as in {{F:leftovers}}.1.</p>\n<h5>Depends On</h5>\n<p>{{F:leftovers}}.1 (the list).</p>",
+  "kind": "step",
+  "name": "Suggest Meals from Leftovers",
+  "phase": "p-leftovers",
+  "sort": 2000,
+  "status": "todo"
+}

@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"prose\">\n  <ul>\n    <li><strong>Odd recipe files.</strong> Hand-written files vary a lot; the parser keeps any line it can't read.</li>\n    <li><strong>Unit conversion.</strong> Volume to weight needs a density per ingredient; only common ones are covered.</li>\n  </ul>\n</div>",
+  "id": "risks",
+  "kind": "section",
+  "name": "Risks and Open Questions",
+  "sort": 7000
+}

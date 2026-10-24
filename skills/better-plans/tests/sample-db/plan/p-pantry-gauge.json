@@ -1,0 +1,8 @@
+{
+  "desc": "A gauge in the top bar that shows how much of the week's shopping the pantry already covers.",
+  "feature": "pantry-gauge",
+  "kind": "phase",
+  "name": "Pantry Gauge",
+  "short": "Pantry Gauge",
+  "sort": 2000
+}

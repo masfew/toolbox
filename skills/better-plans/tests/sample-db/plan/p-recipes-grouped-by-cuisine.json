@@ -1,0 +1,8 @@
+{
+  "desc": "The recipe list folds into one drop-down per cuisine, each remembering whether it's open.",
+  "feature": "recipes-grouped-by-cuisine",
+  "kind": "phase",
+  "name": "Recipes Grouped by Cuisine",
+  "short": "Cuisine Groups",
+  "sort": 4000
+}

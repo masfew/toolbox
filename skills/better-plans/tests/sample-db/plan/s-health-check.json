@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A look over everything built so far for slow spots and things that can break, before the polish phase.</p>\n<h5>Findings</h5>\n<ul>\n  <li>Search slows down past about 2,000 recipes: fixed in the polish phase.</li>\n  <li>A crash while saving a week can leave a half-written file: fixed in the polish phase.</li>\n  <li>Leftover ingredients are thrown away when a week ends. Planned as {{F:leftovers}}, Leftovers.</li>\n  <li>A store with no sections falls back to one long list. Left as is; dealt with if anyone asks ({{F:leftovers}}.2 would cover part of it).</li>\n</ul>",
+  "kind": "step",
+  "name": "Health Check",
+  "phase": "p-meal-planner",
+  "sort": 6000,
+  "status": "done"
+}

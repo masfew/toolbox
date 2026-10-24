@@ -1,0 +1,140 @@
+<title>Project Topic Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="plan.css">
+
+<main class="page">
+<!-- PLAN CONTENT START: replace everything between this marker and PLAN CONTENT END. -->
+
+<header class="plan-header">
+  <div class="plan-top">
+    <h1>Project Topic Plan</h1>
+    <dl class="meta">
+      <dt>Version</dt><dd>1.0</dd>
+      <dt>Created</dt><dd><time datetime="2026-01-01">1 Jan 2026</time></dd>
+      <dt>Last updated</dt><dd><time datetime="2026-01-01">1 Jan 2026</time></dd>
+    </dl>
+  </div>
+  <p class="summary">One paragraph saying what this plan does, what it is for, and what is true once it is finished.</p>
+</header>
+
+<section class="block" id="overview">
+  <div class="block-head">
+    <h2>Plan Overview</h2>
+    <span class="progress" data-progress>0 of 3 done</span>
+  </div>
+  <div class="table-wrap">
+    <table class="table overview" id="overview-table">
+      <thead><tr><th scope="col">Phase</th><th scope="col">Step</th><th class="st" scope="col">Status</th></tr></thead>
+      <tbody data-phase="1">
+        <tr data-target="step-1-1" tabindex="0">
+          <th class="phase" scope="rowgroup" rowspan="2" data-target="phase-1" tabindex="0"><span class="ph"><span class="ph-num">1</span><span class="ph-name">Phase Name</span></span></th>
+          <td class="step" data-step="1.1"><span class="sn">1.1</span> Short Step Name</td>
+          <td class="st"><span class="status" data-status="todo">Not started</span></td>
+        </tr>
+        <tr data-target="step-1-2" tabindex="0">
+          <td class="step" data-step="1.2"><span class="sn">1.2</span> Short Step Name</td>
+          <td class="st"><span class="status" data-status="todo">Not started</span></td>
+        </tr>
+      </tbody>
+      <tbody data-phase="2">
+        <tr data-target="step-2-1" tabindex="0">
+          <th class="phase" scope="rowgroup" rowspan="1" data-target="phase-2" tabindex="0"><span class="ph"><span class="ph-num">2</span><span class="ph-name">Phase Name</span></span></th>
+          <td class="step" data-step="2.1"><span class="sn">2.1</span> Short Step Name</td>
+          <td class="st"><span class="status" data-status="todo">Not started</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Extra sections, when the plan needs any, go here: <section class="block block-extra" id="..."><h2>...</h2><div class="prose">...</div></section> -->
+
+<section class="block" id="details">
+  <h2>Build Outline</h2>
+
+  <details class="phase-card" id="phase-1" open>
+    <summary class="card-head">
+      <span class="card-title"><span class="card-num">Phase 1</span><h3>Phase Name</h3></span>
+      <span class="status" data-status="todo">Not started</span>
+    </summary>
+    <div class="phase-body">
+      <details class="step-card" id="step-1-1" open>
+        <summary class="card-head">
+          <span class="card-title"><span class="card-num">Step 1.1</span><h4>Short Step Name</h4></span>
+          <span class="status" data-status="todo">Not started</span>
+        </summary>
+        <div class="step-body">
+          <div class="prose">
+            <h5>What</h5>
+            <p>What this step changes or produces.</p>
+            <h5>How</h5>
+            <p>How it will be done.</p>
+            <h5>Why</h5>
+            <p>Why it is needed and why this approach.</p>
+          </div>
+          <a class="back" href="#overview">↑ Back to overview</a>
+        </div>
+      </details>
+      <details class="step-card" id="step-1-2" open>
+        <summary class="card-head">
+          <span class="card-title"><span class="card-num">Step 1.2</span><h4>Short Step Name</h4></span>
+          <span class="status" data-status="todo">Not started</span>
+        </summary>
+        <div class="step-body">
+          <div class="prose">
+            <h5>What</h5>
+            <p>What this step changes or produces.</p>
+          </div>
+          <a class="back" href="#overview">↑ Back to overview</a>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <details class="phase-card" id="phase-2" open>
+    <summary class="card-head">
+      <span class="card-title"><span class="card-num">Phase 2</span><h3>Phase Name</h3></span>
+      <span class="status" data-status="todo">Not started</span>
+    </summary>
+    <div class="phase-body">
+      <details class="step-card" id="step-2-1" open>
+        <summary class="card-head">
+          <span class="card-title"><span class="card-num">Step 2.1</span><h4>Short Step Name</h4></span>
+          <span class="status" data-status="todo">Not started</span>
+        </summary>
+        <div class="step-body">
+          <div class="prose">
+            <h5>What</h5>
+            <p>What this step changes or produces.</p>
+          </div>
+          <a class="back" href="#overview">↑ Back to overview</a>
+        </div>
+      </details>
+    </div>
+  </details>
+</section>
+
+
+<section class="block" id="future">
+  <h2>Future Ideas</h2>
+  <p class="block-intro" data-feature-hint hidden></p>
+  <div class="feature-board" id="feature-board">
+    <article class="idea-card" data-feature="feature-name">
+      <div class="idea-text">
+        <h3>Feature Name</h3>
+        <p>One or two sentences on what it would add.</p>
+      </div>
+      <div class="idea-more prose">
+        <p>Optional details that don't fit in those sentences: options, a recommendation, requirements.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- PLAN CONTENT END -->
+</main>
+
+<script src="plan.js"></script>

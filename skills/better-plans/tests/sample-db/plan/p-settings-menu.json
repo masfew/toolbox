@@ -1,0 +1,8 @@
+{
+  "desc": "One settings menu for the choices scattered across the app, with switches to hide parts of the screen.",
+  "feature": "settings-menu",
+  "kind": "phase",
+  "name": "Settings Menu",
+  "short": "Settings Menu",
+  "sort": 8000
+}

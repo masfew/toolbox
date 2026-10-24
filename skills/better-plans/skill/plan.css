@@ -1,0 +1,347 @@
+/* better-plans template styles, published as plan.css beside every plan. Change the look here, not in a plan.
+   Layout: one centred reading column - header, summary, plan overview (phases and steps), extra sections, build outline (a collapsible card per phase holding a card per step), future ideas. */
+:root {
+  /* Soft greyscale base: no pure white page or pure black text. Colour is kept for links and status. */
+  --bg: #f2f2f2;
+  --surface: #ffffff;
+  --fg: #1c1c1c;
+  --muted: #646464;
+  --rule: #dcdcdc;
+  --rule-strong: #c4c4c4;
+  --accent: #3c6fe0;
+  --accent-soft: #e1e9fb;
+  --row-hover: #f7f7f7;
+  --code-bg: #ebebeb;
+  /* Build outline cards: a darker tray for each phase, a tinted header and a white body for each step */
+  --card-tray: #e4e4e4;  --card-tray-hover: #dddddd;
+  --card-head: #f0f0f0;  --card-head-hover: #e9e9e9;
+  --st-todo-fg: #646464;   --st-todo-bg: #e8e8e8;   --st-todo-line: #cfcfcf;
+  --st-prog-fg: #7d5a00;   --st-prog-bg: #fbf1cf;
+  --st-done-fg: #2e7d2a;   --st-done-bg: #e2f2dc;
+  --st-block-fg: #b8433c;  --st-block-bg: #f6e4df;
+  --st-skip-fg: #b0561c;   --st-skip-bg: #f8e5d5;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141414; --surface: #1e1e1e; --fg: #ebebeb; --muted: #a3a3a3; --rule: #333333; --rule-strong: #484848;
+    --accent: #86a8ff; --accent-soft: #1e2a44; --row-hover: #252525; --code-bg: #2a2a2a;
+    --card-tray: #101010; --card-tray-hover: #171717; --card-head: #282828; --card-head-hover: #2f2f2f;
+    --st-todo-fg: #a3a3a3;  --st-todo-bg: #2a2a2a;  --st-todo-line: #3d3d3d;
+    --st-prog-fg: #f0cb62;  --st-prog-bg: #3a3016;
+    --st-done-fg: #7ccb6c;  --st-done-bg: #23361f;
+    --st-block-fg: #e08a80; --st-block-bg: #3a2421;
+    --st-skip-fg: #e39258;  --st-skip-bg: #3b2616;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141414; --surface: #1e1e1e; --fg: #ebebeb; --muted: #a3a3a3; --rule: #333333; --rule-strong: #484848;
+  --accent: #86a8ff; --accent-soft: #1e2a44; --row-hover: #252525; --code-bg: #2a2a2a;
+  --card-tray: #101010; --card-tray-hover: #171717; --card-head: #282828; --card-head-hover: #2f2f2f;
+  --st-todo-fg: #a3a3a3;  --st-todo-bg: #2a2a2a;  --st-todo-line: #3d3d3d;
+  --st-prog-fg: #f0cb62;  --st-prog-bg: #3a3016;
+  --st-done-fg: #7ccb6c;  --st-done-bg: #23361f;
+  --st-block-fg: #e08a80; --st-block-bg: #3a2421;
+  --st-skip-fg: #e39258;  --st-skip-bg: #3b2616;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 16px/1.6 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+.page {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding-block: 64px 96px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 3.5rem;
+}
+.page > * { min-width: 0; }
+
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code { font: 0.875em var(--font-mono); background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+h1, h2, h3, h4, h5 { text-wrap: balance; margin: 0; }
+
+/* Header: title on the left, version and dates stacked on the right (below the title when narrow), a rule, then the summary. */
+.plan-header { display: flex; flex-direction: column; gap: 2rem; }
+.plan-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1.25rem 2rem; padding-bottom: 2rem; border-bottom: 1px solid var(--rule); }
+.plan-header h1 { flex: 1 1 18rem; min-width: 0; font-size: 2.25rem; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; }
+.meta { display: grid; grid-template-columns: auto auto; gap: 0.125rem 1.125rem; margin: 0; padding-left: 1rem; border-left: 2px solid var(--rule-strong); font: 400 0.75rem/1.6 var(--font-mono); }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+.summary { margin: 0; font-size: 1.0625rem; max-width: 65ch; }
+
+/* Sections */
+.block-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; margin-bottom: 1rem; }
+.block > h2, .block-head h2 { font-size: 1.25rem; line-height: 1.3; font-weight: 600; }
+.block > h2 { margin-bottom: 1rem; }
+.block-intro { margin: -0.5rem 0 1rem; color: var(--muted); max-width: 65ch; }
+.progress { font: 400 0.8125rem/1.4 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Tables: the plan overview and any table in an extra section */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+.table { width: 100%; border-collapse: collapse; }
+.table thead th { text-align: left; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0.625rem 0.875rem; }
+.table td, .table tbody th { padding: 0.75rem 0.875rem; border-top: 1px solid var(--rule); vertical-align: top; text-align: left; }
+.table td.st, .table th.st { width: 1%; white-space: nowrap; }
+
+/* Plan overview: one tbody per phase, the phase cell (number and name, one line) spanning its steps.
+   Every step row is clickable and jumps to its step in the build outline; the phase cell jumps to the phase. */
+.overview tbody tr:first-child > * { border-top-color: var(--rule-strong); }
+.overview thead + tbody tr:first-child > * { border-top-color: var(--rule); }
+/* The split row (Future Ideas) that starts the planned features (phases F1, F2 ...) below the core phases */
+.overview tbody.split th { padding: 0.5rem 0.875rem; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: var(--card-head); border-top: 1px solid var(--rule-strong); }
+.overview tbody.split + tbody tr:first-child > * { border-top-color: var(--rule); }
+/* A planned feature the user has reset, until Claude takes it out: greyed out, and left out of the count */
+.overview tbody.is-reset > tr > *, .overview tbody.is-reset .sn, .overview tbody.is-reset .ph-num { color: var(--muted); }
+.overview tbody.is-reset > tr > *:not(th.phase), .overview tbody.is-reset th.phase .ph { opacity: 0.55; }
+/* A "Pending reset" label under the phase name, at full strength. It makes the row taller, which is fine while it lasts. */
+.ph-reset { display: none; margin-top: 0.25rem; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--st-prog-fg); }
+.overview tbody.is-reset .ph-reset { display: block; }
+.overview tbody.is-reset .status { filter: grayscale(1); }
+.overview td { vertical-align: middle; font-size: 0.9375rem; line-height: 1.6; }
+.overview th.phase { width: 9rem; font-weight: 600; font-size: 0.9375rem; line-height: 1.6; border-right: 1px solid var(--rule); }
+.ph { display: flex; align-items: baseline; gap: 0.5rem; }
+.ph-num { font: 500 0.8125rem/1 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ph-name { min-width: 0; }
+.sn { display: inline-block; min-width: 2.25rem; color: var(--accent); font: 500 0.8125rem/1.6 var(--font-mono); font-variant-numeric: tabular-nums; }
+/* The pill is a block of its own, so it sits in the exact vertical centre of its row instead of on the text baseline. */
+.overview td.st .status { display: flex; width: max-content; }
+/* A finished phase (every step done or skipped) folds to one row: its phase cell, a step count and its status. The script
+   adds the fold row and the chevron button, a strip down the right edge of the phase cell (its full height) that unfolds
+   the phase, pointing down while open; the rest of the cell still jumps to the phase. An empty float keeps the phase name
+   clear of the strip without widening the column on a phone, as padding would. */
+.overview tbody.can-fold th.phase { position: relative; }
+.overview tbody.can-fold th.phase::before { content: ""; float: right; width: 1.625rem; height: 1px; }
+.fold-btn { display: none; position: absolute; top: 0; right: 0; bottom: 0; width: 2.25rem; align-items: flex-start; justify-content: center; padding: 1.0625rem 0 0; border: 0; border-radius: 0; background: none; color: var(--muted); cursor: pointer; }
+.overview tbody.can-fold .fold-btn { display: flex; }
+.fold-btn svg { width: 0.875rem; height: 0.875rem; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s ease; }
+.overview tbody.can-fold:not(.is-folded) .fold-btn svg { transform: rotate(90deg); }
+.fold-btn:hover { color: var(--fg); background: var(--code-bg); }
+.fold-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.overview tbody.is-folded > tr:not(.fold-row) { display: none; }
+.overview td.fold-count { color: var(--muted); }
+.overview tr.fold-row > td { cursor: pointer; }
+.overview tr.fold-row:hover:not(:has(th.phase:hover)) td { background: var(--row-hover); }
+@media (prefers-reduced-motion: reduce) { .fold-btn svg { transition: none; } }
+/* Inset the count to line up with the table's text rather than its rounded corner. */
+.block-head .progress { padding-right: 0.875rem; }
+.overview [data-target] { cursor: pointer; }
+.overview tr[data-target]:hover:not(:has(th.phase:hover)) td,
+.overview th.phase[data-target]:hover:not(:has(.fold-btn:hover)) { background: var(--row-hover); }
+.overview [data-target]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 520px) {
+  .table thead th, .table td, .table tbody th { padding-inline: 0.625rem; }
+  .overview th.phase { width: 6rem; font-size: 0.875rem; }
+  .overview tbody.can-fold th.phase::before { width: 1.875rem; }
+  .fold-btn { padding-top: 1rem; }
+  .block-head .progress { padding-right: 0.625rem; }
+  .sn { display: block; min-width: 0; }
+}
+
+/* Status pill */
+.status { display: inline-flex; align-items: center; gap: 0.375rem; font: 500 0.6875rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 0.3125rem 0.5rem; border-radius: 999px; white-space: nowrap; color: var(--st-todo-fg); background: var(--st-todo-bg); }
+.status::before { content: ""; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: currentColor; }
+.status[data-status="progress"] { color: var(--st-prog-fg); background: var(--st-prog-bg); }
+.status[data-status="done"] { color: var(--st-done-fg); background: var(--st-done-bg); }
+.status[data-status="blocked"] { color: var(--st-block-fg); background: var(--st-block-bg); }
+.status[data-status="skipped"] { color: var(--st-skip-fg); background: var(--st-skip-bg); }
+.status[data-status="skipped"]::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+
+/* Build outline: a card per phase holding a card per step. Clicking a card's header collapses or expands it.
+   The script starts every card collapsed except in-progress steps and the phases that hold them. */
+/* Three shades: the phase card is a darker tray, each step has a tinted header and a white (surface) body. */
+.phase-card { border: 1px solid var(--rule); border-radius: 10px; background: var(--card-tray); }
+.phase-card + .phase-card { margin-top: 0.875rem; }
+.phase-body { display: flex; flex-direction: column; gap: 0.625rem; padding: 0 0.75rem 0.75rem; }
+.step-card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+/* Jumping to a card from the overview stops with the card a tenth of the way down the window, not at its very top edge. */
+.phase-card, .step-card, .idea-card { scroll-margin-top: max(1rem, 10vh); }
+.card-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; list-style: none; cursor: pointer; border-radius: 9px; }
+.phase-card > .card-head { padding: 1rem 1.125rem; }
+.phase-card > .card-head:hover { background: var(--card-tray-hover); }
+.step-card > .card-head { border-radius: 7px; background: var(--card-head); }
+.step-card > .card-head:hover { background: var(--card-head-hover); }
+details[open] > .card-head { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.card-head::-webkit-details-marker { display: none; }
+/* "Not started" pills get a hairline so they stay visible on the grey card headers. */
+.card-head .status[data-status="todo"] { box-shadow: inset 0 0 0 1px var(--st-todo-line); }
+.card-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Chevron: points right when collapsed, down when open */
+.card-head::after { content: ""; flex: none; width: 0.4375rem; height: 0.4375rem; margin: 0 0.375rem 0 0.125rem; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); }
+details[open] > .card-head::after { transform: translateY(-0.125rem) rotate(45deg); }
+.card-head:hover::after { border-color: var(--fg); }
+@media (prefers-reduced-motion: no-preference) { .card-head::after { transition: transform 0.15s ease; } }
+.card-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.3125rem; }
+.card-num { font: 500 0.75rem/1 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.phase-card > .card-head h3 { font-size: 1.0625rem; line-height: 1.35; font-weight: 600; }
+.step-card > .card-head h4 { font-size: 1rem; line-height: 1.4; font-weight: 600; }
+.card-head .status { flex: none; }
+.step-body { padding: 1rem 1.125rem 1.125rem; border-top: 1px solid var(--rule); }
+.phase-card:target, .step-card:target, .idea-card:target { box-shadow: 0 0 0 2px var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .phase-card:target, .step-card:target, .idea-card:target { animation: card-flash 2.4s ease-out forwards; }
+  @keyframes card-flash { 0%, 40% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+}
+@media (max-width: 520px) {
+  .card-head, .phase-card > .card-head { padding: 0.75rem 0.875rem; }
+  .phase-body { gap: 0.5rem; padding: 0 0.5rem 0.5rem; }
+  .step-body { padding: 0.875rem 0.875rem 1rem; }
+}
+.back { display: inline-block; margin-top: 1.25rem; font: 400 0.8125rem/1.4 var(--font-mono); color: var(--muted); text-decoration: none; }
+.back:hover { color: var(--accent); }
+/* Back to top: a round button pinned to the bottom-right corner, which the script shows once the plan overview has scrolled out of view */
+.to-top { position: fixed; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; padding: 0; border: 1px solid var(--rule-strong); border-radius: 50%; background: var(--surface); box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); cursor: pointer; opacity: 0; visibility: hidden; }
+.to-top.is-shown { opacity: 1; visibility: visible; }
+.to-top::before { content: ""; width: 0.5rem; height: 0.5rem; margin-top: 0.25rem; border-left: 1.5px solid var(--muted); border-top: 1.5px solid var(--muted); transform: rotate(45deg); }
+.to-top:hover { background: var(--row-hover); }
+.to-top:hover::before { border-color: var(--fg); }
+.to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .to-top { transition: opacity 0.2s ease, visibility 0.2s; } }
+
+/* Running text inside steps and extra sections */
+.prose { max-width: 65ch; }
+.prose > * { margin: 0; }
+.prose > * + * { margin-top: 0.75rem; }
+.prose h4, .prose h5 { margin-top: 1.375rem; font: 500 0.75rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.prose h4 + *, .prose h5 + * { margin-top: 0.375rem; }
+.prose ul, .prose ol { padding-left: 1.25rem; }
+.prose li + li { margin-top: 0.25rem; }
+
+/* Note: a boxed aside for a caveat, dependency or decision */
+.note { border: 1px solid var(--rule); background: var(--surface); border-radius: 8px; padding: 0.875rem 1rem; max-width: 65ch; }
+.note-label { display: block; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.25rem; }
+
+/* Extra sections: space between their stacked blocks (running text, tables, notes, diagrams) */
+.block-extra > :not(h2) + * { margin-top: 1rem; }
+
+/* A hairline rule above each extra section and the build outline, with equal space either side.
+   Future Ideas has none: its cards follow the build outline's cards. */
+.block-extra, #details { border-top: 1px solid var(--rule-strong); margin-top: -1rem; padding-top: 2.5rem; }
+
+/* Diagram: an inline SVG drawn with these classes, so it follows the theme. Scrolls sideways on narrow screens. */
+.diagram { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 0.75rem; }
+.diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.diagram .d-box { fill: none; stroke: var(--rule-strong); stroke-width: 1.25; }
+.diagram .d-main { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.diagram .d-edge { fill: none; stroke: var(--muted); stroke-width: 1.25; }
+.diagram .d-head { fill: var(--muted); }
+.diagram .d-name { fill: var(--fg); font-weight: 600; font-size: 13px; }
+.diagram .d-sub { fill: var(--muted); font-size: 11.5px; }
+.diagram .d-main-sub { fill: var(--fg); font-size: 11.5px; }
+
+/* Future ideas: idea cards with Accept, Reject and Edit buttons, which the script sorts into Pending, Completed and Rejected.
+   An accepted feature, once Claude plans it, becomes a phase card like the build outline's, numbered F1, F2 ... */
+.feature-group + .feature-group { margin-top: 1.75rem; }
+.group-title { display: flex; gap: 0.5rem; margin-bottom: 0.625rem; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.group-count { font-variant-numeric: tabular-nums; }
+.group-list { display: flex; flex-direction: column; gap: 0.625rem; }
+.group-list > .phase-card + .phase-card { margin-top: 0; }
+.idea-card { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1rem; padding: 0.875rem 1rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+.idea-text { flex: 1 1 0; min-width: 0; }
+.idea-card h3 { font-size: 1rem; line-height: 1.4; font-weight: 600; }
+.idea-text p { margin: 0.25rem 0 0; color: var(--muted); max-width: 65ch; }
+/* Idea details: an optional drop-down under an idea's sentence, for the context that doesn't fit in it.
+   The script hides it until the card's text or its chevron is clicked. */
+.idea-card.has-more .idea-text { cursor: pointer; }
+.idea-more { flex: 1 1 100%; max-width: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--rule); }
+.idea-more > * { max-width: 65ch; }
+/* Once any idea has details, the others keep the chevron's room empty, so every card's buttons line up. */
+.feature-board.has-details .idea-card:not(.has-more) { padding-right: 2.8125rem; }
+/* Closed, the details keep a box for find in page to search, so it takes no room. */
+.idea-more[hidden] { margin: 0; padding: 0; border: 0; }
+/* The negative margins line the chevron up with a planned feature's, and the buttons up with its status pill. */
+.idea-toggle { display: none; flex: none; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; margin: 0 -0.21875rem 0 -0.71875rem; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; }
+.idea-card.has-more .idea-toggle { display: flex; }
+.idea-toggle::before { content: ""; width: 0.4375rem; height: 0.4375rem; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); }
+.idea-card.is-open .idea-toggle::before { transform: translateY(-0.125rem) rotate(45deg); }
+.idea-toggle:hover { background: var(--row-hover); }
+.idea-toggle:hover::before, .idea-card.has-more:has(.idea-text:hover) .idea-toggle::before { border-color: var(--fg); }
+.idea-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .idea-toggle::before { transition: transform 0.15s ease; } }
+.idea-card .idea-wait { display: none; margin-top: 0.375rem; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--st-done-fg); }
+.idea-card[data-decision="accept"] .idea-wait { display: block; }
+.idea-card .idea-reset { margin-top: 0.375rem; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--st-prog-fg); }
+/* Rejected ideas: no card fill, so they sit back on the page background like inactive items, with only a faint red wash over it */
+.idea-card[data-decision="reject"] { background: rgb(190 50 40 / 0.05); border-color: color-mix(in srgb, var(--st-block-fg) 8%, var(--rule)); }
+.idea-card[data-decision="reject"] h3 { color: var(--muted); }
+.idea-actions { flex: none; display: none; gap: 0.375rem; }
+.feature-board.can-decide .idea-actions { display: flex; }
+.idea-card[hidden] { display: none; }
+/* Reset: on a planned feature that has not been started, next to its status pill */
+.card-head .reset-btn { display: none; flex: none; padding: 0.3125rem 0.625rem; }
+.feature-board.can-decide .card-head .reset-btn { display: inline-block; }
+.feature-board.can-decide .card-head .reset-btn[hidden] { display: none; }
+.idea-btn { font: 500 0.6875rem/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 0.5rem 0.75rem; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--fg); cursor: pointer; }
+.idea-btn:hover { background: var(--row-hover); }
+.idea-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Accept (a tick), Reject (a cross) and Edit (a pencil): square icon buttons */
+.idea-btn.icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 2rem; height: 2rem; padding: 0; }
+.icon-btn svg { width: 0.875rem; height: 0.875rem; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.idea-btn[data-decide="accept"][aria-pressed="true"] { color: var(--st-done-fg); background: var(--st-done-bg); border-color: currentColor; }
+.idea-btn[data-decide="reject"][aria-pressed="true"] { color: var(--st-block-fg); background: var(--st-block-bg); border-color: currentColor; }
+/* The pencil is orange while it holds changes for Claude, and filled while its box is open */
+.idea-btn[data-edit].has-edit { color: var(--st-skip-fg); border-color: currentColor; }
+.idea-btn[data-edit][aria-expanded="true"] { color: var(--st-skip-fg); background: var(--st-skip-bg); border-color: currentColor; }
+.card-head .edit-btn { display: none; width: 1.75rem; height: 1.75rem; }
+.feature-board.can-decide .card-head .edit-btn { display: inline-flex; }
+.feature-board.can-decide .card-head .edit-btn[hidden] { display: none; }
+/* A rejected idea swaps Accept, Reject and Edit for one Recover button, styled like Reset, which makes it undecided again */
+.idea-actions .recover-btn { display: none; flex: none; padding: 0.3125rem 0.625rem; }
+.idea-card[data-decision="reject"] .idea-actions > :not(.recover-btn), .idea-card[data-decision="reject"] > .idea-edit { display: none; }
+.idea-card[data-decision="reject"] .idea-actions > .recover-btn { display: inline-block; }
+/* Edit box: opens along the bottom of the card for the changes the user wants Claude to make to that feature */
+.idea-edit { flex: 1 1 100%; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--rule); }
+.idea-edit[hidden] { display: none; }
+.feature-board.has-details .idea-card:not(.has-more) > .idea-edit { margin-right: -1.8125rem; }
+.phase-body > .idea-edit { margin: 0.25rem 0.375rem 0; }
+.edit-label { display: block; margin-bottom: 0.375rem; font: 500 0.6875rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--st-skip-fg); }
+.idea-edit textarea { display: block; box-sizing: border-box; width: 100%; min-height: 5.5rem; padding: 0.5rem 0.625rem; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; line-height: 1.5; resize: vertical; }
+.idea-edit textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.edit-status { min-height: 1.4em; margin: 0.375rem 0 0; font-size: 0.8125rem; color: var(--muted); }
+/* Drag handle: two columns of dots just outside the left edge of each planned feature in Pending, level with its header,
+   for the owner and editors to drag them into order. Where the page has no margin to spare, those cards move in to make room. */
+.group-list { position: relative; }
+.group-list > .phase-card > summary { position: relative; }
+.drag-handle { display: none; position: absolute; top: 50%; right: calc(100% + 0.5rem); transform: translateY(-50%); align-items: center; justify-content: center; width: 1.25rem; height: 2rem; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); opacity: 0.45; cursor: grab; touch-action: none; }
+.drag-handle svg { width: 0.625rem; height: 1rem; fill: currentColor; }
+.feature-board.can-decide .feature-group.can-sort .group-list > .phase-card:not([hidden]):not(.is-skipped) > summary > .drag-handle { display: flex; }
+.group-list > :hover .drag-handle, .drag-handle:focus-visible, .is-dragging .drag-handle { opacity: 1; }
+.drag-handle:hover { background: var(--row-hover); }
+.drag-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.group-list > .is-dragging { z-index: 2; box-shadow: 0 8px 24px rgb(0 0 0 / 0.18); }
+body.is-sorting, body.is-sorting * { cursor: grabbing; user-select: none; }
+@media (max-width: 52rem) {
+  .feature-board.can-decide .feature-group.can-sort .group-list > .phase-card { margin-left: 1.75rem; }
+}
+/* The line under a phase card's header: a phase's goal and estimate, or a planned feature's description */
+.phase-desc, .feature-desc { margin: 0 0.375rem 0.125rem; color: var(--muted); max-width: 65ch; }
+.feature-error { color: var(--st-block-fg); }
+/* Save Snapshot: a quiet line under the summary of a database plan, for the owner and editors */
+.snapshot-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.875rem; margin-top: -1rem; font: 400 0.75rem/1.6 var(--font-mono); color: var(--muted); }
+.snapshot-bar .snapshot-btn { padding: 0.375rem 0.625rem; }
+.snapshot-bar .snapshot-btn:disabled { opacity: 0.6; cursor: default; }
+.snapshot-bar.is-error .snapshot-note { color: var(--st-block-fg); }
+@media (max-width: 520px) {
+  .feature-board.has-details .idea-card:not(.has-more) { padding-right: 1rem; }
+  .idea-toggle { margin: 0; }
+  .idea-actions { width: 100%; order: 1; margin-top: 0.75rem; }
+  .idea-more { order: 2; }
+  .idea-card > .idea-edit { order: 3; }
+  .feature-board.has-details .idea-card:not(.has-more) > .idea-edit { margin-right: 0; }
+  /* A planned feature's Reset, pencil and status pill go on a second line, under its name */
+  .feature-board.can-decide .phase-card > .card-head { flex-wrap: wrap; row-gap: 0.625rem; }
+  .feature-board.can-decide .phase-card > .card-head > .card-title { flex-basis: calc(100% - 2rem); }
+  .feature-board.can-decide .phase-card > .card-head > :is(.reset-btn, .edit-btn, .status) { order: 1; }
+}

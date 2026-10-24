@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A note on each day, such as <em>guests at seven</em>, saved with the week.</p>",
+  "kind": "step",
+  "name": "Per-Day Notes",
+  "phase": "p-meal-planner",
+  "sort": 3000,
+  "status": "done"
+}

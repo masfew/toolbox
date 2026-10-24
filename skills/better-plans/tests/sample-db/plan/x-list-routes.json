@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"prose\">\n  <p>The list panel shows the week's list by default, a single recipe's list when one is open, and the leftovers list at the end of a week.</p>\n</div>",
+  "id": "list-routes",
+  "kind": "section",
+  "name": "How the List Knows What to Show",
+  "sort": 5000
+}

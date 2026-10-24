@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A pin on each card; pinned cards sit above the cuisine groups.</p>",
+  "kind": "step",
+  "name": "Pin and Unpin Recipes",
+  "phase": "p-pinned-recipes",
+  "sort": 1000,
+  "status": "done"
+}

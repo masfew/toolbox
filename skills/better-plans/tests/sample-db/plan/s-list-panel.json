@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A panel docked on the right that can be shown or hidden with <kbd>Ctrl</kbd>+<kbd>L</kbd>.</p>\n<h5>Why</h5>\n<p>The list stays in view while recipes are picked.</p>",
+  "kind": "step",
+  "name": "List Panel",
+  "phase": "p-shopping-list",
+  "sort": 1000,
+  "status": "done"
+}

@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>A card per running timer, stacked in the corner, each with its step's text.</p>",
+  "kind": "step",
+  "name": "Timer Cards",
+  "phase": "p-cooking-timers",
+  "sort": 1000,
+  "status": "done"
+}

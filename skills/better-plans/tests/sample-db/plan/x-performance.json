@@ -1,0 +1,7 @@
+{
+  "body": "<div class=\"prose\">\n  <p>Startup reads every recipe file once; past about 2,000 files that takes over a second, which 4.2 deals with.</p>\n</div>",
+  "id": "performance",
+  "kind": "section",
+  "name": "Performance Considerations",
+  "sort": 8000
+}

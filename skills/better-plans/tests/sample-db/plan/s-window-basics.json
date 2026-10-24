@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>The window remembers its size and place, and opens on the screen it closed on.</p>",
+  "kind": "step",
+  "name": "Window Basics",
+  "phase": "p-recipe-store",
+  "sort": 3000,
+  "status": "done"
+}

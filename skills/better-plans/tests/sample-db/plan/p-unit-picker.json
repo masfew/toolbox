@@ -1,0 +1,8 @@
+{
+  "desc": "Switch every recipe between metric and imperial units.",
+  "feature": "unit-picker",
+  "kind": "phase",
+  "name": "Unit Picker",
+  "short": "Unit Picker",
+  "sort": 1000
+}

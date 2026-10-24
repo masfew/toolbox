@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Saves go to a temporary file that replaces the old one only once it's complete, and a crash brings back the last good copy.</p>\n<h5>Depends On</h5>\n<p>3.6 (the findings).</p>",
+  "kind": "step",
+  "name": "Crash Recovery",
+  "phase": "p-polish",
+  "sort": 3000,
+  "status": "done"
+}

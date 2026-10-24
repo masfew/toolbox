@@ -1,0 +1,6 @@
+{
+  "intro": "A list panel on the right that turns chosen recipes into one list of things to buy.",
+  "kind": "phase",
+  "name": "Shopping List",
+  "sort": 2000
+}

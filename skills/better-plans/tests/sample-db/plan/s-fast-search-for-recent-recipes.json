@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Keep a search index for the 50 most recently opened recipes, so search answers at once even in a large recipe box. Decided from the 3.6 findings.</p>\n<h5>How</h5>\n<ul>\n  <li>The index keeps the order recipes were last opened in.</li>\n  <li>The cap of 50 is one constant.</li>\n</ul>\n<h5>Why</h5>\n<p>A full search over thousands of files took over a second.</p>",
+  "kind": "step",
+  "name": "Fast Search for Recent Recipes",
+  "phase": "p-polish",
+  "sort": 2000,
+  "status": "done"
+}

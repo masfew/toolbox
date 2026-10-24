@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>Two buttons in the top bar that convert every amount on screen.</p>\n<h5>How</h5>\n<ul>\n  <li>Converted amounts round to kitchen-friendly values (¼, ⅓, ½).</li>\n  <li>The bar leaves room at its right end for {{F:pantry-gauge}}'s gauge.</li>\n</ul>",
+  "kind": "step",
+  "name": "Metric and Imperial Buttons",
+  "phase": "p-unit-picker",
+  "sort": 1000,
+  "status": "done"
+}

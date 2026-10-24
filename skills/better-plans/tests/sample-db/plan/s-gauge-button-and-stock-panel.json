@@ -1,0 +1,8 @@
+{
+  "body": "<h5>What</h5>\n<p>The gauge itself, and a panel that opens from it listing what's in stock.</p>\n<h5>How</h5>\n<p>The top bar: {{F:unit-picker}} already built it, with the unit buttons on the left.</p>\n<h5>Depends On</h5>\n<p>{{F:pantry-gauge}}.1.</p>",
+  "kind": "step",
+  "name": "Gauge Button and Stock Panel",
+  "phase": "p-pantry-gauge",
+  "sort": 2000,
+  "status": "done"
+}

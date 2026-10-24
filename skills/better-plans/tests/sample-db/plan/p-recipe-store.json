@@ -1,0 +1,6 @@
+{
+  "intro": "Recipes as plain Markdown files in one folder, opened in a window that shows them as cards. Done when a recipe written in any text editor shows up in Larder within a second.",
+  "kind": "phase",
+  "name": "Recipe Store",
+  "sort": 1000
+}
