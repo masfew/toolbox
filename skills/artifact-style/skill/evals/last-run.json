@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-24",
+  "description_sha256": "2a0c61a2f36707f2f153f04092a78664211f105194c5f985ad21316d372531e8",
+  "description_chars": 695,
+  "model": "default",
+  "runs_per_query": 3,
+  "runs_made": 40,
+  "passed": 20,
+  "total": 20,
+  "should_load_rate": 1.0,
+  "near_miss_rate": 0.0,
+  "failed": []
+}

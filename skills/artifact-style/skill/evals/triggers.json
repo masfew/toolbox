@@ -1,0 +1,82 @@
+[
+ {
+  "query": "write up an artifact page explaining that auto mode blocks merge commits when two sessions conflict, and the settings.json rule that fixes it, so i can read it later",
+  "should_trigger": true
+ },
+ {
+  "query": "make a handoff page for the next session: we moved the email digest from cron to a systemd timer, removed the old cron line, and retries are still to do. publish it as an artifact",
+  "should_trigger": true
+ },
+ {
+  "query": "can you put these audit results into a nice html page i can share with my team: 41 packages, 3 outdated (lodash, axios, sharp), 1 with a known vulnerability (axios), 2 unused",
+  "should_trigger": true
+ },
+ {
+  "query": "turn this into an artifact page pls:\n# Disk cleanup\n- freed 42 GB from old build caches\n- 3 folders left because they're in use\n- next: move the photo library to D:",
+  "should_trigger": true
+ },
+ {
+  "query": "publish a quick reference page for the git commands we use for releases",
+  "should_trigger": true
+ },
+ {
+  "query": "build me a little comparison page of netlify vs vercel vs cloudflare pages for a static portfolio site, as an artifact",
+  "should_trigger": true
+ },
+ {
+  "query": "make an artifact explaining how a backup script like this decides which folders to skip: it reads a .backupignore file, skips anything over 5 GB, and skips folders named cache or tmp",
+  "should_trigger": true
+ },
+ {
+  "query": "can you make a runbook page for the monthly server patching steps and publish it",
+  "should_trigger": true
+ },
+ {
+  "query": "redo the onboarding checklist page you made last week, it looks weird, the colours are all over the place",
+  "should_trigger": true
+ },
+ {
+  "query": "make a small html tool page where i can paste a json file and see it as a table, publish it as an artifact",
+  "should_trigger": true
+ },
+ {
+  "query": "make a plan for adding dark mode to quill notes",
+  "should_trigger": false
+ },
+ {
+  "query": "mark step 2.3 done in the recipe app plan",
+  "should_trigger": false
+ },
+ {
+  "query": "make me a slide deck about our q3 sales results",
+  "should_trigger": false
+ },
+ {
+  "query": "build a dashboard of my claude usage per day from this csv",
+  "should_trigger": false
+ },
+ {
+  "query": "design a landing page mockup for my new app, a few artboards",
+  "should_trigger": false
+ },
+ {
+  "query": "build the shop menu ui for my platformer game in unity",
+  "should_trigger": false
+ },
+ {
+  "query": "make a thumbnail for my mobile puzzle game's store listing",
+  "should_trigger": false
+ },
+ {
+  "query": "write me a google doc with the meeting notes from today",
+  "should_trigger": false
+ },
+ {
+  "query": "change the accent colour in my vscode theme to blue",
+  "should_trigger": false
+ },
+ {
+  "query": "fix the css in my website repo so the header stops overlapping on mobile",
+  "should_trigger": false
+ }
+]
