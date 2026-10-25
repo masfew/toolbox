@@ -1,0 +1,17 @@
+{
+  "telegram_token": "REPLACE_WITH_YOUR_BOT_TOKEN",
+  "telegram_chat_id": "REPLACE_WITH_YOUR_CHAT_ID",
+  "waiting_pushes": false,
+  "telegram_commands": [],
+  "launcher": {
+    "quiet_seconds": 10,
+    "busy_reply_after": 300,
+    "give_up_after": 1500,
+    "permission_mode": "Auto",
+    "max_age_seconds": 120,
+    "max_link_chars": 30000,
+    "step_timeout": 20,
+    "attempts": 5,
+    "nicknames": {}
+  }
+}
