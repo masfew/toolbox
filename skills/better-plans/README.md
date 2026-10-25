@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.3.0. See the [changes](#changes) at the end.
+Version 1.3.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -173,6 +173,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.3.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
 - 1.3.0: Plans run in batches no longer have side batches, which ran beside the others with a dashed "Requires Batch N" badge and only when named. Every batch is now numbered and runs in order, and work that has to wait on something (such as a week of everyday use) ends its batch, with the next batch's row saying what it waits on. Existing plans with a side batch keep working as they are.
 - 1.2.0: Finished phases in the plan overview now also fold together. Once every core phase is finished, the build plan folds into one row; once 10 or more planned features at the top of Future Ideas are done, they fold into one row, with the ones in progress, not started or skipped left below it. Opening the finished features scrolls down to the last of them and the next one or two, and hiding them (from a row at the bottom) scrolls back up. Published plans pick this up the next time their look is refreshed.
 - 1.1.0: A phase or planned feature whose status moves it into another group (finished, reopened, skipped or brought back) now moves only as far as it must, to the end of its new group going up or the top going down, and stays there, instead of jumping back to wherever it first sat. Published plans pick this up the next time their look is refreshed.

@@ -669,10 +669,28 @@ def read_claude_md():
     return CLAUDE_MD.read_text(encoding="utf-8") if CLAUDE_MD.exists() else ""
 
 
+def has_terminal():
+    """True if a person can answer the installer's questions here. Windows
+    reports the null device, which Claude Code's tools give a command as its
+    input, as a terminal, and a question would then fail or wait forever, so
+    there stdin must also be a console."""
+    if not sys.stdin.isatty():
+        return False
+    if os.name != "nt":
+        return True
+    import ctypes
+    import msvcrt
+    try:
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+    except OSError:
+        return False
+    return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(ctypes.c_ulong())))
+
+
 def ask_instructions():
     """Shows the block and asks whether to add it. Returns True or False, or None
     when there's no terminal to ask in."""
-    if not sys.stdin.isatty():
+    if not has_terminal():
         return None
     print(f"\n{TOOL_NAME} can add these lines to {CLAUDE_MD}, which every Claude Code session loads:\n")
     print("    " + INSTRUCTIONS.strip().replace("\n", "\n    "))

@@ -1,6 +1,6 @@
 # artifact-style
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 1.0.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -161,4 +161,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.0.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
 - 1.0.0: First public version.

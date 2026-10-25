@@ -819,6 +819,12 @@ class Installer(unittest.TestCase):
         with open(os.devnull) as null, mock.patch.object(self.install.sys, "stdin", null):
             self.assertFalse(self.install.has_terminal())
 
+    def test_the_claude_md_question_is_not_asked_on_the_null_device(self):
+        # The template's question, shared by every installer with INSTRUCTIONS, used to raise EOFError here.
+        with open(os.devnull) as null, mock.patch.object(self.install.sys, "stdin", null), \
+                mock.patch("builtins.input", side_effect=EOFError):
+            self.assertIsNone(self.install.ask_instructions())
+
     def test_placeholders_count_as_not_set(self):
         self.assertFalse(self.install.is_set("REPLACE_WITH_YOUR_BOT_TOKEN"))
         self.assertFalse(self.install.is_set(None))
