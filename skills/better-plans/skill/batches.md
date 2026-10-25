@@ -2,7 +2,7 @@
 
 Read when the user asks for a plan to be run in batches (making a new plan with them, or adding them to one), or asks a session to build a plan's next batch or a named batch (SKILL.md's routing table).
 
-A batch is a run of a plan's steps that one fresh session builds back to back, stopping only where the user is needed. The plan says which steps each batch holds, where each one stops, and how a session finds the next one, so the user can start a session with "build the next batch in the <plan>" and nothing else. **Batches are optional.** A plan has none unless the user asks for them: never add them on your own, and don't suggest them for small plans. Without them a plan looks and works exactly as the rest of this skill describes.
+A batch is a run of a plan's steps that one fresh session builds back to back, stopping only where the user is needed. The plan says which steps each batch holds, where each one stops, and how a session finds the next one, so the user can start a session with "build the next batch in the <plan>" and nothing else. **Batches are optional.** A plan has none unless the user asks for them: never add them on your own, and don't suggest them for small plans. Without them a plan looks and works exactly as the rest of this skill describes. With them, the overview's build boxes ([building.md](building.md)) appear only on planned features: core phases are built batch by batch, in order.
 
 ## The Four Pieces
 

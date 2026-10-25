@@ -29,6 +29,13 @@ Database plans (DB: the folder ArtifactData list wrote with out_dir; it holds pl
   convert PAGE OUTDIR
                  A plan page as entries: OUTDIR/plan/_plan.json and _seed.json, with every number mention made a
                  token listed, and anything the page's allowlist won't show.
+  build DB [--claim NAME [--take PHASE ...] --out FILE | --release [PHASE ...] --out FILE | --brief PHASE --out FILE]
+                 The phases ticked in the overview to build next and the ones a session claimed, with their steps,
+                 Depends On text and mentions of other unfinished phases, in a suggested order. --claim writes the
+                 update that claims every ticked phase for the session NAME (--take adds phases by number or doc id,
+                 ticked or not); --release the one that hands back the phases named, or with none every finished
+                 one. Send either as ArtifactData update of features/_build, pinned to the version the features list
+                 showed. --brief writes one phase's own text (its steps still to do, in full) for a worker.
   snapshot DB --out PAGE [--fold OUTDIR] [--files FOLDER]
                  The page built from the entries and records. --fold also writes the entries with the records
                  written in (OUTDIR/<doc id>.json) and prints the batch.
@@ -113,7 +120,7 @@ def main():
         return
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("command", choices=["status", "record", "outline", "edit", "add", "move", "new", "convert",
-                                        "snapshot", "files"])
+                                        "snapshot", "files", "build"])
     ap.add_argument("args", nargs="*")
     ap.add_argument("--db")
     ap.add_argument("--out")
@@ -143,6 +150,10 @@ def main():
     ap.add_argument("--major", action="store_true")
     ap.add_argument("--fold")
     ap.add_argument("--files")
+    ap.add_argument("--claim", metavar="NAME")
+    ap.add_argument("--release", nargs="*", metavar="PHASE")
+    ap.add_argument("--take", nargs="+", default=[], metavar="PHASE")
+    ap.add_argument("--brief", metavar="PHASE")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     c, args = a.command, a.args
@@ -192,6 +203,54 @@ def main():
             fail("give at least one STEP=STATUS, --outcome, --note or change")
         rec = db.record(steps=steps, notes=notes, major=major, **ops)
         save(args[0], rec, describe(rec))
+    elif c == "build":
+        m = model(args[0] if args else a.db)
+
+        def phase_id(x):
+            pid = x if x.startswith("p-") else m.resolve(x)
+            if not pid or m.E.get(pid, {"kind": "phase"}).get("kind") != "phase":
+                fail(f"{x!r} isn't a phase in the plan: give its number (2, F8) or doc id")
+            return pid
+        if a.claim is None and a.release is None and a.brief is None:
+            print(db.build_report(m))
+            return
+        if not a.out:
+            fail("build --claim, --release and --brief need --out FILE")
+        if a.brief is not None:
+            pid = phase_id(a.brief)
+            if pid not in m.pnum:
+                fail(f"{a.brief!r} isn't in the plan any more")
+            path = Path(a.out)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(db.phase_brief(m, pid), encoding="utf-8")
+            print(f"Wrote {path.as_posix()}: {m.pnum[pid]}'s own text for its worker.")
+            return
+        if a.claim is not None:
+            if not a.claim.strip():
+                fail("--claim needs the session's name, as the page will show it")
+            take = []
+            for x in a.take:
+                pid = phase_id(x)
+                if pid not in m.pnum or db.phase_state(m, pid) in ("done", "skipped"):
+                    fail(f"{x} is finished or gone, so there's nothing to build")
+                take.append(pid)
+            order, upd = db.build_claim(m, db.strict("--claim", a.claim.strip(), True), take)
+            if not order:
+                fail("nothing is ticked to build, so there's nothing to claim (build DB shows what's there)")
+            what = "claims " + ", ".join(m.pnum[p] for p in order) + " (in that order)"
+        else:
+            pids = [phase_id(x) for x in a.release]
+            pids, upd = db.build_release(m, pids)
+            if not pids:
+                print("Nothing to release: no finished or gone phase has an entry.")
+                return
+            what = "releases " + ", ".join(m.pnum.get(p, p) for p in pids)
+        path = Path(a.out)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(upd, ensure_ascii=False), encoding="utf-8")
+        print(f"Wrote {path.as_posix()}: {what}. Send it as ArtifactData update of features/_build (file_path this "
+              "file) with if_version the version the features list showed; if it's refused, list features again and "
+              "rerun build.")
     elif c == "outline":
         print(db.outline(model(args[0] if args else a.db), a.show, a.jobs))
     elif c == "add":

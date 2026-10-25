@@ -297,6 +297,55 @@ m = with_records(rec_of("F8.1=done", "F8.2=done", "F7.1=done", "F7.2=done"), pla
 check("two finished in one record keep their order", m.pnum["p-leftovers"] == "F7" and m.pnum["p-settings-menu"] == "F8",
       {k: m.pnum[k] for k, _ in m.feats})
 
+# 18 build selections (features/_build): which phases can be ticked, the report, the claim and the release
+def with_build(phases, plan=None):
+    return db.Model(plan or plan0, st0, {**fe0, "_build": {"phases": phases}})
+m = with_build({"p-settings-menu": {"state": "selected"}, "p-leftovers": {"state": "selected"},
+                "p-unit-picker": {"state": "selected"}, "p-gone": {"state": "claimed", "by": "Old"}, "p-polish": None})
+check("buildable: open features yes, done no", db.buildable(m, "p-leftovers") and not db.buildable(m, "p-unit-picker")
+      and not db.buildable(m, "p-recipe-store"))
+order, upd = db.build_claim(m, "Larder build")
+check("claim: ticked ones, stale cleared", order == ["p-leftovers", "p-settings-menu"]
+      and upd["phases"]["p-leftovers"]["state"] == "claimed" and upd["phases"]["p-leftovers"]["by"] == "Larder build"
+      and upd["phases"]["p-unit-picker"] == {"__delete__": True} and upd["phases"]["p-gone"] == {"__delete__": True}
+      and "p-polish" not in upd["phases"], upd)
+# A mention of a ticked phase's step puts that phase first, whatever the plan order
+mp = copy.deepcopy(plan0)
+mp["s-keep-list-at-meal-end"]["body"] += "<p>Needs {{S:s-settings-button-and-menu}} first.</p>"
+m = with_build({"p-settings-menu": {"state": "selected"}, "p-leftovers": {"state": "selected"}}, plan=mp)
+check("build order follows mentions", db.build_order(m, ["p-leftovers", "p-settings-menu"]) == ["p-settings-menu", "p-leftovers"])
+rep = db.build_report(m)
+check("report", "Ticked to build (2)" in rep and rep.index("F8 Settings Menu") < rep.index("F7 Leftovers")
+      and "F7.2 depends on:" in rep, rep)
+m = with_build({"p-leftovers": {"state": "selected"}}, plan=mp)
+check("report flags an unticked dependency", "F8 Settings Menu [todo, NOT ticked]" in db.build_report(m), db.build_report(m))
+# Core phases only when the plan has no batches; a reset planned feature never
+cp = copy.deepcopy(plan0)
+cp["s-polish-pass"]["status"] = "todo"
+m = with_build({}, plan=cp)
+check("core phase tickable without batches", db.buildable(m, "p-polish"))
+cp["s-recipe-files"]["name"] += " <kbd>Batch 1</kbd>"
+m = with_build({}, plan=cp)
+check("core phase not tickable with batches", not db.buildable(m, "p-polish") and db.buildable(m, "p-leftovers"))
+m = db.Model(plan0, st0, {**fe0, "leftovers": {"decision": "undecided"}})
+check("reset feature not tickable", not db.buildable(m, "p-leftovers"))
+# Release: named phases, or with none every finished or gone one
+m = with_build({"p-leftovers": {"state": "claimed", "by": "X"}, "p-unit-picker": {"state": "claimed", "by": "X"}})
+pids, upd = db.build_release(m, [])
+check("release finished", pids == ["p-unit-picker"] and upd == {"phases": {"p-unit-picker": {"__delete__": True}}}, upd)
+check("report: claimed", "Claimed: F7 Leftovers [todo] [p-leftovers] by X" in db.build_report(m), db.build_report(m))
+bdir = Path(tempfile.mkdtemp())
+for c, docs in (("plan", plan0), ("statuses", st0), ("features", {"_build": {"phases": {"p-leftovers": {"state": "selected"}}}})):
+    (bdir / c).mkdir()
+    for k, v in docs.items():
+        (bdir / c / f"{k}.json").write_text(json.dumps(v), encoding="utf-8")
+out = run("build", bdir, "--claim", "Test", "--out", tmp / "claim.json")
+got = json.loads((tmp / "claim.json").read_text(encoding="utf-8"))
+check("plan.py build --claim", "claims F7" in out and got["phases"]["p-leftovers"]["by"] == "Test", out)
+out = run("build", bdir, "--release", "F7", "--out", tmp / "rel.json")
+check("plan.py build --release", json.loads((tmp / "rel.json").read_text(encoding="utf-8")) == {"phases": {"p-leftovers": {"__delete__": True}}}, out)
+check("outline ignores _build", "_build" not in run("outline", bdir, "--jobs"))
+
 sys.stdout.reconfigure(encoding="utf-8")
 import os
 if os.environ.get("DUMP"):

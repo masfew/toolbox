@@ -205,6 +205,8 @@ def load_choices(folder):
         if p.stem == "_order":
             order = [x for x in body.get("order", []) if isinstance(x, str)]
             continue
+        if p.stem.startswith("_"):   # _build (build selections) and any other document that isn't a feature's
+            continue
         d = OLD_DECISIONS.get(body.get("decision"), body.get("decision"))
         choices[p.stem] = {"decision": d if d in ("accept", "reject") else "undecided",
                            "edit": body.get("edit") if isinstance(body.get("edit"), str) else ""}

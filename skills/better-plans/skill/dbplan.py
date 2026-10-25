@@ -1220,6 +1220,151 @@ def idea_jobs(m):
     return jobs
 
 
+# ---------------------------------------------------------------------------------------------- build selections
+# The phases the user ticked in the overview to build next, and the ones a session has claimed: one document,
+# features/_build, {"phases": {<phase doc id>: {"state": "selected" | "claimed", "at", "by"}}}. The page writes ticks
+# (null clears one); a session claims every ticked phase in one update pinned to the version it listed, so a second
+# session (or a tick made in between) makes the write fail instead of both sessions building the same phase. plan.js's
+# initBuild shows them, with the same rules for which phases can be ticked.
+
+BUILD_DOC = "_build"
+BATCH_BADGE = re.compile(r"<kbd>\s*Batch\b", re.I)
+DEPENDS_ON = re.compile(r"<h5>\s*Depends\s+On\s*</h5>(.*?)(?=<h[1-5]\b|\Z)", re.I | re.S)
+
+
+def build_entries(m):
+    """features/_build's ticks and claims, {phase doc id: entry}."""
+    phases = (m.features.get(BUILD_DOC) or {}).get("phases")
+    if not isinstance(phases, dict):
+        return {}
+    return {pid: v for pid, v in phases.items() if isinstance(v, dict) and v.get("state") in ("selected", "claimed")}
+
+
+def has_batches(m):
+    return any(BATCH_BADGE.search(s.get("name", "")) for pid, _ in m.phases for _, s in m.phase_steps(pid))
+
+
+def phase_state(m, pid):
+    return phase_status([m.status[s] for s, _ in m.phase_steps(pid)])
+
+
+def buildable(m, pid):
+    """Whether the page shows a tick box for the phase: it has steps and isn't finished, and it's a planned feature
+    that isn't waiting to be reset, or a core phase in a plan without batches."""
+    ph = m.E.get(pid)
+    if not ph or pid not in m.pnum or not m.phase_steps(pid) or phase_state(m, pid) in ("done", "skipped"):
+        return False
+    if ph.get("feature"):
+        dec = (m.features.get(ph["feature"]) or {}).get("decision")
+        return dec in (None, "accept", "keep")
+    return not has_batches(m)
+
+
+def phase_mentions(m, pid):
+    """Other phases this phase's text mentions (its intro and its steps' details and notes), by doc id."""
+    fpid = {ph["feature"]: k for k, ph in m.feats}
+    texts = [m.E[pid].get("intro") or "", m.E[pid].get("desc") or ""]
+    for sid, s in m.phase_steps(pid):
+        texts += [s.get("body", "")] + m.notes.get(sid, [])
+    out = []
+    for kind, ref in TOKEN.findall("\n".join(texts)):
+        other = m.E.get(ref, {}).get("phase") if kind == "S" else fpid.get(ref)
+        if other and other != pid and other in m.pnum and other not in out:
+            out.append(other)
+    return out
+
+
+def build_order(m, pids):
+    """The phases in an order that puts each after the ones among them its text mentions, else in plan order."""
+    rank = {pid: i for i, (pid, _) in enumerate(m.phases + m.feats)}
+    need = {p: [o for o in phase_mentions(m, p) if o in pids] for p in pids}
+    done, order = set(), []
+    while len(order) < len(pids):
+        ready = sorted((p for p in pids if p not in done and all(o in done for o in need[p])), key=rank.get)
+        if not ready:   # they mention each other: plan order for the rest
+            ready = sorted((p for p in pids if p not in done), key=rank.get)
+        order.append(ready[0])
+        done.add(ready[0])
+    return order
+
+
+def build_report(m):
+    ent = build_entries(m)
+    name = lambda pid: f"{m.pnum[pid]} {text_of(m.sub(m.E[pid]['name']))}"   # noqa: E731
+    sel = [p for p, v in ent.items() if v["state"] == "selected" and buildable(m, p)]
+    claimed = [p for p, v in ent.items() if v["state"] == "claimed" and p in m.pnum and phase_state(m, p) not in ("done", "skipped")]
+    stale = [p for p in ent if p not in sel and p not in claimed]
+    out = [f"Build selections in {text_of(m.sub(m.M['title']))}" + (" (core phases can't be ticked: the plan has batches)" if has_batches(m) else "")]
+    if not sel:
+        out.append("Nothing is ticked to build.")
+    else:
+        out.append(f"Ticked to build ({len(sel)}), in a suggested order (each after the ticked phases its text mentions):")
+        for pid in build_order(m, sel):
+            out.append(f"  {name(pid)} [{phase_state(m, pid)}] [{pid}]")
+            out.append("    steps: " + ", ".join(f"{m.num_of[s]} {text_of(m.sub(v['name']))} [{m.status[s]}]" for s, v in m.phase_steps(pid)))
+            for s, v in m.phase_steps(pid):
+                dep = DEPENDS_ON.search(v.get("body", ""))
+                if dep and m.status[s] not in ("done", "skipped"):
+                    out.append(f"    {m.num_of[s]} depends on: " + hp.one_line(m.sub(dep.group(1))))
+            ments = []
+            for o in phase_mentions(m, pid):
+                st = phase_state(m, o)
+                if st in ("done", "skipped"):
+                    continue
+                how = "ticked" if o in sel else ("claimed" if o in claimed else "NOT ticked")
+                ments.append(f"{name(o)} [{st}, {how}]")
+            if ments:
+                out.append("    mentions unfinished: " + "; ".join(ments))
+    for pid in claimed:
+        e = ent[pid]
+        out.append(f"Claimed: {name(pid)} [{phase_state(m, pid)}] [{pid}]" + (f" by {e['by']}" if e.get("by") else "") + f" at {e.get('at', '?')}")
+    if stale:
+        out.append("Entries to clear (finished, gone, reset, or a core phase in a plan with batches): " + ", ".join(
+            (name(p) if p in m.pnum else p) for p in stale))
+    return "\n".join(out)
+
+
+def build_claim(m, by, take=()):
+    """The update that claims every ticked phase (and the phases in take, ticked or not, claimed or not), and clears
+    entries that can't be built any more."""
+    ent = build_entries(m)
+    at = now_stamp()
+    sel = [p for p, v in ent.items() if v["state"] == "selected" and buildable(m, p)]
+    sel += [p for p in take if p not in sel]
+    phases = {p: {"state": "claimed", "by": by, "at": at} for p in sel}
+    for p, v in ent.items():
+        if p not in sel and not (v["state"] == "claimed" and p in m.pnum and phase_state(m, p) not in ("done", "skipped")):
+            phases[p] = {"__delete__": True}
+    return build_order(m, sel), {"phases": phases}
+
+
+def phase_brief(m, pid):
+    """One phase's own text for a worker: its name, intro and every step still to do with its details. Finished
+    steps are listed by name only."""
+    ph = m.E[pid]
+    kind = "Feature" if ph.get("feature") else "Phase"
+    out = [f"# {kind} {m.pnum[pid]}: {text_of(m.sub(ph['name']))}"]
+    intro = ph.get("desc") if ph.get("feature") else ph.get("intro")
+    if intro:
+        out += ["", hp.one_line(m.sub(intro))]
+    for sid, s in m.phase_steps(pid):
+        st = m.status[sid]
+        out += ["", f"## Step {m.num_of[sid]}: {text_of(m.sub(s['name']))} [{LABELS[st]}]"]
+        if st in ("done", "skipped"):
+            continue
+        out.append(m.sub(s.get("body", "")).strip())
+        out += [m.sub(h).strip() for h in m.notes.get(sid, [])]
+    return "\n".join(out) + "\n"
+
+
+def build_release(m, pids):
+    """The update that clears the given phases' entries, or with none every entry whose phase is finished or gone."""
+    ent = build_entries(m)
+    if not pids:
+        pids = [p for p in ent if p not in m.pnum or phase_state(m, p) in ("done", "skipped")]
+    return pids, {"phases": {p: {"__delete__": True} for p in pids}}
+
+
 # ---------------------------------------------------------------------------------------------- writing records
 
 def write_json(folder, name, body):

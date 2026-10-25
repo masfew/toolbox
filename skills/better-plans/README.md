@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.3.1. See the [changes](#changes) at the end.
+Version 1.4.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -90,12 +90,15 @@ Ask for a plan as usual. Claude builds the page, publishes it as an Artifact tit
 - *"Add a future idea: calendar sync."* An undecided idea card on the Future Ideas board.
 - *"I've updated my future ideas."* After you press ✓ or ✕ on idea cards, or wrote changes in a planned feature's edit box, Claude turns accepted ideas into planned features with steps and makes your edits.
 - *"Read the plan and build step 3.2."* A session reads only the outline and the parts it needs, not the whole page.
+- *"Build the selected phases in the <plan>."* After you tick phases in the overview (see Building Selected Phases below).
 
 On the page, a round button in the bottom-right corner takes you to the next step that isn't finished. Finished phases fold up in the overview, and once the whole build plan is finished, or 10 or more planned features are done, those fold together into one row. Drag a planned feature by the dots left of its header to change its order.
 
 **Snapshots.** A plan's content lives in the page's database, and the page builds itself from it every time it opens. The page's HTML is a snapshot for people who can't load the database (signed out, or a tool that doesn't run the page's script). When you open a plan that has changed and whose snapshot is over a day old (or more than 30 updates behind), the page saves a fresh snapshot by itself. The **Save Snapshot** line under the summary saves one whenever you want.
 
 **Batches**, only when you ask for them: a long plan can be split into batches, each a run of steps one fresh session builds back to back, stopping only where you're needed. Then *"build the next batch in the <plan>"* is all a new session needs.
+
+**Building selected phases.** Each unfinished planned feature in the overview has a tick box in its phase cell, and so does each unfinished core phase in a plan without batches. Tick the ones you want built next, in any order, then tell a new session *"build the selected phases in the <plan>"*. The session claims them all at once, so another session can't take them: each shows "Claimed" with the session's name in place of its box, and a Release button for a session that stopped without finishing. It works out the order from the phases' dependencies, asks you first if a ticked phase depends on unfinished work you didn't tick, then builds them one at a time, handing each phase to a worker subagent while it checks the work and keeps the plan up to date. The same happens when you name two or more phases for one session.
 
 ### Light Plans
 
@@ -107,7 +110,7 @@ Light plans live in the desktop app's session notes folder (`%APPDATA%\Claude\si
 
 ## How It Works
 
-- `skill/SKILL.md` is what every request loads: which file to read for which request, headings, record and lookup updates, reading a plan for context, and the plan source format. The other `skill/*.md` files are read only when a request needs them: `making.md` (new plans), `ideas.md` and `selections.md` (the Future Ideas board), `snapshots.md`, `batches.md`, `light.md` (light plans), and `older-plans.md` and `older-selections.md` (plans published before the database pages, which are HTML pages republished to change them).
+- `skill/SKILL.md` is what every request loads: which file to read for which request, headings, record and lookup updates, reading a plan for context, and the plan source format. The other `skill/*.md` files are read only when a request needs them: `making.md` (new plans), `ideas.md` and `selections.md` (the Future Ideas board), `building.md` (building ticked phases), `snapshots.md`, `batches.md`, `light.md` (light plans), and `older-plans.md` and `older-selections.md` (plans published before the database pages, which are HTML pages republished to change them).
 - **Making a plan:** Claude writes a short plan source (title, summary, sections, phases, steps and ideas under light headings), and `skill/plan.py new` builds the page and the plan's database entries from it. Claude publishes the page with `skill/plan.css` and `skill/plan.js` beside it and saves the entries in one write.
 - **Updating a plan:** every update is one small record in the page's database (its `statuses` collection), written by `skill/plan.py record`. Records name steps by number or by name, as you'd say them. The page replays the records over the plan's entries and works out every number itself. `skill/dbplan.py` holds the plan model and page builder, and `skill/plan.js` has their twin for the page; tests keep the two identical.
 - **The look and behaviour** live in `skill/plan.css` and `skill/plan.js`, published beside each plan. A published plan keeps the copies it was published with; ask Claude to refresh a plan's look to give it newer ones.
@@ -173,6 +176,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.4.0: Plans get build boxes. Tick the planned features (and, in a plan without batches, the core phases) you want built next, and tell a new session to build the selected phases. It claims them all in one write, so no other session can take them, shows them as Claimed with a Release button, and builds them in dependency order as an orchestrator, one worker subagent per phase. Naming two or more phases for one session works the same way. Published plans get the boxes the next time their look is refreshed.
 - 1.3.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
 - 1.3.0: Plans run in batches no longer have side batches, which ran beside the others with a dashed "Requires Batch N" badge and only when named. Every batch is now numbered and runs in order, and work that has to wait on something (such as a week of everyday use) ends its batch, with the next batch's row saying what it waits on. Existing plans with a side batch keep working as they are.
 - 1.2.0: Finished phases in the plan overview now also fold together. Once every core phase is finished, the build plan folds into one row; once 10 or more planned features at the top of Future Ideas are done, they fold into one row, with the ones in progress, not started or skipped left below it. Opening the finished features scrolls down to the last of them and the next one or two, and hiding them (from a row at the bottom) scrolls back up. Published plans pick this up the next time their look is refreshed.

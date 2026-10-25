@@ -20,9 +20,11 @@
   // content) listens through the hub, so a rebuild doesn't resubscribe and the new content gets the last data at once.
   var hub = {
     db: null, canEdit: null, mode: null, dragging: false, saving: false, model: null, differs: false,
-    plan: null, statuses: null, features: null, fl: [], sl: [], cl: [],
+    plan: null, statuses: null, features: null, fl: [], sl: [], cl: [], ml: [],
     live: { plan: false, statuses: false },   // the collection has arrived from the store, not only from the cache
     onFeatures: function (fn, err) { return listen(hub.fl, { fn: fn, err: err }, hub.features); },
+    // Every build of the model from the database, swapped in or not (the snapshot often already matches it).
+    onModel: function (fn) { return listen(hub.ml, { fn: fn }, hub.model); },
     // Status records reach a run of boot() only for plans whose entries aren't in the database (mode "legacy").
     onStatuses: function (fn) { return listen(hub.sl, { fn: fn }, hub.mode === 'legacy' ? hub.statuses : null); },
     onCanEdit: function (fn) { return listen(hub.cl, { fn: fn }, hub.canEdit === null ? null : hub.canEdit); }
@@ -117,6 +119,7 @@
       lastBuilt = html;
       swap(frag, textOf(model.sub(model.M.title)));
     }
+    fire(hub.ml, model);
     snapshotBar();
   }
 
@@ -915,6 +918,7 @@
         setFold(body, list.length > 0 && (choice ? choice.folded : finished), st, list.length);
       });
       regroup();
+      if (paintBuild) paintBuild();   // a new fold row copied the phase cell as it was
     }
 
     // Finished phases also fold together, into one group row: the core phases once every one is finished (GROUP_MIN_CORE or
@@ -1034,8 +1038,138 @@
     // "_order" document of the features collection ({order: [data-feature ids]}) until Claude renumbers them to match.
     var board = document.getElementById('feature-board');
     var placeFeatures = null; // regroups the cards when step statuses change (see initStatuses)
+    var paintBuild = null;    // shows the build ticks and claims (see initBuild)
     if (board) initFeatures(board);
     refold();   // after the features, which add their "Pending reset" label to the phase cell the fold row copies
+    initBuild();
+
+    // Build selections, on database plans. The owner and editors tick the phases they want built next, and a session
+    // told to "build the selected phases" claims them all at once, then builds them (building.md). Ticks and claims are
+    // one document, features/_build: {phases: {<phase doc id>: {state: "selected" | "claimed", at, by}}}, keyed by doc id
+    // so a tick stays with its phase when the plan renumbers; null (or no entry) means neither. Planned features can always
+    // be ticked, core phases only in a plan without batches (batches run in their own order); done, skipped and reset ones
+    // never. A claimed phase shows who claimed it and when, and a Release button that hands it back, until it's finished.
+    // The order of the ticks isn't kept: dependencies decide the build order. Everything here is DOM only, so snapshots
+    // and the parity test never see it.
+    function initBuild() {
+      var pending = {}, chain = Promise.resolve(), error = '';
+      var head = document.querySelector('#overview > .block-head');
+      var hint = document.createElement('p');
+      hint.className = 'build-hint';
+      hint.hidden = true;
+      if (head) head.parentNode.insertBefore(hint, head.nextSibling);
+      offs.push(function () { if (hint.parentNode) hint.parentNode.removeChild(hint); });
+      function saved() {
+        var d = (hub.features || []).filter(function (x) { return x.id === '_build'; })[0];
+        return d && d.body && isObj(d.body.phases) ? d.body.phases : {};
+      }
+      function entryOf(pid) {
+        var v = has(pending, pid) ? pending[pid] : saved()[pid];
+        return isObj(v) && (v.state === 'selected' || v.state === 'claimed') ? v : null;
+      }
+      function batched(m) {
+        return m.phases.some(function (ph) {
+          return (m.steps[ph.id] || []).some(function (s) { return /<kbd>\s*Batch\b/i.test(s.body.name || ''); });
+        });
+      }
+      function when(iso) {
+        var d = new Date(iso);
+        if (isNaN(d)) return '';
+        return d.getDate() + ' ' + MONTHS[d.getMonth()] + ', ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      }
+      function paint() {
+        if (!alive) return;
+        var m = hub.model, ready = hub.mode === 'db' && !!m && !!hub.db && hub.features !== null;
+        var canEdit = ready && hub.canEdit === true;
+        var pidOf = {}, feats = {}, core = ready && !batched(m), ticked = 0, claimed = 0;
+        if (ready) {
+          Object.keys(m.pnum).forEach(function (pid) { pidOf[m.pnum[pid]] = pid; });
+          m.feats.forEach(function (ph) { feats[ph.id] = true; });
+        }
+        Array.prototype.forEach.call(table.querySelectorAll('tbody[data-phase]'), function (body) {
+          var pid = pidOf[body.getAttribute('data-phase')], list = stepStatuses(body);
+          var live = !!pid && list.length > 0 && !isFinished(phaseStatus(list));
+          var e = live ? entryOf(pid) : null, isClaimed = !!e && e.state === 'claimed';
+          var tickable = live && !isClaimed && (feats[pid] || core) && !body.classList.contains('is-reset');
+          var isTicked = tickable && !!e && e.state === 'selected';
+          if (isTicked) ticked++;
+          if (isClaimed) claimed++;
+          var num = body.getAttribute('data-phase'), label = (/^F/.test(num) ? 'feature ' : 'phase ') + num;
+          Array.prototype.forEach.call(body.querySelectorAll('th.phase'), function (cell) {
+            var box = cell.querySelector('.build-box'), tag = cell.querySelector('.ph-claim');
+            if (canEdit && tickable) {
+              if (!box) {
+                box = document.createElement('input');
+                box.type = 'checkbox';
+                box.className = 'build-box';
+                var ph = cell.querySelector('.ph');
+                if (ph) ph.insertBefore(box, ph.firstChild);
+              }
+              box.setAttribute('data-pid', pid);
+              box.checked = isTicked;
+              box.title = isTicked ? 'Ticked to build in a new session' : 'Tick to build this in a new session';
+              box.setAttribute('aria-label', 'Build ' + label);
+            } else if (box) box.parentNode.removeChild(box);
+            if (isClaimed) {
+              if (!tag) {
+                tag = document.createElement('span');
+                tag.className = 'ph-claim';
+                tag.innerHTML = '<span class="claim-label">Claimed</span><span class="claim-by"></span>';
+                cell.appendChild(tag);
+              }
+              tag.querySelector('.claim-by').textContent = [e.by ? 'by ' + e.by : '', when(e.at)].filter(Boolean).join(', ');
+              var btn = tag.querySelector('.claim-release');
+              if (canEdit && !btn) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'claim-release';
+                btn.textContent = 'Release';
+                btn.title = 'Hand this back, so it can be ticked again. Only for a session that stopped without finishing it.';
+                tag.appendChild(btn);
+              } else if (!canEdit && btn) btn.parentNode.removeChild(btn);
+              if (btn) { btn.setAttribute('data-pid', pid); btn.setAttribute('aria-label', 'Release ' + label); }
+            } else if (tag) tag.parentNode.removeChild(tag);
+          });
+        });
+        var parts = [];
+        if (ticked) parts.push(ticked + (ticked === 1 ? ' phase ticked to build' : ' phases ticked to build') +
+          '. In a new session, say “Build the selected phases in the ' + textOf(m.sub(m.M.title)) + '”.');
+        if (claimed) parts.push(claimed + (claimed === 1 ? ' phase is claimed by a session.' : ' phases are claimed by a session.'));
+        hint.textContent = error || parts.join(' ');
+        hint.classList.toggle('feature-error', !!error);
+        hint.hidden = !canEdit || !hint.textContent;
+      }
+      // One write at a time to the document, as the store asks; the tick shows at once and stays while its write is out.
+      function save(pid, value) {
+        pending[pid] = value;
+        paint();
+        chain = chain.then(function () {
+          if (!hub.db) throw new Error('no database');
+          var ref = hub.db.collection('features').doc('_build'), patch = { phases: {} };
+          patch.phases[pid] = value;
+          var exists = (hub.features || []).some(function (d) { return d.id === '_build'; });
+          return exists ? ref.update(patch) : ref.set(patch);
+        }).then(function () { error = ''; }, function () {
+          error = 'Couldn’t save that change. Check your connection and try again.';
+        }).then(function () {
+          if (pending[pid] === value) delete pending[pid];
+          paint();
+        });
+      }
+      on(table, 'change', function (e) {
+        var box = e.target.closest && e.target.closest('.build-box');
+        if (box) save(box.getAttribute('data-pid'), box.checked ? { state: 'selected', at: new Date().toISOString() } : null);
+      });
+      on(table, 'click', function (e) {
+        var btn = e.target.closest && e.target.closest('.claim-release');
+        if (btn) save(btn.getAttribute('data-pid'), null);
+      });
+      paintBuild = paint;
+      offs.push(hub.onModel(paint));
+      offs.push(hub.onFeatures(paint));
+      offs.push(hub.onCanEdit(paint));
+      paint();
+    }
     function initFeatures(board) {
       var DECISIONS = { accept: true, reject: true, undecided: true }, OLD_DECISIONS = { keep: 'accept', remove: 'reject' };
       function asDecision(d) { d = OLD_DECISIONS[d] || d; return DECISIONS[d] ? d : null; }
@@ -1675,6 +1809,7 @@
       glide(target, id);
     }
     table.addEventListener('click', function (e) {
+      if (e.target.closest('.build-box, .claim-release')) return;   // initBuild's own controls in a phase cell
       var group = e.target.closest('tbody.group, tbody.group-end');
       if (group && table.contains(group)) {
         if (group.classList.contains('group') || e.target.closest('.group-hide')) toggleGroup(group.getAttribute('data-group'));

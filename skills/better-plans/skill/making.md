@@ -103,6 +103,7 @@ A table of every step in the plan, grouped into phases, under the heading **Plan
 - **Name:** one or two words, since the overview's phase cell holds the bare number and the name on one short line, so a one-step phase is no taller than any other row. There is no per-phase count.
 - **Order:** the page sorts phases (and, separately, planned features) by status: done, then in progress or blocked, then not started, then skipped, keeping written order within each group, and numbers them in that order. Write them in the order the work will happen.
 - **Collapsing:** clicking a phase cell folds its rows to one line. Done and skipped phases start folded; the rest start open, and a phase folds by itself once it finishes. A user's own fold or unfold holds until the phase's finished state changes.
+- **Build boxes:** the page adds a tick box to the phase cells the user can pick to build next, and a "Claimed" label to phases a session has claimed; no markup is needed (see [building.md](building.md)).
 - **Markup:** each phase is one `<tbody data-phase="N">`. Its first row starts with the phase cell, a `<th class="phase" scope="rowgroup" rowspan="…" data-target="phase-N" tabindex="0">`, holding the number (`.ph-num`, "1" rather than "Phase 1") and the name (`.ph-name`). Set `rowspan` to the number of steps in the phase.
 
 **Steps.** Number each step `phase.step`: 1.1, 1.2, 2.1, and so on.
