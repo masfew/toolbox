@@ -1,0 +1,8 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.log
+.startup-probe*
+src-tauri/windows/version.nsh
+perf-results/

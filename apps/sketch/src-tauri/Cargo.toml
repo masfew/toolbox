@@ -1,0 +1,61 @@
+[package]
+name = "sketch"
+version = "1.0.0"
+description = "A fast, simple paint app"
+edition = "2021"
+# Three programs: Sketch itself, sketch-capture (src/bin), the capture helper, and sketch-launcher
+# (src/bin), which the installer puts in the install folder as sketch.exe to start the newest version.
+default-run = "sketch"
+
+[lib]
+name = "sketch_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+arboard = "3"
+urlencoding = "2"
+ureq = "2"
+sha2 = "0.10"
+png = "0.18"
+
+[target.'cfg(windows)'.dependencies]
+clipboard-win = "5"
+window-vibrancy = "0.8"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_StationsAndDesktops", "Win32_System_SystemInformation", "Win32_System_Variant", "Data_Xml_Dom", "Foundation", "UI_Notifications"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
+panic = "abort"
+strip = true
+
+# The image coding behind copy, paste and saving is built for speed; the rest stays small. Copying a
+# 4K photo spent most of its time encoding the clipboard's PNG at opt-level "s".
+[profile.release.package.png]
+opt-level = 3
+[profile.release.package.fdeflate]
+opt-level = 3
+[profile.release.package.flate2]
+opt-level = 3
+[profile.release.package.miniz_oxide]
+opt-level = 3
+[profile.release.package.zlib-rs]
+opt-level = 3
+[profile.release.package.crc32fast]
+opt-level = 3
+[profile.release.package.simd-adler32]
+opt-level = 3
+[profile.release.package.adler2]
+opt-level = 3
+[profile.release.package.image]
+opt-level = 3
+[profile.release.package.arboard]
+opt-level = 3

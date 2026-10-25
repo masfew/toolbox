@@ -1,0 +1,42 @@
+# Builds Sketch, runs its unit tests and checks its installer's size and its
+# start-up time whenever its folder changes. The checks that drive the real
+# app (check:native and the rest) run locally only; see the tool's README.
+# Actions are pinned to commits.
+name: Sketch
+
+on:
+  push:
+    paths:
+      - 'apps/sketch/**'
+      - '.github/workflows/sketch.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: apps/sketch
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/sketch/package-lock.json
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/sketch/src-tauri
+      - run: npm ci
+      - run: npm test
+      - run: npm run tauri build
+      - name: Installer size
+        run: npm run check:size
+      - name: Start-up time
+        run: npm run check:startup
