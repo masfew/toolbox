@@ -307,12 +307,8 @@ class Model:
         for k, v in items:
             if v.get("kind") == "step":
                 self.steps.setdefault(v.get("phase"), []).append((k, v))
-        live = getattr(self, "live", None)
-
         def rank(item):
-            sts = [live[sid] if live is not None and sid in live else (v.get("status") if v.get("status") in LABELS else "todo")
-                   for sid, v in self.steps.get(item[0], [])]
-            return STATUS_RANK[phase_status(sts)]
+            return self.rank_of(item[0])
         self.stored_phases = [(k, v) for k, v in items if v.get("kind") == "phase" and not v.get("feature")]
         self.stored_feats = [(k, v) for k, v in items if v.get("kind") == "phase" and v.get("feature")]
         by_status = bool(self.M.get("statusOrder"))
@@ -335,6 +331,24 @@ class Model:
                 self.num_of[sid], self.id_of[f"F{n}.{m}"] = f"F{n}.{m}", sid
         self.orphans = [sid for ph, lst in self.steps.items() if ph not in self.pnum for sid, _ in lst]
 
+    def rank_of(self, pid):
+        live = getattr(self, "live", None)
+        sts = [live[sid] if live is not None and sid in live else (v.get("status") if v.get("status") in LABELS else "todo")
+               for sid, v in self.steps.get(pid, [])]
+        return STATUS_RANK[phase_status(sts)]
+
+    # A phase whose status group a record (with stay) changed moves only as far as it must: up to the end of its new
+    # group, or down to the top of it. Its sort key changes, so the stored order stays the order shown and later
+    # moves, adds and status changes start from what the page showed. plan.js's settle does the same.
+    def settle(self, shown, old):
+        now = {pid: self.rank_of(pid) for pid, _ in shown}
+        up = [(pid, v) for pid, v in shown if now[pid] < old[pid]]
+        down = [(pid, v) for pid, v in shown if now[pid] > old[pid]][::-1]
+        for pid, v in up + down:
+            keys = [o.get("sort", 0) for k, o in shown if k != pid and now[k] == now[pid]]
+            if keys:
+                v["sort"] = max(keys) + GAP if now[pid] < old[pid] else min(keys) - GAP
+
     def baked_statuses(self):
         return {sid: (v.get("status") if v.get("status") in LABELS else "todo")
                 for lst in self.steps.values() for sid, v in lst}
@@ -354,6 +368,9 @@ class Model:
           moves    [{what, before | after}]    a step, phase or planned feature
           order    [feature ids]               the planned features in this order (a drag on the page)
           major    true                        the next major version instead of +0.1
+          stay     true                        a phase or planned feature whose status group the steps change moves
+                                               to the end of its new group (going up) or the top (going down), by
+                                               a new sort key (settle); records without it leave the keys alone
           checkpoint {entries?: {id: entry | null}, meta?: {title, summary}, steps: {id: status},
                       notes: {id: [html]}}     the plan as it stood: entries replaced (null: gone), then statuses
                                                and notes reset by id. Everything in the records before the last
@@ -537,12 +554,16 @@ class Model:
             for lst in self.steps.values():
                 for sid, v in lst:
                     status.setdefault(sid, v.get("status") if v.get("status") in LABELS else "todo")
+        shown = [list(self.phases), list(self.feats)] if st_ids and r.get("stay") and self.M.get("statusOrder") else None
+        old = {pid: self.rank_of(pid) for lst in shown for pid, _ in lst} if shown else {}
         for sid, st in st_ids:
             if sid and sid in status and st in LABELS:
                 status[sid] = st
         for sid, h in note_ids:
             if sid and isinstance(h, str):
                 notes.setdefault(sid, []).append(tok(h))
+        for lst in shown or []:
+            self.settle(lst, old)
         if st_ids:
             self.number()   # the new statuses may move phases
 
@@ -1210,6 +1231,8 @@ def write_json(folder, name, body):
 
 def record(steps=None, notes=None, major=False, **ops):
     r = {"steps": steps or {}, "at": now_stamp(), "date": datetime.date.today().isoformat()}
+    if r["steps"]:
+        r["stay"] = True   # replay moves a phase whose status group changes only as far as it must (Model.settle)
     if notes:
         r["notes"] = notes
     for k, v in ops.items():

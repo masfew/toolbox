@@ -247,7 +247,8 @@ meta1 = json.loads((tmp / "auto-fold" / "_plan.json").read_text(encoding="utf-8"
 check("fold clears snapshotAuto", "snapshotAuto" not in meta1 and meta1["snapshotAt"] == meta1["bakedAt"] > meta0["snapshotAt"], meta1)
 
 # 17 with _plan.statusOrder, phases sort by status: done, in progress, not started, skipped. A planned feature left in
-# progress drops below the done ones and renumbers; a later record uses its new number; finished again, it goes back
+# progress drops below the done ones and renumbers; a later record uses its new number; finished again, it stays
+# at the end of the done ones (records with stay), or goes back to its old place (older records without it)
 r1 = rec_of("F2.1=progress")
 r2 = rec_of("F6.1=done")
 m = with_records(r1)
@@ -256,8 +257,10 @@ m = with_records(r1, plan=sorted_plan)
 check("in progress below done", m.pnum["p-pantry-gauge"] == "F6" and m.pnum["p-pinned-recipes"] == "F5"
       and m.pnum["p-unit-picker"] == "F1", {k: m.pnum[k] for k, _ in m.feats})
 m = with_records(r1, r2, plan=sorted_plan)
-check("finished goes back", m.pnum["p-pantry-gauge"] == "F2" and m.status["s-stock-data-from-receipts"] == "done",
+check("finished stays put", m.pnum["p-pantry-gauge"] == "F6" and m.status["s-stock-data-from-receipts"] == "done",
       {k: m.pnum[k] for k, _ in m.feats})
+m = with_records(*[{k: v for k, v in r.items() if k != "stay"} for r in (r1, r2)], plan=sorted_plan)
+check("without stay: finished goes back", m.pnum["p-pantry-gauge"] == "F2", {k: m.pnum[k] for k, _ in m.feats})
 
 # 18 a skipped feature sinks below the not-started ones; a core phase in progress drops below the done phases
 m = with_records(rec_of("F7.1=skipped", "F7.2=skipped", "3.2=progress"), plan=sorted_plan)
@@ -276,6 +279,23 @@ m2 = db.Model({**{k: v for k, v in plan0.items() if k == "_plan" or k.startswith
 check("fold turns statusOrder on", meta.get("statusOrder") is True and F["s-keep-list-at-meal-end"]["status"] == "skipped"
       and F["s-stock-data-from-receipts"]["status"] == "progress" and m2.pnum["p-pantry-gauge"] == "F6"
       and m2.pnum["p-leftovers"] == f"F{len(m2.feats)}", {k: m2.pnum[k] for k, _ in m2.feats})
+
+# 21 a skipped feature brought back goes to the end of the not-started ones (not back to its old place), a reopened
+# one to the top of them, and a snapshot keeps where they went
+r1 = rec_of("F7.1=skipped", "F7.2=skipped")
+r2 = rec_of("F8.1=todo", "F8.2=todo")
+m = with_records(r1, r2, plan=sorted_plan)
+check("unskipped to the end of not started", m.pnum["p-leftovers"] == "F8" and m.pnum["p-settings-menu"] == "F7",
+      {k: m.pnum[k] for k, _ in m.feats})
+F, meta = db.folded(m)
+m2 = db.Model({**{k: v for k, v in sorted_plan.items() if k == "_plan" or k.startswith("_seed")}, **F, "_plan": meta}, {}, fe0)
+check("snapshot keeps the settled order", "p-leftovers" in F and m2.pnum["p-leftovers"] == "F8", {k: m2.pnum[k] for k, _ in m2.feats})
+m = with_records(rec_of("F2.1=todo"), plan=sorted_plan)
+check("reopened to the top of not started", m.pnum["p-pantry-gauge"] == "F6" and m.pnum["p-leftovers"] == "F7",
+      {k: m.pnum[k] for k, _ in m.feats})
+m = with_records(rec_of("F8.1=done", "F8.2=done", "F7.1=done", "F7.2=done"), plan=sorted_plan)
+check("two finished in one record keep their order", m.pnum["p-leftovers"] == "F7" and m.pnum["p-settings-menu"] == "F8",
+      {k: m.pnum[k] for k, _ in m.feats})
 
 sys.stdout.reconfigure(encoding="utf-8")
 import os

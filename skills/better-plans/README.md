@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 1.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -173,4 +173,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.1.0: A phase or planned feature whose status moves it into another group (finished, reopened, skipped or brought back) now moves only as far as it must, to the end of its new group going up or the top going down, and stays there, instead of jumping back to wherever it first sat. Published plans pick this up the next time their look is refreshed.
 - 1.0.0: First public version.

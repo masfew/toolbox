@@ -247,14 +247,8 @@
       else if (k === 'idea') m.allIdeas.push(d);
       else if (k === 'step') (m.steps[d.body.phase] = m.steps[d.body.phase] || []).push(d);
     });
-    function rank(ph) {
-      return STATUS_RANK[phaseStatusOf((m.steps[ph.id] || []).map(function (s) {
-        if (m.live && has(m.live, s.id)) return m.live[s.id];
-        return LABELS[s.body.status] ? s.body.status : 'todo';
-      }))];
-    }
     function byStatus(list) {
-      return list.map(function (ph, i) { return { ph: ph, r: rank(ph), i: i }; })
+      return list.map(function (ph, i) { return { ph: ph, r: rankOf(m, ph.id), i: i }; })
         .sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (x) { return x.ph; });
     }
     var sorted = !!m.M.statusOrder;
@@ -274,6 +268,26 @@
       m.fnum[ph.body.feature] = f;
       m.fids[f] = ph.body.feature;
       (m.steps[ph.id] || []).forEach(function (s, i) { var n = f + '.' + (i + 1); m.numOf[s.id] = n; m.idOf[n] = s.id; });
+    });
+  }
+  function rankOf(m, pid) {
+    return STATUS_RANK[phaseStatusOf((m.steps[pid] || []).map(function (s) {
+      if (m.live && has(m.live, s.id)) return m.live[s.id];
+      return LABELS[s.body.status] ? s.body.status : 'todo';
+    }))];
+  }
+  // A phase whose status group a record (with stay) changed moves only as far as it must: up to the end of its new
+  // group, or down to the top of it. Its sort key changes, so the stored order stays the order shown and later
+  // moves, adds and status changes start from what the page showed. dbplan.py's settle does the same.
+  function settle(m, shown, old) {
+    var now = {};
+    shown.forEach(function (ph) { now[ph.id] = rankOf(m, ph.id); });
+    var up = shown.filter(function (ph) { return now[ph.id] < old[ph.id]; });
+    var down = shown.filter(function (ph) { return now[ph.id] > old[ph.id]; }).reverse();
+    up.concat(down).forEach(function (ph) {
+      var keys = shown.filter(function (o) { return o.id !== ph.id && now[o.id] === now[ph.id]; })
+        .map(function (o) { return o.body.sort || 0; });
+      if (keys.length) ph.body.sort = now[ph.id] < old[ph.id] ? Math.max.apply(null, keys) + GAP : Math.min.apply(null, keys) - GAP;
     });
   }
   function bakedStatuses(m) {
@@ -433,8 +447,11 @@
         m.steps[pid].forEach(function (s) { if (!has(status, s.id)) status[s.id] = LABELS[s.body.status] ? s.body.status : 'todo'; });
       });
     }
+    var shown = stIds.length && r.stay && m.M.statusOrder ? [m.phases.slice(), m.feats.slice()] : null, old = {};
+    if (shown) shown[0].concat(shown[1]).forEach(function (ph) { old[ph.id] = rankOf(m, ph.id); });
     stIds.forEach(function (x) { if (x[0] && has(status, x[0]) && LABELS[x[1]]) status[x[0]] = x[1]; });
     noteIds.forEach(function (x) { if (x[0] && typeof x[1] === 'string') (notes[x[0]] = notes[x[0]] || []).push(tok(x[1])); });
+    if (shown) shown.forEach(function (list) { settle(m, list, old); });
     if (stIds.length) number(m);   // the new statuses may move phases
   }
   function escapeRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
