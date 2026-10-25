@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-24",
+  "tier": "standard",
+  "description_sha256": "57a7caaced8665df0989725dc028f2507242a58b042b2a6b28e8566742511249",
+  "description_chars": 705,
+  "model": "default",
+  "runs_per_query": 3,
+  "runs_made": 58,
+  "seconds": 51,
+  "passed": 29,
+  "total": 29,
+  "should_load_rate": 1.0,
+  "near_miss_rate": 0.0,
+  "failed": [],
+  "tiers": {
+    "standard": {
+      "date": "2026-10-24",
+      "tier": "standard",
+      "description_sha256": "57a7caaced8665df0989725dc028f2507242a58b042b2a6b28e8566742511249",
+      "description_chars": 705,
+      "model": "default",
+      "runs_per_query": 3,
+      "runs_made": 58,
+      "seconds": 51,
+      "passed": 29,
+      "total": 29,
+      "should_load_rate": 1.0,
+      "near_miss_rate": 0.0,
+      "failed": []
+    }
+  }
+}

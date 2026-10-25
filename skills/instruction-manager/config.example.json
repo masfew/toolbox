@@ -1,0 +1,9 @@
+{
+  "skill_folders": ["~/.claude/skills/*"],
+  "project_skills": true,
+  "global_instructions": ["~/.claude/CLAUDE.md"],
+  "skill_prefixes": [],
+  "new_skill_homes": [
+    {"when": "anything", "path": "~/.claude/skills/<name>"}
+  ]
+}
