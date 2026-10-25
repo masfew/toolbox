@@ -2,7 +2,7 @@
 
 Read when the user asks for a plan to be run in batches (making a new plan with them, or adding them to one), or asks a session to build a plan's next batch or a named batch (SKILL.md's routing table).
 
-A batch is a run of a plan's steps that one fresh session builds back to back, stopping only where the user is needed. The plan says which steps each batch holds, where each one stops, and how a session finds the next one, so the user can start a session with "build the next batch in the <plan>" and nothing else. **Batches are optional.** A plan has none unless the user asks for them: never add them on your own, and don't suggest them for small plans. Without them a plan looks and works exactly as the rest of this skill describes. With them, the overview's build boxes ([building.md](building.md)) appear only on planned features: core phases are built batch by batch, in order.
+A batch is a run of a plan's steps, usually several whole phases, that one fresh session builds back to back, pausing where the user is needed. The plan says which steps each batch holds, where each one pauses and why it ends, and how a session finds the next one, so the user can start a session with "build the next batch in the <plan>" and nothing else. **Batches are optional.** A plan has none unless the user asks for them: never add them on your own, and don't suggest them for small plans. Without them a plan looks and works exactly as the rest of this skill describes. With them, the overview's build boxes ([building.md](building.md)) appear only on planned features: core phases are built batch by batch, in order.
 
 ## The Four Pieces
 
@@ -15,10 +15,10 @@ A plan with batches has all four. Leave none out: the badges show where batches 
 
 ## Choosing the Batches
 
-- A batch ends where the user has to act: a push or publish to approve, a hands-on check, a decision, a paid run. Several steps that end in the same kind of stop can share one batch ("three pushes reviewed in one sitting").
-- A batch is small enough to finish in one session's context. A phase or two of a few steps each is typical.
-- Something that could break the user's setup (a switch-over, a hook that moves) ends its batch with a check, so a later break points at one change.
-- Work that has to wait on something outside the plan before the next batch can start (a week of everyday use, a review) ends its batch there. The next batch's row says what it waits on, and Running a Batch has the session check it.
+- **Group whole phases, and as few batches as the plan allows.** Batching means combining phases into fewer sessions, not cutting phases into smaller pieces, which only gives the user more sessions to start. Split a phase only when it alone is too long for one session.
+- **A batch ends only where the session can't go on.** That's one of two places: the work waits on something outside the plan (a week of everyday use, the team's feedback, a review), or the next steps would take the session past one context (about a dozen substantial build steps). The next batch's row says what it waits on, and Running a Batch has the session check it.
+- **Every other stop is a pause inside the batch:** a push or publish to approve, a hands-on check, a decision, a paid run. The session waits for the user's reply and carries on, so none of these needs a new session.
+- Something that could break the user's setup (a switch-over, a hook that moves) gets a check pause straight after it, so a later break points at one change.
 
 ## The Styles
 
@@ -33,23 +33,23 @@ td.step kbd, .card-title kbd { display: inline-block; margin-left: 0.5rem; paddi
 
 ## The Section
 
-Under an `<h4>Batches</h4>` subheading: one sentence on how the plan is run ("one fresh session per batch, which reads this plan, runs its steps back to back and stops where you're needed"), one on what the badges mean, then a table:
+Under an `<h4>Batches</h4>` subheading: one sentence on how the plan is run ("one fresh session per batch, which reads this plan, runs its steps back to back and pauses where you're needed"), one on what the badges mean, then a table with a row for each batch:
 
-| Batch | Steps | Where it stops for you |
-|---|---|---|
-| `1` | `1.1 to 1.2, the repo layout` | `One push to approve` |
-| `7` | `9.1, the private merge` | `Nothing to push; a week of everyday use before batch 8 starts` |
+| Batch | Steps | Where it pauses for you | Why it ends there |
+|---|---|---|---|
+| `1` | `1.1 to 3.4, the repo layout and the importer` | `A push to approve after 1.2; a hands-on check of the importer` | `A week of everyday use before batch 2 starts` |
+| `2` | `Phases 4 to 6, the private merge` | `Your call on the merge rules at 5.2` | `End of the plan` |
 
 Write step numbers as plain text (`1.1 to 1.2`, `Phases 2 to 4`): they become references that follow their steps when the plan renumbers. Add a `.note` after the table for any rule that holds across batches (such as never two sessions writing in the same folder at once).
 
 Then an `<h4>Running a Batch</h4>` subheading, which every batch session follows. Write it for this plan, but keep these parts:
 
-- **What you do:** which folder to start the session in, the words to say ("build the next batch in the <plan title>", or "build batch 4" to pick one), and that the user answers the session's questions and approves its pushes when it stops.
+- **What you do:** which folder to start the session in, the words to say ("build the next batch in the <plan title>", or "build batch 4" to pick one), and that the user answers the session's questions and approves its pushes when it pauses.
 - **What the session does,** as a numbered list:
   1. **Works out which batch.** A batch is done when every step in it is Done or Skipped. The next batch is the lowest-numbered one that isn't done, and it may start only when every batch before it is done. When its row says it waits on something else (a week of use, a review), the session checks that first; if it isn't met, the session says so and stops.
   2. **Reads what the batch needs:** its steps in full, any plan its steps point at, and the skills and project files they name.
   3. **Keeps the plan current as it works:** each step In progress when it starts and Done when it finishes, with an Outcome when what happened differs from the step, and Blocked with the reason when it can't finish. Statuses are how the next session finds its place, so no step is left unmarked.
-  4. **Stops only where the table says**, plus anything the session's own instructions say to ask about, and carries on from that step when the user replies.
+  4. **Pauses only where the table says**, plus anything the session's own instructions say to ask about, and carries on from that step when the user replies.
   5. **Ends at the batch's last step.** It never starts the next batch by itself. Its last message says the batch is done, what it couldn't check, and what's left for the user.
 - **Picking up after a break:** if a session ends partway, the next "build the next batch" starts at the first step of that batch that isn't Done.
 

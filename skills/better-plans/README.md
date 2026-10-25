@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.4.0. See the [changes](#changes) at the end.
+Version 1.5.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -96,7 +96,7 @@ On the page, a round button in the bottom-right corner takes you to the next ste
 
 **Snapshots.** A plan's content lives in the page's database, and the page builds itself from it every time it opens. The page's HTML is a snapshot for people who can't load the database (signed out, or a tool that doesn't run the page's script). When you open a plan that has changed and whose snapshot is over a day old (or more than 30 updates behind), the page saves a fresh snapshot by itself. The **Save Snapshot** line under the summary saves one whenever you want.
 
-**Batches**, only when you ask for them: a long plan can be split into batches, each a run of steps one fresh session builds back to back, stopping only where you're needed. Then *"build the next batch in the <plan>"* is all a new session needs.
+**Batches**, only when you ask for them: a long plan can be grouped into batches, each usually several whole phases that one fresh session builds back to back, pausing where you're needed. A batch ends only where the work has to wait on something, such as a week of use, or the session would run too long. Then *"build the next batch in the <plan>"* is all a new session needs.
 
 **Building selected phases.** Each unfinished planned feature in the overview has a tick box in its phase cell, and so does each unfinished core phase in a plan without batches. Tick the ones you want built next, in any order, then tell a new session *"build the selected phases in the <plan>"*. The session claims them all at once, so another session can't take them: each shows "Claimed" with the session's name in place of its box, and a Release button for a session that stopped without finishing. It works out the order from the phases' dependencies, asks you first if a ticked phase depends on unfinished work you didn't tick, then builds them one at a time, handing each phase to a worker subagent while it checks the work and keeps the plan up to date. The same happens when you name two or more phases for one session.
 
@@ -176,6 +176,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.5.0: Batches group whole phases into as few sessions as the plan allows. A batch now ends only where the work waits on something outside the plan or the session would run too long; approvals, hands-on checks and decisions are pauses inside a batch, and the Batches table says why each batch ends. Plans already split into batches keep their batches until you ask to regroup them.
 - 1.4.0: Plans get build boxes. Tick the planned features (and, in a plan without batches, the core phases) you want built next, and tell a new session to build the selected phases. It claims them all in one write, so no other session can take them, shows them as Claimed with a Release button, and builds them in dependency order as an orchestrator, one worker subagent per phase. Naming two or more phases for one session works the same way. Published plans get the boxes the next time their look is refreshed.
 - 1.3.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
 - 1.3.0: Plans run in batches no longer have side batches, which ran beside the others with a dashed "Requires Batch N" badge and only when named. Every batch is now numbered and runs in order, and work that has to wait on something (such as a week of everyday use) ends its batch, with the next batch's row saying what it waits on. Existing plans with a side batch keep working as they are.
