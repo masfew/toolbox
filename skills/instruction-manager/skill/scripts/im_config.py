@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Reads instruction-manager's config, ~/.claude/instruction-manager.json, for the
 check scripts, run_triggers.py and the edit guard. Every key is optional, and a
-missing file means the defaults below.
+missing file means the defaults below. The INSTRUCTION_MANAGER_CONFIG environment
+variable, when set, names another config file to read instead (the behaviour tests
+use it, so they never read your own config).
 
     python im_config.py     prints the config in effect and the skill folders it finds
 
@@ -24,7 +26,8 @@ import sys
 from pathlib import Path
 
 CLAUDE_DIR = Path.home() / ".claude"
-CONFIG_FILE = CLAUDE_DIR / "instruction-manager.json"
+CONFIG_FILE = Path(os.path.expanduser(os.environ.get("INSTRUCTION_MANAGER_CONFIG")
+                                      or CLAUDE_DIR / "instruction-manager.json"))
 USER_CLAUDE_MD = CLAUDE_DIR / "CLAUDE.md"
 
 DEFAULTS = {

@@ -1,0 +1,50 @@
+{
+  "skill_name": "instruction-manager",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "new skill goes to the configured home",
+      "prompt": "Make me a new skill that checks a web page's accessibility (alt text, colour contrast, keyboard focus) before I ship front-end changes.",
+      "expected_output": "The session reads the config in effect, picks the first new_skill_homes entry that fits (the web front-end home, web-skills/web-<name>), checks the name is free, and interviews the user about what should and shouldn't load the skill before drafting anything. It never writes into ~/.claude/skills.",
+      "files": [],
+      "expectations": [
+        "Reads the config in effect (check_skill.py --show-config, or the file INSTRUCTION_MANAGER_CONFIG names) rather than ~/.claude/instruction-manager.json",
+        "Names a home under web-skills/web-<name>, the first new_skill_homes entry whose 'when' fits",
+        "Checks the name is free (check_skill.py --all, or lists the skill folders)",
+        "Asks the user what should and shouldn't load the skill before drafting it: no file written or changed in the project, and the reply ends with interview questions",
+        "Never writes or creates anything in ~/.claude/skills"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "changed description is tested only after asking",
+      "prompt": "I just reworded the description of my release-notes skill (it's in .claude/skills/release-notes) so it also loads when I say 'changelog'. Can you test that it still triggers properly?",
+      "expected_output": "The session runs check_skill.py on the skill and run_triggers.py --dry-run, then asks 'How should I test this change?' with Quick, Standard, Full and Skip in that order, each with the dry-run's session counts, Standard marked recommended but left in second place. It starts no trigger run before the answer.",
+      "files": [],
+      "expectations": [
+        "Runs check_skill.py on the skill before asking",
+        "Runs run_triggers.py --dry-run on the skill before asking",
+        "Asks how to test, with Quick, Standard, Full and Skip in that order",
+        "Each option's session count matches the dry-run's figures",
+        "Standard is marked (Recommended) and Quick stays first",
+        "Starts no trigger run (run_triggers.py without --dry-run)"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "audit of all skills asks once with totals",
+      "prompt": "Can you audit all my skills? I think some of them have drifted and got wordy.",
+      "expected_output": "The session runs check_skill.py --all first, says how many subagents it will start (one per skill) or that it reviews these 3 small skills itself, runs run_triggers.py --dry-run for each of the 3 skills, and asks one tier question for the whole audit with the session counts summed across the 3 skills. It starts no trigger run and edits nothing before reporting.",
+      "files": [],
+      "expectations": [
+        "Runs check_skill.py --all before any other check",
+        "Says how many subagents it will start (one per skill), or that it reviews these few small skills itself instead",
+        "Runs run_triggers.py --dry-run for each of the 3 skills",
+        "Asks one tier question for the whole audit, with Quick, Standard, Full and Skip in that order",
+        "Each option's session count is the total across the 3 skills",
+        "Starts no trigger run (run_triggers.py without --dry-run)",
+        "Edits nothing before reporting"
+      ]
+    }
+  ]
+}

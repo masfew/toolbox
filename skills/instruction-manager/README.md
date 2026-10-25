@@ -1,6 +1,6 @@
 # instruction-manager
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 1.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -77,7 +77,7 @@ The install is safe to rerun. It never adds an entry twice, and it leaves your o
 
 ## Configuration
 
-Settings are read from `~/.claude/instruction-manager.json`, which the install creates from `config.example.json`. Every setting is optional, and a missing file means the defaults. To see what's in effect and which skills it covers, run `python -I ~/.claude/skills/instruction-manager/scripts/check_skill.py --show-config` (PowerShell or bash).
+Settings are read from `~/.claude/instruction-manager.json`, which the install creates from `config.example.json`. Every setting is optional, and a missing file means the defaults. To read another file instead, set the `INSTRUCTION_MANAGER_CONFIG` environment variable to its path (the behaviour tests do this, so they never read your own config). To see what's in effect and which skills it covers, run `python -I ~/.claude/skills/instruction-manager/scripts/check_skill.py --show-config` (PowerShell or bash).
 
 | Setting | What it does | Default | Example |
 |---|---|---|---|
@@ -121,7 +121,10 @@ python -I ~/.claude/skills/instruction-manager/scripts/run_triggers.py ~/.claude
 | `skill/scripts/check_skill.py` | Fast checks for skills, no sessions started: frontmatter, sizes, links, copied sentences, test files |
 | `skill/scripts/check_instructions.py` | Fast checks for instruction files: size with imports against the budget, broken imports, links and paths, skill names that aren't installed, copied sentences, and which tested sections changed. `--all` finds every project `CLAUDE.md` from the folders your sessions have run in |
 | `skill/scripts/run_triggers.py` | Runs a skill's `evals/triggers.json` through real Claude sessions at the tier you choose and scores whether the description loads the skill. Replaces skill-creator's `run_eval.py`, which doesn't run on Windows as shipped |
-| `skill/scripts/im_config.py` | Reads `~/.claude/instruction-manager.json` for the scripts and the edit guard |
+| `skill/scripts/im_config.py` | Reads `~/.claude/instruction-manager.json` (or the file `INSTRUCTION_MANAGER_CONFIG` names) for the scripts and the edit guard |
+| `skill/evals/triggers.json`, `skill/evals/last-run.json` | This skill's own trigger tests and its last score |
+| `skill/evals/evals.json` | This skill's behaviour tests: a new skill goes to the folder `new_skill_homes` picks, a changed description is tested only after asking, and an audit of all skills asks once with totals |
+| `skill/evals/run_behaviour.py` | Runs those behaviour tests as real Claude sessions in scratch projects (3 runs each by default, so 9 sessions on your plan) and grades each run: `python -I skill/evals/run_behaviour.py` |
 | `edit_guard.py` | The edit guard hook |
 
 **The edit guard** runs before every Edit, Write, MultiEdit and NotebookEdit. When the file is inside one of your skill folders (by real path, so edits through links count) or is a `CLAUDE.md` or `CLAUDE.local.md`, and the session's transcript shows no load of instruction-manager, it lets the edit through and adds a message telling the session to load the skill before any further edit to that file. It never blocks an edit. READMEs aren't watched, since most README edits are ordinary documentation. Edits made through shell commands (`sed`, scripts) don't pass through those tools, so the guard doesn't see them.
@@ -185,4 +188,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.1.0: The skill now has behaviour tests (`skill/evals/evals.json`, run by `skill/evals/run_behaviour.py`), which check that a new skill goes to the folder `new_skill_homes` picks, that a changed description is tested only after asking, and that an audit of all skills asks once with totals. The `INSTRUCTION_MANAGER_CONFIG` environment variable can now point the scripts and the edit guard at another config file. Two fixes the tests found: a new skill is drafted only after you've answered the interview questions, and an audit of all skills edits nothing until you've chosen how to test, so each starting score comes from the unedited skill. An audit of a few small skills can now review them without subagents, and says so.
 - 1.0.0: First public version.

@@ -39,7 +39,7 @@ The **edit guard** (a hook the installer adds) never blocks an edit. When a sess
 
 ### Configuration
 
-`~/.claude/instruction-manager.json` holds the user's setup. Every key is optional; a missing file means the defaults.
+`~/.claude/instruction-manager.json` (or the file `INSTRUCTION_MANAGER_CONFIG` names) holds the user's setup; read it with `check_skill.py --show-config`. Every key is optional; a missing file means the defaults.
 
 | Key | What it does | Default |
 |---|---|---|
@@ -54,7 +54,7 @@ The **edit guard** (a hook the installer adds) never blocks an edit. When a sess
 
 1. **Check nothing already covers it.** List every skill's name and description (`check_skill.py --all`, and the session's skill list for the rest). If one covers the request or most of it, offer to extend it through [Any change](#any-change) instead. 
 2. **Pick the home** from the config's `new_skill_homes`: the first entry whose `when` fits the skill. If two fit, ask. Check the name is free among installed skills too, since a plugin skill can hold it.
-3. **Interview the user**, in one round where you can: what it does, the situations and phrasings that should load it, what should not and which neighbouring skill those belong to, and whether output quality matters enough for behaviour tests. 
+3. **Interview the user, and wait for the answers before drafting anything**, in one round where you can: what it does, the situations and phrasings that should load it, what should not and which neighbouring skill those belong to, and whether output quality matters enough for behaviour tests. The description and near-misses come from those answers, so don't guess them.
 4. **Draft it to the house style** (house-style.md, SKILL.md layout). Keep `SKILL.md` near 2,000 words; put material only some tasks need in reference files.
 5. **Write `evals/triggers.json`**: about 10 should-load prompts and 10 near-misses, as house-style.md's Tests section describes. Take near-misses from the neighbours named in step 3.
 6. **Run `check_skill.py`** on it and fix every `ERROR`. The checks are free, and the test question in the next step says they passed.
