@@ -35,7 +35,7 @@ All three are Python standard library only and live in this skill's `scripts/` f
 - **`check_skill.py <skill folder>`** (or `--all` for every skill the config covers): frontmatter (including skill-creator's `quick_validate.py`), description length, word counts with estimated tokens and the change against the last git commit, broken and never-linked files, sentences that closely copy another skill or the global instructions, and whether the trigger tests are present and current. `ERROR` breaks the skill or a hard limit; `WARN` is over an aim or likely wrong. `--show-config` prints the effective config.
 - **`run_triggers.py <skill folder>`**: runs `evals/triggers.json` against the description (or `--description "<candidate>"`) and prints the score and each failed prompt with what loaded instead. Pick the cost with `--tier quick|standard|full` (what each means: [references/test-tiers.md](references/test-tiers.md)); `--runs` and `--model` without a tier make a custom run. `--dry-run` prints each tier's session count, model and time estimate and starts nothing; with no tier, `--runs` or `--model` the script does the same and exits 2, so it never starts sessions by accident. `--compare` checks against the latest saved run of the same tier and exits 3 if the score dropped (with no earlier run of that tier it says so and passes); `--save` records the score in `last-run.json` beside the triggers (with `--compare`, only when it didn't drop). Test sessions run in an empty folder with user-level settings off, so prompts must carry their own context (house-style.md, Tests). If the script can't find the CLI or the CLI isn't signed in, tell the user to run the CLI once in a terminal and use `/login`.
 
-The **edit guard** (a hook the installer adds) never blocks an edit. When a session edits a file in a covered skill folder, or a `CLAUDE.md`, without having loaded this skill, it tells the session to load this skill. It doesn't see edits made through shell commands.
+The **edit guard** (a hook the installer adds) never blocks an edit. When a session edits a file in a covered skill folder, a `CLAUDE.md`, or a file the global instructions import, without having loaded this skill, it tells the session to load this skill. It doesn't see edits made through shell commands.
 
 ### Configuration
 
@@ -45,7 +45,7 @@ The **edit guard** (a hook the installer adds) never blocks an edit. When a sess
 |---|---|---|
 | `skill_folders` | Glob patterns (`~`, `*` one level, `**` any depth) for the user's skills; a match needs a `SKILL.md`. Used by `--all`, the duplicate search and the edit guard | `["~/.claude/skills/*"]` |
 | `project_skills` | Also treat each project's `.claude/skills/<name>/` as the user's skills | `true` |
-| `global_instructions` | Files checked as global instructions (`~/.claude/CLAUDE.md` always counts; its `@import`s are followed) | `["~/.claude/CLAUDE.md"]` |
+| `global_instructions` | Files checked as global instructions (`~/.claude/CLAUDE.md` always counts; their `@import`s are followed, and the edit guard watches the imported files too) | `["~/.claude/CLAUDE.md"]` |
 | `skill_prefixes` | Name prefixes (such as `web-`) that mark a backticked word in an instruction file as a skill name | `[]` |
 | `new_skill_homes` | Where a new skill goes: `{"when": "what it's about", "path": "folder pattern with <name>"}` entries, tried in order | `~/.claude/skills/<name>` |
 | `budgets` | Overrides for the budgets in house-style.md and instruction-files.md | those tables |

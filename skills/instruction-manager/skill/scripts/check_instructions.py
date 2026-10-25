@@ -11,7 +11,8 @@ from ~/.claude/instruction-manager.json (im_config.py has the keys).
 
 Reports, per file, as a plain list:
   - word count with estimated tokens (imports included) against the budget for its kind,
-    and the change against the last git commit when the file has uncommitted edits
+    and the change against the last git commit when the file has uncommitted edits (a file
+    the global instructions import counts toward their budget, not one of its own)
   - imported files and links that point nowhere, and backticked paths that don't exist
   - skills named that aren't installed (a renamed or removed skill)
   - sentences that closely match one in a skill or in the global instructions
@@ -49,6 +50,8 @@ PREFIXED_SKILL = (re.compile("^(?:" + "|".join(re.escape(x) for x in CONFIG["ski
 def kind_of(path):
     if im_config.real(path) in im_config.global_files():
         return "global"
+    if im_config.real(path) in im_config.imported_files():
+        return "global import"
     if path.name in PROJECT_NAMES:
         return "project"
     return "readme"
@@ -180,6 +183,10 @@ def check_file(path, dups, show_info):
     if kind == "readme":
         add("INFO", f"{total:,} words (~{round(total * TOKENS_PER_WORD):,} tokens), read only when a "
                     "session is told to: no budget")
+    elif kind == "global import":
+        add("INFO", f"{total:,} words (~{round(total * TOKENS_PER_WORD):,} tokens), imported by the "
+                    "global instructions, so every session loads it: its budget is counted with "
+                    "the file that imports it")
     else:
         aim, limit = BUDGETS[kind]
         head, _ = git_head_text(path)
@@ -196,7 +203,7 @@ def check_file(path, dups, show_info):
     check_skill_names("\n".join(read(p) for p in loaded), add, project_skills(path))
 
     if dups is not None:
-        own = {"the global instructions"} if kind == "global" else set()
+        own = {"the global instructions"} if kind in ("global", "global import") else set()
         seen = set()
         for src, s, j in dups.matches("", "\n".join(read(p) for p in loaded)):
             if src in own or (s, src) in seen:
@@ -240,8 +247,8 @@ def session_folders():
 
 
 def all_files():
-    files = {Path(im_config.expand(f)).resolve() for f in CONFIG["global_instructions"]
-             if Path(im_config.expand(f)).is_file()}
+    files = {p.resolve() for p in [im_config.USER_CLAUDE_MD]
+             + [Path(im_config.expand(f)) for f in CONFIG["global_instructions"]] if p.is_file()}
     for folder in session_folders():
         # Claude Code loads CLAUDE.md from the working folder and every folder above it.
         for f in [folder, *folder.parents]:

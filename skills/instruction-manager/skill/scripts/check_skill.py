@@ -64,47 +64,17 @@ def find_all_skills():
     return im_config.skill_folders()
 
 
-AT = "@"  # an import line in a CLAUDE.md starts with it
-IMPORT = re.compile(r"(?:^|\s)" + AT + r"((?:~|\.{1,2})?[\w./\\ -]*?[\w-]+\.md)\b", re.M)
-
-
-def strip_code(text):
-    """Text with fenced blocks and code spans blanked, so examples aren't read as imports."""
-    text = re.sub(r"```.*?```", " ", text, flags=re.S)
-    return re.sub(r"`[^`\n]*`", " ", text)
-
-
-def resolve(ref, base):
-    ref = ref.strip().replace("\\", "/")
-    if ref.startswith("~/"):
-        return USER_HOME / ref[2:]
-    if re.match(r"^[A-Za-z]:/", ref) or ref.startswith("/"):
-        return Path(ref)
-    return base / ref
-
-
-def imports_of(path, seen=None):
-    """[(import text, resolved path or None if missing)] for path and what it imports, depth 5."""
-    seen = seen if seen is not None else {path.resolve()}
-    out = []
-    for m in IMPORT.finditer(strip_code(read(path))):
-        target = resolve(m.group(1), path.parent)
-        if not target.is_file():
-            out.append((m.group(1), None))
-            continue
-        if target.resolve() in seen or len(seen) > 5:
-            continue
-        seen.add(target.resolve())
-        out.append((m.group(1), target))
-        out += imports_of(target, seen)
-    return out
+IMPORT = im_config.IMPORT
+strip_code = im_config.strip_code
+resolve = im_config.resolve
+imports_of = im_config.imports_of
 
 
 def global_instruction_files():
-    """The configured global instruction files that exist, and the files they import."""
+    """The global instruction files that exist (~/.claude/CLAUDE.md and the configured
+    ones), and the files they import."""
     out = []
-    for f in CONFIG["global_instructions"]:
-        p = Path(im_config.expand(f))
+    for p in im_config.global_files():
         if not p.is_file():
             continue
         for q in [p] + [t for _, t in imports_of(p) if t]:

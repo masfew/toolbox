@@ -22,6 +22,7 @@ import copy
 import glob
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -149,6 +150,67 @@ def global_files():
     if real(USER_CLAUDE_MD) not in files:
         files.append(real(USER_CLAUDE_MD))
     return files
+
+
+# ---------- import lines, read the way Claude Code reads them ----------
+
+AT = "@"  # an import line in a CLAUDE.md starts with it
+IMPORT = re.compile(r"(?:^|\s)" + AT + r"((?:~|\.{1,2})?[\w./\\ -]*?[\w-]+\.md)\b", re.M)
+IMPORT_DEPTH = 5  # Claude Code follows imports this many hops deep
+
+
+def strip_code(text):
+    """Text with fenced blocks and code spans blanked, so examples aren't read as imports."""
+    text = re.sub(r"```.*?```", " ", text, flags=re.S)
+    return re.sub(r"`[^`\n]*`", " ", text)
+
+
+def resolve(ref, base):
+    ref = ref.strip().replace("\\", "/")
+    if ref.startswith("~/"):
+        return Path.home() / ref[2:]
+    if re.match(r"^[A-Za-z]:/", ref) or ref.startswith("/"):
+        return Path(ref)
+    return base / ref
+
+
+def imports_of(path, seen=None, depth=IMPORT_DEPTH):
+    """[(import text, resolved path or None if missing)] for path and what it imports,
+    IMPORT_DEPTH hops deep, each file once."""
+    path = Path(path)
+    seen = seen if seen is not None else {path.resolve()}
+    out = []
+    if depth <= 0:
+        return out
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    for m in IMPORT.finditer(strip_code(text)):
+        target = resolve(m.group(1), path.parent)
+        if not target.is_file():
+            out.append((m.group(1), None))
+            continue
+        if target.resolve() in seen:
+            continue
+        seen.add(target.resolve())
+        out.append((m.group(1), target))
+        out += imports_of(target, seen, depth - 1)
+    return out
+
+
+def imported_files():
+    """Real paths of the files the global instruction files import, directly or through
+    another import: every session loads them along with the global instructions."""
+    files = global_files()
+    out = []
+    for f in files:
+        if not f.is_file():
+            continue
+        for _, target in imports_of(f):
+            if target is not None and real(target) not in files and real(target) not in out:
+                out.append(real(target))
+    return out
 
 
 def main():
