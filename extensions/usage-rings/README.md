@@ -50,7 +50,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install usage-
 **Claude does:**
 
 1. Checks `claude --version` is 2.1.275 or newer. If it's older, it stops and tells you to update Claude Code.
-2. Runs `python install.py` from `mods/usage-rings` (the [From a clone](#from-a-clone-of-the-repo) install), and checks it ends with **Setup complete**. Asked to install it without a clone, it runs the [Quick Start](#quick-start) command instead.
+2. Runs `python install.py` from `extensions/usage-rings` (the [From a clone](#from-a-clone-of-the-repo) install), and checks it ends with **Setup complete**. Asked to install it without a clone, it runs the [Quick Start](#quick-start) command instead.
 
 **You do:**
 
@@ -78,7 +78,7 @@ Use this to install the exact version you have checked out, or to change the mod
 2. Run the installer from the `usage-rings` folder (PowerShell, or bash with `python3` on macOS and Linux):
 
    ```bash
-   cd toolbox/mods/usage-rings
+   cd toolbox/extensions/usage-rings
    python install.py
    ```
 
@@ -149,7 +149,7 @@ If you installed from a clone, from the root of the clone (PowerShell, or bash w
 
 ```bash
 git pull
-cd mods/usage-rings
+cd extensions/usage-rings
 python install.py
 ```
 
@@ -160,7 +160,7 @@ To stay on a version, check out its tag in a clone, then rerun the install (Powe
 ```bash
 git fetch --tags
 git checkout usage-rings-v1.0.0
-cd mods/usage-rings
+cd extensions/usage-rings
 python install.py
 ```
 

@@ -31,7 +31,7 @@ Then, in your own PowerShell window (the installer asks for the token with hidde
 
 ```powershell
 git clone https://github.com/masfew/toolbox.git
-cd toolbox\hooks\phone-bridge
+cd toolbox\extensions\phone-bridge
 python install.py
 ```
 
@@ -46,7 +46,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install phone-
 1. Checks this is Windows, and that Python 3.9 or newer is installed. It asks before installing Python if it's missing, with the command from [Install](#install) step 1. When `Get-Command python` (PowerShell) points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python by itself, so it asks you before running `python` at all. If you want the phone launcher, it also asks you whether the Claude desktop app is installed and signed in.
 2. Asks whether you want the notifications alone, or the notifications with the phone launcher, and uses the answer as the installer's `--features` value (`notify` or `notify,launcher`). If you're not sure, it suggests both on Windows with the desktop app: a session started from your phone needs the pushes to tell you when it finishes.
 3. Tells you what the install changes: it adds four hooks to `~/.claude/settings.json` (after backing it up), adds two Startup shortcuts that run the Telegram listener and the presence watcher at every sign-in, starts them now, and puts the tool at `~/.claude/tools/phone-bridge`. It waits for your yes.
-4. Only if `~/.claude/phone-bridge.json` already holds both `telegram_token` and `telegram_chat_id` (a reinstall or update), it checks that without printing their values (for example with a one-line Python command that prints only True or False), then runs `python install.py --features <your choice> --test` from `hooks/phone-bridge`, and checks the output ends with **Setup complete**. Otherwise it doesn't run the installer: a first install asks for the token, which Claude must never see. It gives you the two lines for You do step 3 instead: `cd "<the full path of hooks\phone-bridge in the clone>"` and `python install.py --features <your choice> --test`. (Run by Claude on a first install, the installer stops at once with "Run this in a terminal" and changes nothing.)
+4. Only if `~/.claude/phone-bridge.json` already holds both `telegram_token` and `telegram_chat_id` (a reinstall or update), it checks that without printing their values (for example with a one-line Python command that prints only True or False), then runs `python install.py --features <your choice> --test` from `extensions/phone-bridge`, and checks the output ends with **Setup complete**. Otherwise it doesn't run the installer: a first install asks for the token, which Claude must never see. It gives you the two lines for You do step 3 instead: `cd "<the full path of extensions\phone-bridge in the clone>"` and `python install.py --features <your choice> --test`. (Run by Claude on a first install, the installer stops at once with "Run this in a terminal" and changes nothing.)
 5. After you've run it, asks you to confirm the installer ended with **Setup complete** and that "phone-bridge is set up" arrived in the bot's chat, then checks, without printing any value, that `~/.claude/phone-bridge.json` now holds `telegram_token` and `telegram_chat_id`.
 
 **You do:**
@@ -66,7 +66,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install phone-
 
    ```powershell
    git clone https://github.com/masfew/toolbox.git
-   cd toolbox\hooks\phone-bridge
+   cd toolbox\extensions\phone-bridge
    ```
 
 4. Open the bot's chat and **send it any message**, such as "Hi". Tapping Start alone may not reach the bot.
@@ -373,7 +373,7 @@ From the root of the cloned repo, pull the new version, then rerun the install (
 
 ```powershell
 git pull
-cd hooks\phone-bridge
+cd extensions\phone-bridge
 python install.py
 ```
 
@@ -384,9 +384,11 @@ To stay on a version, check out its tag instead, then rerun the install (PowerSh
 ```powershell
 git fetch --tags
 git checkout phone-bridge-v1.0.0
-cd hooks\phone-bridge
+cd extensions\phone-bridge
 python install.py
 ```
+
+Releases up to phone-bridge-v1.0.0 have the tool's folder in `hooks\phone-bridge`, so after checking out one of those, it's `cd hooks\phone-bridge` instead.
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `phone-bridge` folder inside it. The install copies the tool to `~/.claude/tools/phone-bridge`, so the unzipped folder can be deleted afterwards.
 
