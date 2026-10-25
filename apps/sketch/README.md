@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.2.0. See the [changes](#changes) at the end.
+Version 1.3.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -87,7 +87,7 @@ Uninstalling removes all of this.
 
 ## Configuration
 
-There's no config file. Everything is set inside Sketch: Settings (Ctrl+,) holds the colour theme, keyboard shortcuts (including the capture key), where files opened from Explorer go, what happens after a capture, and the paste key. Settings, autosaves and update builds live in `%LOCALAPPDATA%\app.sketch.desktop`, which uninstalling removes unless you choose to keep it ([Uninstall](#uninstall)).
+There's no config file. Everything is set inside Sketch: Settings (Ctrl+,) holds the colour theme, keyboard shortcuts (including the capture key), where files opened from Explorer go, the pointer over the picture, whether rough shapes clean up, what happens after a capture, and the paste key. Settings, autosaves and update builds live in `%LOCALAPPDATA%\app.sketch.desktop`, which uninstalling removes unless you choose to keep it ([Uninstall](#uninstall)).
 
 | Setting | What it does | Default | Example |
 |---|---|---|---|
@@ -97,6 +97,11 @@ There's no config file. Everything is set inside Sketch: Settings (Ctrl+,) holds
 | Press Left Shift to open the capture | A Left Shift tap within a second of a capture opens it | On | Off |
 | Hide Sketch when capturing | Sketch hides itself before the screen freezes | Off | On |
 | Open files from Explorer in | A new tab, or the tab showing | A new tab | The tab showing |
+| Pointer over the picture | The pointer shown over the picture with a drawing tool: Windows' normal arrow, a small dot, a thin crosshair or the brush-size circle | Normal arrow | Thin crosshair |
+| Dot size, Crosshair size | The dot's width (2 to 32 px) and the crosshair's length (7 to 65 px) | 6 px, 15 px | 21 px |
+| Dot and crosshair colour | Automatic (light with a dark edge, so it shows on any picture) or a colour you pick | Automatic | Red |
+| Different pointer for the eraser | Gives the eraser a pointer of its own, chosen from the same four | Off | On, with the size circle |
+| Clean up rough shapes | Holding the pointer still at the end of a brush or pencil stroke turns a rough line, arrow, box or circle into a clean shape (also **Turn Shape Clean-Up On/Off** in the command palette) | On | Off |
 | Open Sketch with the clipboard picture pasted | A key that works anywhere in Windows, even with Sketch closed (it makes a **Paste into Sketch** Start menu shortcut) | None | Ctrl+Alt+V |
 
 ## Usage
@@ -119,6 +124,8 @@ The window opens where you last moved or resized one, maximised if it was, after
 
 Light and dark follow Windows, or pick Light or Dark under Colour theme at the top of Settings (Ctrl+,). On Windows 11 the window has the Mica background.
 
+Over the picture every tool shows Windows' normal arrow. If you'd rather have a drawing pointer, pick **Pointer over the picture** in Settings > General: a small dot, a thin crosshair (both with a size and a colour, or an automatic colour that shows on any picture) or a circle the size of the brush at the current zoom. A preview beside the choice shows it on a light and a dark patch. The pointer you pick shows over the picture with the Brush, Pencil, Eraser, Fill, Shapes, Lines and Arrows, Text and Mark-Up tools (the circle for the Brush, Pencil and Eraser; a dot where the tool has no size to show), and over the whole canvas of a whiteboard or capture. The Select, Crop and Colour Picker tools keep their own pointers, and the arrow returns over the toolbars, the options bar and beside the picture. **Different pointer for the eraser** gives the eraser its own choice.
+
 ### Drawing Tools
 
 - **Brush** (round, marker or highlighter, with smoothing and pen pressure), **Pencil** (hard pixels) and **Eraser** (to transparent or to colour 2). Shift+click draws a straight line from where the last stroke ended.
@@ -131,6 +138,7 @@ Light and dark follow Windows, or pick Light or Dark under Colour theme at the t
 
 - **Shapes** (rectangle with rounded corners, ellipse, polygon, star) and **Lines and Arrows** stay editable: they live on an object layer with text. Drag to draw (Shift keeps a shape square or round, Alt draws it from the centre, Shift turns a line in 15° steps). The outline or line is colour 1 and a shape's fill is colour 2; right-drag swaps them. Outline width, fill, solid, dashed or dotted lines, opacity, and an arrowhead (none, open, filled or dot) at either end.
 - **Picking**: click a shape or line with the Shapes, Lines or Select tool to pick it, Shift+click to pick more. Drag to move, handles to resize or turn a shape, a line's ends to move them and its middle handle to bend it. The options bar shows the picked shape's settings and changes it. Delete removes it, arrows nudge it, Ctrl+D duplicates, Ctrl+C and Ctrl+V copy and paste shapes, Ctrl+Shift+] and [ bring to front and send to back. An unfilled shape is picked by its outline, so you can draw inside it.
+- **Clean up rough shapes**: draw a line, an arrow (a line with a V at its tip, drawn in the same stroke), a box or a circle with the Brush or Pencil, then hold the pointer still, with the button down, for half a second. The stroke turns into a clean, editable shape in the stroke's colour and width, as if you had drawn it with the Shapes or Lines and Arrows tool: it lands on the shape layer above the current layer and is picked, so you can move, resize or restyle it. While the button is still down, moving the pointer resizes the shape (a line's or arrow's end follows the pointer); letting go keeps it. **Shift** held while holding or dragging makes a box a square and an oval a circle (and turns a line or arrow in 15° steps). It's one undo step, and undoing it brings the rough stroke back exactly as drawn. Only a clear fit changes: scribbles, letters, open curves and strokes drawn without stopping stay as drawn, as does anything drawn with the Eraser. Boxes and ovals come out upright. Moving more than a few pixels starts the half second again. Some people hold still on purpose, so **Clean up rough shapes** in Settings > General (or **Turn Shape Clean-Up On/Off** in the command palette) turns it off; it's on by default, for new installs and for people updating.
 - **Smart guides** show while moving, resizing and drawing, and snap to other shapes, text and the picture's edges and centre, and to equal gaps. Hold Ctrl to skip them, or turn them off in View > Snap to Shapes. With two or more picked, the options bar has Align and Space Evenly buttons.
 - **Turning into pixels**: painting while a shape layer is current paints underneath it, and says so the first time with a button to rasterize the layer. Image > Rasterize Layer, Edit > Rasterize Shapes and Image > Flatten turn shapes into pixels. PNG, JPEG, WebP and BMP flatten when saved; `.sktch` keeps everything editable.
 
@@ -253,8 +261,8 @@ Updates need the same build tools as the install, on the PATH. The build log is 
 - `src/view` viewport maths, renderer, mouse and pen input
 - `src/io` file formats, encoder worker, BMP, `.sktch`
 - `src/platform` Tauri calls with browser fallbacks
-- `src/app` app state, actions, a whiteboard growing with the view kept still (`board.ts`), autosave and recovery (`recovery.ts`), the mouse speed slider (`mouse.ts`), launches and windows (`launch.ts`), updates (`update.ts`), layer actions (`layers.ts`), the Adjust menu (`adjust.ts`), Remove Background (`cutout.ts`), the command list and key bindings, tool state, colours, saved settings
-- `src/tools` the tool list with each tool's options (`registry.ts`), strokes, fill and its worker, selection, the transform box, crop, text, shapes and lines (`shapes.ts`), the mark-up tools (`marks.ts`) and callouts (`callout.ts`), and snapping and lining up (`snap.ts`)
+- `src/app` app state, actions, a whiteboard growing with the view kept still (`board.ts`), autosave and recovery (`recovery.ts`), the mouse speed slider (`mouse.ts`), launches and windows (`launch.ts`), updates (`update.ts`), layer actions (`layers.ts`), the Adjust menu (`adjust.ts`), Remove Background (`cutout.ts`), the pointer over the picture (`pointer.ts`, `pointerStyle.ts`), the Clean up rough shapes setting (`cleanUp.ts`, `cleanUpPref.ts`), the command list and key bindings, tool state, colours, saved settings
+- `src/tools` the tool list with each tool's options (`registry.ts`), strokes, fill and its worker, selection, the transform box, crop, text, shapes and lines (`shapes.ts`), telling a rough stroke's shape (`recognize.ts`) and turning it into one on a hold (`quickshape.ts`), the mark-up tools (`marks.ts`) and callouts (`callout.ts`), and snapping and lining up (`snap.ts`)
 - `src/ui` Preact components: menu bar, tool rail, options bar, colour popover, side panel with the layers panel, dialogs, palette, shortcuts sheet, settings
 - `src-tauri` Rust side: file reading and writing, clipboard, URL fetch, start-up probe, windows and launches (`lib.rs`), one running Sketch (`instance.rs`), the mouse speed (`mouse.rs`), Remove Background's add-on download and model (`cutout.rs`), screen capture and its overlay (`capture.rs`), its notification (`note.rs`), the capture helper `sketch-capture.exe` (`helper.rs`, started by `src/bin/sketch-capture.rs`), the launcher (`src/bin/sketch-launcher.rs`) and the install layout (`layout.rs`), autosave slots (`recovery.rs`), updates and the quiet restart (`update.rs`), jump list and the paste and capture keys (`shell.rs`), and the installer's launcher layout, Explorer integration and capture helper (`windows/hooks.nsh`)
 - `scripts` the checks, the build stamp (`build-info.mjs`, which also writes the installer's `src-tauri/windows/version.nsh`), the update build (`update-build.mjs`) and developer updates after a push (`dev-update.mjs`, started by the repo's `.github/hooks/pre-push`)
@@ -277,11 +285,11 @@ The drawing code also runs in a plain browser for testing: `npm run dev`, then o
 From the `apps/sketch` folder (PowerShell):
 
 ```powershell
-npm test                 # unit tests (history, viewport, tiles, BMP encoder, keys, search, colours, tools, fill, selection box, text, shapes, snapping, mark-up, adjustments, whiteboards)
+npm test                 # unit tests (history, viewport, tiles, BMP encoder, keys, search, colours, tools, fill, selection box, text, shapes, snapping, mark-up, adjustments, whiteboards, the pointer setting, recognising rough shapes and the Clean up setting)
 npm run tauri build      # release app and NSIS installer
 npm run check:size       # installer must be under 15 MB
 npm run check:startup    # median start-up must be under 1 second
-npm run check:native     # drives the built app: paste, copy, shapes copy and paste, file dialogs, fill, drag and drop, close prompt, Mica, colour theme, saved settings, autosave and recovery, tabs, more than one window, Remove Background, mouse speed, screen capture, the capture helper, the Copy button
+npm run check:native     # drives the built app: paste, copy, shapes copy and paste, file dialogs, fill, drag and drop, close prompt, Mica, colour theme, saved settings, the pointer over the picture, Clean up rough shapes, autosave and recovery, tabs, more than one window, Remove Background, mouse speed, screen capture, the capture helper, the Copy button
 npm run check:speed      # 4K paste under 200 ms, brush at 60 fps on 4K, and timings of mark-up, copy and autosave
 npm run check:fuzz       # random edits with undo and redo for 3 minutes (add 60 for the hour-long run)
 npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher
@@ -375,6 +383,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.3.0: Settings has a **Pointer over the picture** choice: the normal arrow (still the default), a small dot, a thin crosshair or the brush-size circle, with its own size and colour and an optional different pointer for the eraser. Draw a rough line, arrow, box or circle with the brush or pencil and hold still for half a second to turn it into a clean, editable shape; **Clean up rough shapes** in Settings (on by default) or **Turn Shape Clean-Up On/Off** in the command palette turns it off.
 - 1.2.0: Uninstalling removes everything Sketch keeps on the PC by default: settings, autosaves, waiting captures, update builds and the Remove Background add-on. Tick **Keep my settings, autosaves and Remove Background add-on** in the uninstaller, or use `python install.py --remove --keep-data`, to keep them. Updates and reinstalls never touch them.
 - 1.1.0: Remove Background cuts out the person or object in front onto a new layer, with a model that runs on the PC. Its first use downloads a 193 MB add-on.
 - 1.0.0: First release in the toolbox. Updates follow the clone and folder Sketch was built from, wherever they are; a build worktree left by another clone is made again instead of failing. `install.py` builds and installs it, or installs a release's installer with `--setup`, and releases attach the installer.

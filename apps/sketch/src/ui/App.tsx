@@ -26,11 +26,12 @@ import { Tooltip } from './Tooltip';
 
 function CanvasView() {
   const ref = useRef<HTMLCanvasElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const canvas = ref.current!;
     const renderer = new Renderer(canvas);
     app.requestRender = () => renderer.request();
-    new CanvasController(canvas, renderer);
+    new CanvasController(canvas, renderer, ringRef.current);
     let fitted = false;
     // The observer fires once the canvas has its real size, so the first fit happens there.
     const ro = new ResizeObserver(() => {
@@ -56,6 +57,8 @@ function CanvasView() {
   return (
     <div class="view-wrap">
       <canvas class="view" ref={ref} />
+      {/* The brush-size circle that stands in for the pointer when Settings picks it (F17). */}
+      <div class="pointer-ring" ref={ringRef} hidden />
       <TextEditor />
     </div>
   );

@@ -41,7 +41,7 @@ export interface StrokePoint {
 }
 
 /** How see-through each nib is, on top of the opacity setting. */
-const NIB_ALPHA: Record<Nib, number> = { round: 1, marker: 0.75, highlighter: 0.45, pencil: 1, eraser: 1 };
+export const NIB_ALPHA: Record<Nib, number> = { round: 1, marker: 0.75, highlighter: 0.45, pencil: 1, eraser: 1 };
 
 /** How far a smoothed point moves towards the pointer each time it moves. Lower is smoother but lags more. */
 const FOLLOW = 0.45;

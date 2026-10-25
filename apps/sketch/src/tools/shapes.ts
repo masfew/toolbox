@@ -2,6 +2,7 @@ import { app, changed, colorSignal, toast } from '../app/store';
 import { loadOptions, onOptionChange, onToolChange, settingsOf } from '../app/tools';
 import { frameOf, inkBounds, isOpen } from '../engine/board';
 import { addLayer, ObjectsCommand } from '../engine/commands';
+import type { Command } from '../engine/history';
 import { createObjectLayer, ctxOf, newCanvas, objectLayerForNew, type ObjectLayer } from '../engine/document';
 import { renumbered, type MarkObject } from '../engine/marks';
 import { drawObject, hitObject, moveObject, newObjectId, objectBounds, objectPaintBounds, type SketchObject } from '../engine/objects';
@@ -198,16 +199,26 @@ function changePicked(label: string, fn: (o: Drawn) => Drawn | null, join?: stri
  * layer for new objects (or a new one called `newName`), and picks them.
  */
 export function addObjects(objects: Drawn[], label: string, prefer?: ObjectLayer, newName = 'Shapes'): void {
-  let layer = prefer && app.doc.layers.includes(prefer) && prefer.visible && !prefer.locked ? prefer : objectLayerForNew(app.doc);
+  const step = addObjectsStep(objects, label, prefer, newName);
+  joinable = null;
+  app.history.record(step.cmd);
+  pickObjects(step.layer, objects.map((o) => o.id));
+}
+
+/**
+ * Adds objects as `addObjects` does, but hands back the change (already made) instead of recording it,
+ * for a caller that records it together with another change as one step (a rough stroke becoming a
+ * shape, `quickshape.ts`). Pick the objects with `pickObjects` once it's recorded.
+ */
+export function addObjectsStep(objects: Drawn[], label: string, prefer?: ObjectLayer, newName = 'Shapes'): { cmd: Command; layer: ObjectLayer } {
+  const layer = prefer && app.doc.layers.includes(prefer) && prefer.visible && !prefer.locked ? prefer : objectLayerForNew(app.doc);
   if (layer) {
     const before = layer.objects;
     layer.objects = [...before, ...objects];
-    record(label, layer, before);
-  } else {
-    layer = createObjectLayer(newName, objects);
-    app.history.record(addLayer(app.doc, layer, label));
+    return { cmd: new ObjectsCommand(label, layer, before, layer.objects), layer };
   }
-  pickObjects(layer, objects.map((o) => o.id));
+  const made = createObjectLayer(newName, objects);
+  return { cmd: addLayer(app.doc, made, label), layer: made };
 }
 
 // ---------- Snapping ----------

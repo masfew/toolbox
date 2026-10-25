@@ -15,10 +15,14 @@ import { closeTab, confirmCloseAll, discardAll } from './app/tabs';
 import { startUpdates, update } from './app/update';
 import { mouse, startMouseSpeed } from './app/mouse';
 import { startTheme } from './app/theme';
+import { startPointer } from './app/pointer';
+import { startCleanUp } from './app/cleanUp';
 
 // Windows 11's Mica shows through the window's see-through parts; elsewhere the colours stay solid.
 void platform.micaEnabled().then((on) => document.documentElement.classList.toggle('mica', on));
 startTheme();
+startPointer();
+startCleanUp();
 
 tabHooks.historyChanged = (tab) => {
   changed();

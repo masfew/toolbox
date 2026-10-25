@@ -3,6 +3,7 @@ import * as platform from '../platform';
 import * as actions from './actions';
 import * as layers from './layers';
 import { adjustNow, adjustWithDialog } from './adjust';
+import { cleanUp, toggleCleanUp } from './cleanUp';
 import { removeBackground } from './cutout';
 import { fromWindowsHotkey, isCaptureHotkey, keyMap, resolveBindings } from './keys';
 import { loadPref, savePref } from './prefs';
@@ -202,6 +203,15 @@ export const COMMANDS: AppCommand[] = [
     hidden: () => !update.ready,
     enabled: () => !update.restarting,
     keywords: 'install new version upgrade update restart',
+  },
+
+  {
+    id: 'tools.cleanUp',
+    label: 'Turn Shape Clean-Up On/Off',
+    group: 'Tools',
+    run: toggleCleanUp,
+    checked: () => cleanUp.on,
+    keywords: 'clean up rough shapes quickshape snap hold still straighten line arrow box circle ellipse rectangle',
   },
 
   // Tools: one per rail slot with its key, plus one per tool for the palette.

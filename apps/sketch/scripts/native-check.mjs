@@ -2,7 +2,7 @@
 // clipboard paste (bitmap, Explorer file, image link), copy with transparency, copying and pasting shapes,
 // the native Open and Save dialogs, Ctrl+S, drag and drop, "Open with" and the close prompt, tabs,
 // plus the app shell: Mica, menu Paste, tool shortcuts, the screen colour picker and settings
-// that survive a restart, Remove Background with its add-on download, the mouse speed slider,
+// that survive a restart, the pointer over the picture, Clean up rough shapes, Remove Background with its add-on download, the mouse speed slider,
 // screen capture with the capture helper (sketch-capture.exe) that keeps it ready while Sketch is
 // closed, and the Copy button.
 // Usage: node scripts/native-check.mjs [path-to-exe]
@@ -364,6 +364,751 @@ try {
     expect(keys === '{"edit.swapColors":["Q"]}', `Saved shortcuts after reopening: ${keys}`);
     postClose(app.pid);
     expect(await app.quit(5000), "The app didn't close");
+  });
+
+  // ---------- The pointer over the picture (F17) ----------
+
+  // Its own data folder and WebView2 profiles, so the saved setting starts empty (a fresh install).
+  const ptrData = join(work, 'data-pointer');
+  mkdirSync(ptrData, { recursive: true });
+  const ptrEnv = { SKETCH_DATA_DIR: ptrData };
+  // A stroke the checks drew leaves the picture with changes, so closing asks first; these pictures are thrown away.
+  const quitApp = async () => {
+    postClose(app.pid);
+    const end = Date.now() + 2500;
+    while (Date.now() < end) {
+      // A page that is closing never answers, so each look is given a moment.
+      const now = await Promise.race([app.state().catch(() => ({})), sleep(400).then(() => ({}))]);
+      if (now.dialog === 'Save your changes?') {
+        await app.clickButton("Don't Save").catch(() => {});
+        break;
+      }
+      await sleep(100);
+    }
+    expect(await app.quit(5000), "The app didn't close");
+  };
+  /** Moves the mouse to a point of the page and reads what the pointer is there (no real mouse moves). */
+  const pointerAt = async (x, y) => {
+    await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0 });
+    await sleep(60);
+    return app.evaluate(`(() => {
+      const ring = document.querySelector('.pointer-ring');
+      const r = ring.getBoundingClientRect();
+      return {
+        cursor: getComputedStyle(document.elementFromPoint(${x}, ${y})).cursor,
+        ringShown: !ring.hidden && r.width > 0,
+        ring: { w: r.width, cx: r.x + r.width / 2, cy: r.y + r.height / 2 },
+      };
+    })()`);
+  };
+  /** The page position of a place in the picture, as a fraction of its width and height. */
+  const inPicture = (fx, fy) =>
+    app.evaluate(`(() => {
+      const a = window.sketch.app;
+      const r = document.querySelector('canvas.view').getBoundingClientRect();
+      const p = a.viewport.toScreen(a.doc.width * ${fx}, a.doc.height * ${fy});
+      return { x: Math.round(r.left + p.x), y: Math.round(r.top + p.y) };
+    })()`);
+  /** What a CSS cursor is: its kind, the picture's size for a dot or crosshair, and its drawing. */
+  const kindOf = (cursor) => {
+    const m = /^url\("data:image\/svg\+xml,([^"]+)"\)\s+(\d+)\s+(\d+)/.exec(cursor);
+    if (!m) return { kind: cursor.split(',')[0] };
+    const svg = decodeURIComponent(m[1]);
+    return { kind: svg.includes('<circle') ? 'dot' : 'cross', size: Number(/width="(\d+)"/.exec(svg)[1]), hot: [Number(m[2]), Number(m[3])], svg };
+  };
+  /** Changes Settings the way a person does (opens it, sets the control, closes it). Each step is one control: [name, value]. */
+  const inSettings = async (...steps) => {
+    await app.press(',', ctrl);
+    await sleep(250);
+    for (const [name, value] of steps) {
+      await app.evaluate(`(() => {
+        const el = document.querySelector('[data-setting="${name}"]');
+        if (!el) throw new Error('No ${name} control in Settings');
+        if (el.type === 'checkbox') el.checked = ${JSON.stringify(value)};
+        else el.value = ${JSON.stringify(String(value))};
+        el.dispatchEvent(new Event(el.type === 'range' || el.type === 'color' ? 'input' : 'change', { bubbles: true }));
+      })()`);
+      await sleep(150);
+    }
+    await app.press('Escape');
+    await sleep(150);
+  };
+  const toolKey = async (key, name) => {
+    await app.press(key);
+    await app.waitFor(`the ${name} tool`, (s) => s.tool === name);
+  };
+  const setSize = async (n) => {
+    await app.evaluate(`(() => {
+      const box = document.querySelector('.opt.range .num');
+      box.value = '${n}';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await sleep(100);
+  };
+  const zoomTo = async (z) => {
+    await app.evaluate(`window.sketch.run('view.actual')`);
+    for (let i = 0; i < 6; i++) {
+      const now = await app.evaluate(`window.sketch.app.viewport.zoom`);
+      if (Math.abs(now - z) < 0.01) break;
+      await app.evaluate(`window.sketch.run('${now < z ? 'view.zoomIn' : 'view.zoomOut'}')`);
+    }
+    const now = await app.evaluate(`window.sketch.app.viewport.zoom`);
+    expect(Math.abs(now - z) < 0.01, `Couldn't zoom to ${z}: at ${now}`);
+    await sleep(100);
+  };
+  // The tools that draw, and the ones that keep their own pointers.
+  const DRAWING = [['b', 'Brush'], ['p', 'Pencil'], ['e', 'Eraser'], ['g', 'Fill'], ['u', 'Rectangle'], ['a', 'Arrow'], ['t', 'Text']];
+  const OWN = [['m', 'Rectangle Select'], ['c', 'Crop'], ['i', 'Colour Picker']];
+  const centre = () => inPicture(0.5, 0.5);
+
+  await check('A fresh install shows the normal arrow over the picture with every tool, and saves no pointer setting', async () => {
+    app = await launch(exe, work, [], 'pointer', ptrEnv);
+    expect((await app.evaluate(`localStorage.getItem('sketch.pointer')`)) === null, 'A fresh install already holds a pointer setting');
+    const at = await centre();
+    for (const [key, name] of DRAWING) {
+      await toolKey(key, name);
+      const p = await pointerAt(at.x, at.y);
+      // The text tool's I-beam is what it always was; the rest are Windows' arrow.
+      const want = name === 'Text' ? 'text' : 'default';
+      expect(p.cursor === want && !p.ringShown, `${name} over the picture shows "${p.cursor.slice(0, 40)}" (circle ${p.ringShown}), expected ${want}`);
+    }
+  });
+
+  await check('Settings > General has the pointer choice: the arrow, with the eraser switch off and a preview on a light and a dark patch', async () => {
+    await app.press(',', ctrl);
+    await sleep(250);
+    const s = await app.evaluate(`({
+      pointer: document.querySelector('[data-setting="pointer"]')?.value,
+      options: [...document.querySelectorAll('[data-setting="pointer"] option')].map((o) => o.textContent),
+      eraserOwn: document.querySelector('[data-setting="pointerEraserOwn"]')?.checked,
+      eraserSelect: !!document.querySelector('[data-setting="pointerEraser"]'),
+      patches: [...document.querySelectorAll('.pointer-preview .patch')].map((p) => getComputedStyle(p).backgroundColor),
+      sizeRows: document.querySelectorAll('[data-setting="pointerDotSize"], [data-setting="pointerCrossSize"]').length,
+    })`);
+    await app.press('Escape');
+    expect(s.pointer === 'arrow', `Pointer choice is ${s.pointer}`);
+    expect(s.options.join('|') === 'Normal arrow|Small dot|Thin crosshair|Brush size circle', `Choices: ${s.options.join('|')}`);
+    expect(s.eraserOwn === false && !s.eraserSelect, 'The eraser switch is not off by default');
+    expect(s.patches.length === 2 && s.patches[0] !== s.patches[1], `Preview patches: ${s.patches}`);
+    expect(s.sizeRows === 0, 'The arrow shows size controls');
+  });
+
+  await check('Each pointer shows over the picture with the drawing tools, the size circle for brush, pencil and eraser, and the Select, Crop and picker pointers stay', async () => {
+    const at = await centre();
+    const own = {};
+    for (const [key, name] of OWN) {
+      await toolKey(key, name);
+      own[name] = (await pointerAt(at.x, at.y)).cursor;
+    }
+    await inSettings(['pointer', 'dot']);
+    for (const [key, name] of DRAWING) {
+      await toolKey(key, name);
+      const p = await pointerAt(at.x, at.y);
+      const k = kindOf(p.cursor);
+      expect(k.kind === 'dot' && k.size === 6 + 4 && !p.ringShown, `Dot with ${name}: ${p.cursor.slice(0, 50)} (circle ${p.ringShown})`);
+    }
+    await inSettings(['pointer', 'cross']);
+    for (const [key, name] of DRAWING) {
+      await toolKey(key, name);
+      const p = await pointerAt(at.x, at.y);
+      const k = kindOf(p.cursor);
+      expect(k.kind === 'cross' && k.size === 15 + 4 && k.hot[0] === 9 && !p.ringShown, `Crosshair with ${name}: ${p.cursor.slice(0, 50)} (circle ${p.ringShown})`);
+    }
+    await inSettings(['pointer', 'circle']);
+    for (const [key, name] of DRAWING) {
+      await toolKey(key, name);
+      const p = await pointerAt(at.x, at.y);
+      const sized = ['Brush', 'Pencil', 'Eraser'].includes(name);
+      // A tool with no brush size shows a dot where the circle was picked.
+      expect(sized ? p.cursor === 'none' && p.ringShown : kindOf(p.cursor).kind === 'dot' && !p.ringShown, `Circle with ${name}: ${p.cursor.slice(0, 50)} (circle ${p.ringShown})`);
+    }
+    for (const [key, name] of OWN) {
+      await toolKey(key, name);
+      const p = await pointerAt(at.x, at.y);
+      expect(p.cursor === own[name] && !p.ringShown, `${name} changed from "${own[name].slice(0, 30)}" to "${p.cursor.slice(0, 30)}"`);
+    }
+  });
+
+  await check('The arrow comes back over the toolbars, the options bar, the status bar and beside the picture, and the pointer comes back over the picture', async () => {
+    const at = await centre();
+    const spots = await app.evaluate(`(() => {
+      const mid = (sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; };
+      const view = document.querySelector('canvas.view').getBoundingClientRect();
+      const a = window.sketch.app;
+      const edge = a.viewport.toScreen(a.doc.width, a.doc.height);
+      return {
+        'the tool rail': mid('.rail-btn'),
+        'the options bar': mid('.options .tool-name'),
+        'the status bar': mid('.statusbar'),
+        'the menu bar': mid('.menu-title'),
+        'the workspace beside the picture': { x: Math.round(view.left + Math.min(view.width - 6, edge.x + 24)), y: Math.round(view.top + view.height / 2) },
+      };
+    })()`);
+    for (const shape of ['circle', 'dot', 'cross']) {
+      await inSettings(['pointer', shape]);
+      await toolKey('b', 'Brush');
+      const over = await pointerAt(at.x, at.y);
+      expect(shape === 'circle' ? over.ringShown && over.cursor === 'none' : kindOf(over.cursor).kind === shape && !over.ringShown, `${shape}: not shown over the picture: ${over.cursor.slice(0, 30)}`);
+      for (const [name, p] of Object.entries(spots)) {
+        const r = await pointerAt(p.x, p.y);
+        const k = kindOf(r.cursor).kind;
+        expect(!r.ringShown && k !== 'none' && k !== 'dot' && k !== 'cross', `With the ${shape}, over ${name} the pointer is "${r.cursor.slice(0, 40)}" (circle ${r.ringShown})`);
+      }
+      const back = await pointerAt(at.x, at.y);
+      expect(shape === 'circle' ? back.ringShown : kindOf(back.cursor).kind === shape, `${shape}: did not come back over the picture`);
+    }
+  });
+
+  await check('The size circle matches the brush at 50%, 100% and 400% zoom, and follows a size or zoom change without the mouse moving', async () => {
+    await inSettings(['pointer', 'circle']);
+    for (const [key, name, px] of [['b', 'Brush', 20], ['p', 'Pencil', 10], ['e', 'Eraser', 20]]) {
+      await toolKey(key, name);
+      await setSize(px);
+      for (const z of [0.5, 1, 4]) {
+        await zoomTo(z);
+        const at = await centre();
+        const p = await pointerAt(at.x, at.y);
+        expect(p.ringShown, `${name}: no circle at ${z * 100}%`);
+        const want = Math.max(6, px * z);
+        expect(Math.abs(p.ring.w - want) <= 1.5, `${name} at ${z * 100}%: circle ${p.ring.w} px wide, brush is ${want}`);
+        expect(Math.abs(p.ring.cx - at.x) <= 1.5 && Math.abs(p.ring.cy - at.y) <= 1.5, `${name}: circle centred at ${p.ring.cx}, ${p.ring.cy}, mouse at ${at.x}, ${at.y}`);
+      }
+    }
+    // With the mouse still: a new brush size, then a zoom, change the circle at once.
+    await toolKey('b', 'Brush');
+    await zoomTo(1);
+    const at = await centre();
+    await pointerAt(at.x, at.y);
+    const width = () => app.evaluate(`document.querySelector('.pointer-ring').getBoundingClientRect().width`);
+    await setSize(40);
+    expect(Math.abs((await width()) - 40) <= 1.5, `After a size of 40 the circle is ${await width()} px wide`);
+    await app.press(']');
+    await sleep(200);
+    const size = await width();
+    expect(size > 41.5, `After ] the circle is ${size} px wide, no bigger than before`);
+    await app.evaluate(`window.sketch.run('view.zoomIn')`);
+    await sleep(100);
+    const z = await app.evaluate(`window.sketch.app.viewport.zoom`);
+    expect(Math.abs((await width()) - size * z) <= 1.5, `After zooming to ${z} the circle is ${await width()} px wide, brush is ${size * z}`);
+    // And it follows the mouse through a stroke.
+    const to = { x: at.x + 60, y: at.y + 25 };
+    await app.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at.x, y: at.y, button: 'left', buttons: 1, clickCount: 1 });
+    await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: to.x, y: to.y, button: 'left', buttons: 1 });
+    await sleep(80);
+    const mid = await app.evaluate(`(() => { const el = document.querySelector('.pointer-ring'); const r = el.getBoundingClientRect(); return { cx: r.x + r.width / 2, cy: r.y + r.height / 2, shown: !el.hidden }; })()`);
+    await app.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1 });
+    expect(mid.shown && Math.abs(mid.cx - to.x) <= 1.5 && Math.abs(mid.cy - to.y) <= 1.5, `During a stroke the circle was at ${mid.cx}, ${mid.cy}, mouse at ${to.x}, ${to.y}`);
+  });
+
+  await check("The eraser's own pointer applies to the eraser only, and turning the switch off gives it the shared one back", async () => {
+    await inSettings(['pointer', 'dot']);
+    await zoomTo(1);
+    const at = await centre();
+    await inSettings(['pointerEraserOwn', true]);
+    await inSettings(['pointerEraser', 'circle']);
+    await toolKey('e', 'Eraser');
+    let p = await pointerAt(at.x, at.y);
+    expect(p.cursor === 'none' && p.ringShown, `Eraser with its own circle: ${p.cursor.slice(0, 30)}`);
+    for (const [key, name] of DRAWING.filter(([, n]) => n !== 'Eraser')) {
+      await toolKey(key, name);
+      p = await pointerAt(at.x, at.y);
+      expect(kindOf(p.cursor).kind === 'dot' && !p.ringShown, `${name} should keep the dot: ${p.cursor.slice(0, 30)}`);
+    }
+    await inSettings(['pointerEraser', 'cross']);
+    await toolKey('e', 'Eraser');
+    p = await pointerAt(at.x, at.y);
+    expect(kindOf(p.cursor).kind === 'cross' && !p.ringShown, `Eraser with its own crosshair: ${p.cursor.slice(0, 30)}`);
+    await inSettings(['pointerEraserOwn', false]);
+    p = await pointerAt(at.x, at.y);
+    expect(kindOf(p.cursor).kind === 'dot', `Eraser after the switch is off: ${p.cursor.slice(0, 30)}`);
+    // The arrow for everything else, with the circle only for the eraser.
+    await inSettings(['pointer', 'arrow']);
+    await inSettings(['pointerEraserOwn', true]);
+    await inSettings(['pointerEraser', 'circle']);
+    p = await pointerAt(at.x, at.y);
+    expect(p.cursor === 'none' && p.ringShown, 'The eraser alone should show the circle');
+    await toolKey('b', 'Brush');
+    p = await pointerAt(at.x, at.y);
+    expect(p.cursor === 'default' && !p.ringShown, `Brush should keep the arrow: ${p.cursor.slice(0, 30)}`);
+  });
+
+  await check('The crosshair takes the chosen size and colour, and the choice survives closing and reopening the app', async () => {
+    await inSettings(['pointerEraserOwn', false]);
+    await inSettings(['pointer', 'cross']);
+    await inSettings(['pointerCrossSize', 31]);
+    await inSettings(['pointerColorMode', 'custom']);
+    await inSettings(['pointerColor', '#ff0000']);
+    await toolKey('b', 'Brush');
+    const at = await centre();
+    let k = kindOf((await pointerAt(at.x, at.y)).cursor);
+    expect(k.kind === 'cross' && k.size === 31 + 4 && k.svg.includes('#ff0000'), `Crosshair: ${JSON.stringify({ ...k, svg: undefined })}`);
+    await quitApp();
+    app = await launch(exe, work, [], 'pointer', ptrEnv);
+    const saved = JSON.parse(await app.evaluate(`localStorage.getItem('sketch.pointer')`));
+    expect(saved.shape === 'cross' && saved.crossSize === 31 && saved.color === '#ff0000' && saved.eraserOwn === false, `Saved: ${JSON.stringify(saved)}`);
+    const again = await centre();
+    k = kindOf((await pointerAt(again.x, again.y)).cursor);
+    expect(k.kind === 'cross' && k.size === 35 && k.svg.includes('#ff0000'), `After reopening: ${JSON.stringify({ ...k, svg: undefined })}`);
+    await quitApp();
+  });
+
+  await check('An install updated from a version with no pointer setting keeps the normal arrow', async () => {
+    // Settings saved by an earlier version: a theme, tool settings and where Explorer files open, but no pointer.
+    const oldEnv = { SKETCH_DATA_DIR: join(work, 'data-pointer-old') };
+    app = await launch(exe, work, [], 'pointer-old', oldEnv);
+    await app.evaluate(`(() => {
+      localStorage.setItem('sketch.theme', '"light"');
+      localStorage.setItem('sketch.openIn', '"window"');
+      localStorage.setItem('sketch.tools', JSON.stringify({ settings: { brush: { size: 20 } } }));
+      localStorage.removeItem('sketch.pointer');
+    })()`);
+    await quitApp();
+    app = await launch(exe, work, [], 'pointer-old', oldEnv);
+    expect((await app.evaluate(`localStorage.getItem('sketch.pointer')`)) === null, 'Starting up wrote a pointer setting');
+    const at = await centre();
+    for (const [key, name] of DRAWING) {
+      await toolKey(key, name);
+      const p = await pointerAt(at.x, at.y);
+      const want = name === 'Text' ? 'text' : 'default';
+      expect(p.cursor === want && !p.ringShown, `${name} after the update shows "${p.cursor.slice(0, 40)}", expected ${want}`);
+    }
+    await app.press(',', ctrl);
+    await sleep(250);
+    const shown = await app.evaluate(`document.querySelector('[data-setting="pointer"]').value + '/' + document.querySelector('[data-setting="pointerEraserOwn"]').checked`);
+    await app.press('Escape');
+    expect(shown === 'arrow/false', `Settings after the update shows ${shown}`);
+    await quitApp();
+  });
+
+  // ---------- Clean up rough shapes (F18) ----------
+
+  // Its own data folder and WebView2 profile, so the saved setting starts empty (a fresh install).
+  const cleanData = join(work, 'data-cleanup');
+  mkdirSync(cleanData, { recursive: true });
+  const cleanEnv = { SKETCH_DATA_DIR: cleanData };
+  const mouseAt = (type, p, buttons, mods = 0) =>
+    app.send('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button: 'left', buttons, clickCount: type === 'mouseMoved' ? 0 : 1, modifiers: mods });
+  /** Draws through `pts` (page positions) with the button down, then sits still for `hold` ms before letting go. */
+  const drawRough = async (pts, { hold = 0, mods = 0, between = null, stays = false } = {}) => {
+    await mouseAt('mousePressed', pts[0], 1);
+    for (const p of pts.slice(1)) {
+      await mouseAt('mouseMoved', p, 1, mods);
+      await sleep(3);
+    }
+    if (hold) {
+      await sleep(hold);
+      // A page the window system has put behind others runs its timers late, so a hold that should convert is waited for.
+      if (!stays) await waitDraft();
+    }
+    if (between) await between();
+    await mouseAt('mouseReleased', pts.at(-1), 0, mods);
+    await sleep(120);
+  };
+  /** Waits (up to 4 s) for a clean shape to appear in place of the stroke being drawn. */
+  const waitDraft = async () => {
+    for (const end = Date.now() + 4000; Date.now() < end; await sleep(40)) if (await app.evaluate(`!!window.sketch.app.draft`)) return;
+  };
+  /** A hand's wobble: the same few pixels off at the same place on every run. */
+  const wobble = (i) => Math.round(Math.sin(i * 12.9898) * 2.4);
+  /** Points along straight sides through `corners`, about 9 pixels apart, wobbling. */
+  const along = (corners, org) => {
+    const out = [];
+    let n = 0;
+    for (let c = 1; c < corners.length; c++) {
+      const [x0, y0] = corners[c - 1];
+      const [x1, y1] = corners[c];
+      const steps = Math.max(2, Math.round(Math.hypot(x1 - x0, y1 - y0) / 9));
+      for (let s = c === 1 ? 0 : 1; s <= steps; s++, n++) out.push({ x: org.x + Math.round(x0 + ((x1 - x0) * s) / steps) + wobble(n), y: org.y + Math.round(y0 + ((y1 - y0) * s) / steps) + wobble(n + 7) });
+    }
+    return out;
+  };
+  const roughBox = (org) => along([[100, 100], [300, 100], [300, 220], [100, 220], [103, 104]], org);
+  const roughOval = (org, rx, ry) => {
+    const out = [];
+    for (let i = 0; i <= 44; i++) {
+      const a = -Math.PI / 2 + (i / 40) * Math.PI * 2;
+      out.push({ x: org.x + Math.round(400 + Math.cos(a) * rx + wobble(i)), y: org.y + Math.round(250 + Math.sin(a) * ry + wobble(i + 3)) });
+    }
+    return out;
+  };
+  const roughLine = (org) => along([[100, 350], [330, 372]], org);
+  // The shaft to the tip, then out along one side of the V and back, and out along the other.
+  const roughArrow = (org) => along([[120, 440], [420, 330], [381, 323], [420, 330], [394, 361]], org);
+  const scribbleOf = (org) => along([[100, 100], [210, 160], [120, 140], [260, 90], [150, 230], [280, 200], [110, 180], [240, 120]], org);
+  const letterS = (org) => {
+    const out = [];
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
+      out.push({ x: org.x + Math.round(200 + Math.sin(t * Math.PI * 2) * 60 + wobble(i)), y: org.y + Math.round(100 + t * 200 + wobble(i + 5)) });
+    }
+    return out;
+  };
+  // The picture is bigger than the window at 100%, so the shapes are drawn from a place inside what shows; shapes are read back relative to it.
+  let docOrg = { x: 0, y: 0 };
+  const pic = async () => {
+    const at = await inPicture(0.3, 0.1);
+    docOrg = await app.evaluate(`({ x: Math.round(window.sketch.app.doc.width * 0.3), y: Math.round(window.sketch.app.doc.height * 0.1) })`);
+    return at;
+  };
+  /** The picture's shapes and ink, the shape being drawn, the pick and the undo step, read from the page. */
+  const world = async () => {
+    const w = await app.evaluate(`(() => {
+      const a = window.sketch.app;
+      const objects = a.doc.layers.filter((l) => l.kind === 'objects').flatMap((l) => l.objects.map((o) => JSON.parse(JSON.stringify(o))));
+      const c = a.doc.paintLayer.canvas;
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let ink = 0;
+      let hash = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] !== d[0] || d[i + 1] !== d[1] || d[i + 2] !== d[2] || d[i + 3] !== d[3]) ink++;
+        hash = (Math.imul(hash, 31) + d[i] + d[i + 1] * 3 + d[i + 2] * 7 + d[i + 3] * 11) | 0;
+      }
+      return {
+        objects,
+        layers: a.doc.layers.length,
+        ink,
+        hash,
+        draft: a.draft ? JSON.parse(JSON.stringify(a.draft)) : null,
+        picked: a.objectSel ? a.objectSel.ids.length : 0,
+        undo: a.history.undoLabel,
+        position: a.history.position,
+      };
+    })()`);
+    const move = (o) => {
+      if (!o) return o;
+      for (const k of ['x', 'x1', 'x2']) if (k in o) o[k] -= docOrg.x;
+      for (const k of ['y', 'y1', 'y2']) if (k in o) o[k] -= docOrg.y;
+      return o;
+    };
+    w.objects.forEach(move);
+    move(w.draft);
+    return w;
+  };
+  /** Back to the empty picture: undoes everything, and drops what was picked. */
+  const clearAll = () =>
+    app.evaluate(`(() => {
+      const a = window.sketch.app;
+      while (a.history.canUndo) a.history.undo();
+      a.objectSel = null;
+      a.draft = null;
+      a.requestRender();
+    })()`);
+  const near = (a, b, tol) => Math.abs(a - b) <= tol;
+  // Turns the setting on or off the way a person does, without leaving the picture.
+  const setCleanUp = (on) => inSettings(['cleanUp', on]);
+
+  await check('A fresh install has Clean up rough shapes on and saves nothing until it is changed', async () => {
+    app = await launch(exe, work, [], 'cleanup', cleanEnv);
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === null, 'A fresh install already holds a Clean up setting');
+    await app.press(',', ctrl);
+    await sleep(250);
+    const on = await app.evaluate(`document.querySelector('[data-setting="cleanUp"]')?.checked`);
+    const label = await app.evaluate(`[...document.querySelectorAll('.general-row > span:first-child')].map((s) => s.textContent).includes('Clean up rough shapes')`);
+    await app.press('Escape');
+    expect(on === true, `The switch is ${on}`);
+    expect(label, "Settings has no 'Clean up rough shapes' row");
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === null, 'Opening Settings saved the setting');
+  });
+
+  await check('A rough box drawn and let go at once stays an ordinary stroke', async () => {
+    await toolKey('b', 'Brush');
+    await setSize(6);
+    await zoomTo(1);
+    const org = await pic();
+    await drawRough(roughBox(org));
+    const w = await world();
+    expect(w.ink > 500 && w.objects.length === 0 && w.layers === 1, `Ink ${w.ink}, shapes ${w.objects.length}, layers ${w.layers}`);
+    expect(w.undo === 'Brush stroke', `Last step is "${w.undo}"`);
+    await clearAll();
+  });
+
+  await check('A rough box held still becomes a rectangle in the stroke colour and width, as one undo step that brings the stroke back', async () => {
+    const org = await pic();
+    await app.evaluate(`window.sketch.app.primary = '#d11a1a'`);
+    const before = await world();
+    let during = null;
+    await drawRough(roughBox(org), { hold: 800, between: async () => (during = await world()) });
+    // While the button was still down, the rectangle had already taken the stroke's place.
+    expect(during.draft?.kind === 'rectangle' && during.ink === 0, `While held: draft ${during.draft?.kind}, ink ${during.ink}`);
+    const w = await world();
+    expect(w.objects.length === 1 && w.objects[0].kind === 'rectangle', `Shapes after: ${JSON.stringify(w.objects.map((o) => o.kind))}`);
+    const r = w.objects[0];
+    expect(near(r.x, 100, 8) && near(r.y, 100, 8) && near(r.w, 200, 12) && near(r.h, 120, 12), `Rectangle at ${r.x}, ${r.y}, ${r.w} x ${r.h}`);
+    expect(r.stroke === '#d11a1a' && r.width === 6 && r.opacity === 1 && !r.filled && r.angle === 0, `Rectangle look: ${r.stroke}, ${r.width}, ${r.opacity}`);
+    expect(w.ink === 0, `The rough stroke's ${w.ink} pixels were still committed`);
+    expect(w.layers === 2 && w.picked === 1 && w.draft === null, `Layers ${w.layers}, picked ${w.picked}, draft ${w.draft}`);
+    expect(w.undo === 'Clean up rectangle' && w.position === before.position + 2, `Undo says "${w.undo}", ${w.position - before.position} steps made`);
+    // One undo brings the rough stroke back exactly as drawn (the colour differs, so the pixels are compared on a black stroke below).
+    await app.press('z', ctrl);
+    await sleep(150);
+    let u = await world();
+    expect(u.objects.length === 0 && u.layers === 1 && u.ink > 500, `After undo: ${u.objects.length} shapes, ${u.layers} layers, ink ${u.ink}`);
+    expect(u.undo === 'Brush stroke' && u.position === before.position + 1, `After one undo the last step is "${u.undo}", ${w.position - u.position} steps back`);
+    await app.press('y', ctrl);
+    await sleep(150);
+    u = await world();
+    expect(u.objects.length === 1 && u.ink === 0 && u.layers === 2, `After redo: ${u.objects.length} shapes, ink ${u.ink}`);
+    // Undoing twice takes the stroke away too, back to the empty picture.
+    await app.press('z', ctrl);
+    await app.press('z', ctrl);
+    await sleep(150);
+    u = await world();
+    expect(u.objects.length === 0 && u.ink === 0 && u.layers === 1 && u.position === before.position, `After two undos: ${u.objects.length} shapes, ink ${u.ink}, ${u.position - before.position} steps on`);
+    await clearAll();
+    // The same box drawn without stopping, then held: undo gives back the very pixels the unheld stroke leaves.
+    await app.evaluate(`window.sketch.app.primary = '#000000'`);
+    await setCleanUp(false);
+    await drawRough(roughBox(org));
+    const plain = await world();
+    await clearAll();
+    await setCleanUp(true);
+    await drawRough(roughBox(org), { hold: 800 });
+    await app.press('z', ctrl);
+    await sleep(150);
+    u = await world();
+    expect(plain.ink > 500 && u.hash === plain.hash, `Undo did not bring back the stroke exactly as drawn: ${u.ink} inked pixels, the stroke had ${plain.ink}`);
+    await clearAll();
+  });
+
+  await check('The clean rectangle can be picked and moved like one from the Shapes tool', async () => {
+    const org = await pic();
+    await toolKey('b', 'Brush');
+    await drawRough(roughBox(org), { hold: 800 });
+    await toolKey('m', 'Rectangle Select');
+    // Click empty space to drop the pick, then take the box by its top edge.
+    await mouseAt('mousePressed', { x: org.x + 600, y: org.y + 450 }, 1);
+    await mouseAt('mouseReleased', { x: org.x + 600, y: org.y + 450 }, 0);
+    await sleep(120);
+    expect((await world()).picked === 0, 'Clicking empty space kept the pick');
+    const edge = { x: org.x + 200, y: org.y + 100 };
+    await mouseAt('mousePressed', edge, 1);
+    await mouseAt('mouseMoved', { x: edge.x + 40, y: edge.y + 30 }, 1);
+    await mouseAt('mouseReleased', { x: edge.x + 40, y: edge.y + 30 }, 0);
+    await sleep(150);
+    const w = await world();
+    expect(w.picked === 1 && w.objects[0].x >= 130 && w.objects[0].y >= 120, `Picked ${w.picked}, rectangle now at ${w.objects[0].x}, ${w.objects[0].y}`);
+    await clearAll();
+    await toolKey('b', 'Brush');
+  });
+
+  await check('A rough circle, line and arrow held still become an ellipse, a line and an arrow; the pencil does it too', async () => {
+    const org = await pic();
+    await drawRough(roughOval(org, 80, 80), { hold: 800 });
+    let w = await world();
+    const e = w.objects[0];
+    expect(w.objects.length === 1 && e.kind === 'ellipse' && near(e.x + e.w / 2, 400, 8) && near(e.y + e.h / 2, 250, 8) && near(e.w, 160, 14) && near(e.h, 160, 14), `Circle gave ${JSON.stringify(e)}`);
+    await drawRough(roughLine(org), { hold: 800 });
+    w = await world();
+    const l = w.objects[1];
+    expect(w.objects.length === 2 && l.type === 'line' && l.start === 'none' && l.end === 'none' && near(l.x1, 100, 8) && near(l.y1, 350, 8) && near(l.x2, 330, 8) && near(l.y2, 372, 8), `Line gave ${JSON.stringify(l)}`);
+    await drawRough(roughArrow(org), { hold: 800 });
+    w = await world();
+    const a = w.objects[2];
+    expect(w.objects.length === 3 && a.type === 'line' && a.end !== 'none' && a.start === 'none' && near(a.x1, 120, 10) && near(a.y1, 440, 10) && near(a.x2, 420, 12) && near(a.y2, 330, 12), `Arrow gave ${JSON.stringify(a)}`);
+    expect(w.ink === 0, `${w.ink} rough pixels were left behind`);
+    await clearAll();
+    await toolKey('p', 'Pencil');
+    await drawRough(roughBox(org), { hold: 800 });
+    w = await world();
+    expect(w.objects.length === 1 && w.objects[0].kind === 'rectangle' && w.ink === 0, `Pencil box gave ${JSON.stringify(w.objects.map((o) => o.kind))}, ink ${w.ink}`);
+    await clearAll();
+    await toolKey('b', 'Brush');
+  });
+
+  await check('Scribbles and letters held still stay strokes, and so does anything the eraser draws', async () => {
+    const org = await pic();
+    for (const pts of [scribbleOf(org), letterS(org)]) {
+      await drawRough(pts, { hold: 800, stays: true });
+      const w = await world();
+      expect(w.objects.length === 0 && w.ink > 200 && w.undo === 'Brush stroke', `A stroke held still became ${JSON.stringify(w.objects.map((o) => o.kind))}, ink ${w.ink}, "${w.undo}"`);
+    }
+    await clearAll();
+    await toolKey('b', 'Brush');
+    await drawRough(roughBox(org));
+    await toolKey('e', 'Eraser');
+    await setSize(10);
+    await drawRough(along([[150, 150], [250, 150], [250, 190], [150, 190], [152, 154]], org), { hold: 800, stays: true });
+    const w = await world();
+    expect(w.objects.length === 0 && w.layers === 1 && w.undo === 'Eraser', `Eraser held still: ${w.objects.length} shapes, "${w.undo}"`);
+    await clearAll();
+    await toolKey('b', 'Brush');
+  });
+
+  await check('Moving on starts the wait again, a small tremor does not, and dragging after the shape appears resizes it until the button goes up', async () => {
+    const org = await pic();
+    const box = roughBox(org);
+    const end = box.at(-1);
+    // Still moving every 300 ms: the pause never reaches half a second.
+    await mouseAt('mousePressed', box[0], 1);
+    for (const p of box.slice(1)) {
+      await mouseAt('mouseMoved', p, 1);
+      await sleep(3);
+    }
+    for (let i = 1; i <= 3; i++) {
+      await sleep(300);
+      await mouseAt('mouseMoved', { x: end.x + i * 7, y: end.y + 2 }, 1);
+    }
+    const early = (await world()).draft;
+    expect(early === null, `A shape appeared while the pointer kept moving: ${early?.kind}`);
+    // A 2 pixel tremor does not count as moving: 800 ms after the last real move it has become a shape.
+    const still = { x: end.x + 21, y: end.y + 2 };
+    await sleep(300);
+    await mouseAt('mouseMoved', { x: still.x + 2, y: still.y + 1 }, 1);
+    await sleep(500);
+    await waitDraft();
+    const shown = (await world()).draft;
+    expect(shown?.kind === 'rectangle', `After a pause with a small tremor the draft is ${shown?.kind}`);
+    // Dragging away from the middle (the stroke ended by the top left corner) grows it while the button is down.
+    const grown = { x: still.x - 40, y: still.y - 30 };
+    await mouseAt('mouseMoved', grown, 1);
+    await sleep(60);
+    const dragging = (await world()).draft;
+    expect(dragging.w > shown.w + 30 && dragging.h > shown.h + 20, `Dragging made the rectangle ${shown.w} x ${shown.h} into ${dragging.w} x ${dragging.h}`);
+    await mouseAt('mouseReleased', grown, 0);
+    await sleep(150);
+    const w = await world();
+    expect(w.objects.length === 1 && w.objects[0].w === dragging.w && w.objects[0].h === dragging.h && w.draft === null, `Kept ${JSON.stringify(w.objects.map((o) => [o.w, o.h]))} after dragging to ${dragging.w} x ${dragging.h}`);
+    await clearAll();
+    // A line's end follows the pointer.
+    const line = roughLine(org);
+    await drawRough(line, {
+      hold: 800,
+      between: async () => {
+        const tail = line.at(-1);
+        await mouseAt('mouseMoved', { x: tail.x + 50, y: tail.y + 60 }, 1);
+        await sleep(60);
+      },
+    });
+    const l = (await world()).objects[0];
+    expect(l?.type === 'line' && near(l.x1, 100, 8) && near(l.x2, 330 + 50, 10) && near(l.y2, 372 + 60, 10), `The line's end ended at ${l?.x2}, ${l?.y2}`);
+    await clearAll();
+  });
+
+  await check('Holding Shift makes the held box a square and the held oval a true circle', async () => {
+    const org = await pic();
+    await drawRough(roughBox(org), { hold: 800, mods: 8 });
+    let w = await world();
+    const sq = w.objects[0];
+    expect(sq?.kind === 'rectangle' && sq.w === sq.h && sq.w >= 190, `Box with Shift: ${sq?.w} x ${sq?.h}`);
+    await clearAll();
+    await drawRough(roughOval(org, 120, 60), { hold: 800, mods: 8 });
+    w = await world();
+    const c = w.objects[0];
+    expect(c?.kind === 'ellipse' && c.w === c.h && c.w >= 230, `Oval with Shift: ${c?.w} x ${c?.h}`);
+    await clearAll();
+    await drawRough(roughOval(org, 120, 60), { hold: 800 });
+    w = await world();
+    expect(w.objects[0]?.kind === 'ellipse' && w.objects[0].w - w.objects[0].h > 80, `Oval without Shift: ${w.objects[0]?.w} x ${w.objects[0]?.h}`);
+    await clearAll();
+  });
+
+  await check('With Clean up rough shapes switched off in Settings, holding still changes nothing, and the choice is kept after restarting', async () => {
+    await inSettings(['cleanUp', false]);
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === 'false', 'The off setting was not saved');
+    const org = await pic();
+    await drawRough(roughBox(org), { hold: 900, stays: true });
+    let w = await world();
+    expect(w.objects.length === 0 && w.layers === 1 && w.undo === 'Brush stroke' && w.hash !== 0, `Held with the switch off: ${w.objects.length} shapes, "${w.undo}"`);
+    await clearAll();
+    await quitApp();
+    app = await launch(exe, work, [], 'cleanup', cleanEnv);
+    await toolKey('b', 'Brush');
+    await setSize(6);
+    await zoomTo(1);
+    await app.press(',', ctrl);
+    await sleep(250);
+    const on = await app.evaluate(`document.querySelector('[data-setting="cleanUp"]').checked`);
+    await app.press('Escape');
+    expect(on === false, `After restarting the switch is ${on}`);
+    const org2 = await pic();
+    await drawRough(roughBox(org2), { hold: 900, stays: true });
+    w = await world();
+    expect(w.objects.length === 0 && w.ink > 500, `After restarting, held with the switch off: ${w.objects.length} shapes`);
+    await clearAll();
+  });
+
+  await check('"Turn Shape Clean-Up On/Off" in the command palette switches it, and the Settings switch follows', async () => {
+    const palette = async () => {
+      await app.press('k', ctrl);
+      await sleep(250);
+      await app.evaluate(`(() => {
+        const el = document.querySelector('.palette-input input');
+        el.value = 'shape clean-up';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      })()`);
+      await sleep(200);
+      const shown = await app.evaluate(`document.querySelector('.palette').textContent`);
+      expect(shown.includes('Turn Shape Clean-Up On/Off'), `The palette shows: ${shown.slice(0, 160)}`);
+      await app.press('Enter');
+      await sleep(250);
+    };
+    await palette();
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === 'true', 'The command did not switch it on');
+    await app.press(',', ctrl);
+    await sleep(250);
+    const on = await app.evaluate(`document.querySelector('[data-setting="cleanUp"]').checked`);
+    await app.press('Escape');
+    expect(on === true, `The Settings switch shows ${on} after the command`);
+    const org = await pic();
+    await drawRough(roughBox(org), { hold: 800 });
+    const w = await world();
+    expect(w.objects.length === 1 && w.objects[0].kind === 'rectangle', `Switched on from the palette, held: ${w.objects.length} shapes`);
+    await clearAll();
+    await palette();
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === 'false', 'The command did not switch it off again');
+    await drawRough(roughBox(org), { hold: 800, stays: true });
+    expect((await world()).objects.length === 0, 'Switched off from the palette, but holding still still made a shape');
+    await clearAll();
+    await quitApp();
+  });
+
+  await check('An install updated from a version with no Clean up setting has it on, and writes nothing until it is changed', async () => {
+    const oldEnv = { SKETCH_DATA_DIR: join(work, 'data-cleanup-old') };
+    app = await launch(exe, work, [], 'cleanup-old', oldEnv);
+    await app.evaluate(`(() => {
+      localStorage.setItem('sketch.theme', '"light"');
+      localStorage.setItem('sketch.openIn', '"window"');
+      localStorage.setItem('sketch.pointer', JSON.stringify({ shape: 'dot' }));
+      localStorage.setItem('sketch.tools', JSON.stringify({ settings: { brush: { size: 20 } } }));
+      localStorage.removeItem('sketch.cleanUp');
+    })()`);
+    await quitApp();
+    app = await launch(exe, work, [], 'cleanup-old', oldEnv);
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === null, 'Starting up wrote a Clean up setting');
+    await toolKey('b', 'Brush');
+    await setSize(6);
+    await zoomTo(1);
+    await app.press(',', ctrl);
+    await sleep(250);
+    const on = await app.evaluate(`document.querySelector('[data-setting="cleanUp"]').checked`);
+    await app.press('Escape');
+    expect(on === true, `Settings after the update shows ${on}`);
+    const org = await pic();
+    await drawRough(roughBox(org), { hold: 800 });
+    const w = await world();
+    expect(w.objects.length === 1 && w.objects[0].kind === 'rectangle', `After the update, held: ${w.objects.length} shapes`);
+    expect((await app.evaluate(`localStorage.getItem('sketch.cleanUp')`)) === null, 'Drawing wrote a Clean up setting');
+    await quitApp();
+  });
+
+  await check('On a whiteboard a held box becomes a rectangle, and undoing brings the rough stroke back', async () => {
+    app = await launch(exe, work, [], 'cleanup-board', { SKETCH_DATA_DIR: join(work, 'data-cleanup-board') });
+    await app.evaluate(`window.sketch.run('file.newBoard')`);
+    await sleep(700);
+    await toolKey('b', 'Brush');
+    await setSize(6);
+    // A whiteboard's canvas grows under the stroke and moves its pixels, so only the counts are read, not where things are.
+    docOrg = { x: 0, y: 0 };
+    const at = await app.evaluate(`(() => { const r = document.querySelector('canvas.view').getBoundingClientRect(); return { x: Math.round(r.left + 20), y: Math.round(r.top + 20) }; })()`);
+    await drawRough(roughBox(at), { hold: 800 });
+    let w = await world();
+    expect(w.objects.length === 1 && w.objects[0].kind === 'rectangle' && w.ink === 0 && w.undo === 'Clean up rectangle', `On a whiteboard: ${w.objects.length} shapes, ink ${w.ink}, "${w.undo}"`);
+    expect(near(w.objects[0].w, 200, 12) && near(w.objects[0].h, 120, 12), `Rectangle ${w.objects[0].w} x ${w.objects[0].h}`);
+    await app.press('z', ctrl);
+    await sleep(150);
+    w = await world();
+    expect(w.objects.length === 0 && w.ink > 500, `After undo on a whiteboard: ${w.objects.length} shapes, ink ${w.ink}`);
+    await quitApp();
   });
 
   // ---------- Autosave, recovery and more than one window ----------

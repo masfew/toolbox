@@ -19,6 +19,9 @@ import {
 } from '../app/commandList';
 import { comboOf, fromWindowsHotkey, isCaptureHotkey, isWindowsHotkey, prettyCombo } from '../app/keys';
 import { setOpenIn, windowPrefs, type OpenIn } from '../app/launch';
+import { cleanUp, setCleanUp } from '../app/cleanUp';
+import { pointerPrefs, setPointer } from '../app/pointer';
+import { CROSS_SIZE, DOT_SIZE, imageUrl, POINTER_SHAPES, pointerImage, type PointerShape } from '../app/pointerStyle';
 import * as platform from '../platform';
 import { loadPref, savePref } from '../app/prefs';
 import { searchCommands } from '../app/search';
@@ -345,7 +348,111 @@ function PrintScreenButton(props: { text: string | null | undefined }) {
   );
 }
 
-/** Settings for fitting into Windows: light or dark, where files from Explorer open, the paste key and what a capture does. */
+/** What a pointer looks like on a light and a dark patch, drawn from the same picture the cursor is made from. */
+function PointerPreview(props: { shape: PointerShape }) {
+  const { shape } = props;
+  const p = pointerPrefs;
+  return (
+    <span class="pointer-preview" data-shape={shape} aria-hidden="true">
+      {['light', 'dark'].map((tone) => (
+        <span key={tone} class={`patch ${tone}`}>
+          {shape === 'arrow' ? (
+            <svg width="14" height="20" viewBox="0 0 14 20">
+              <path d="M1.5 1.5v14l3.6-3.2 2.4 5.4 2.2-1-2.4-5.3h4.9z" fill={tone === 'light' ? '#000' : '#fff'} stroke={tone === 'light' ? '#fff' : '#000'} stroke-linejoin="round" />
+            </svg>
+          ) : shape === 'circle' ? (
+            <span class="ring-sample" />
+          ) : (
+            <img src={imageUrl(pointerImage(shape, shape === 'dot' ? p.dotSize : p.crossSize, p.color))} alt="" />
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ShapeSelect(props: { setting: string; value: PointerShape; onPick: (v: PointerShape) => void }) {
+  return (
+    <select data-setting={props.setting} value={props.value} onChange={(e) => props.onPick((e.target as HTMLSelectElement).value as PointerShape)}>
+      {POINTER_SHAPES.map((s) => (
+        <option key={s.value} value={s.value}>
+          {s.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** The pointer over the picture (F17): Windows' normal arrow, or a dot, a crosshair or the brush-size circle. */
+function PointerSettings() {
+  const p = pointerPrefs;
+  const [custom, setCustom] = useState(p.color === 'auto' ? '#ff3b30' : p.color);
+  const shapes = p.eraserOwn ? [p.shape, p.eraserShape] : [p.shape];
+  // A circle picked for a tool with no brush size shows as a dot, so the dot's size counts too.
+  const dotUsed = shapes.some((s) => s === 'dot' || s === 'circle');
+  const crossUsed = shapes.includes('cross');
+  return (
+    <>
+      <label class="general-row">
+        <span>Pointer over the picture</span>
+        <ShapeSelect setting="pointer" value={p.shape} onPick={(shape) => setPointer({ shape })} />
+        <PointerPreview shape={p.shape} />
+      </label>
+      {dotUsed && (
+        <label class="general-row">
+          <span>Dot size</span>
+          <input type="range" data-setting="pointerDotSize" min={DOT_SIZE.min} max={DOT_SIZE.max} value={p.dotSize} onInput={(e) => setPointer({ dotSize: Number((e.target as HTMLInputElement).value) })} />
+          <span class="num-out">{p.dotSize} px</span>
+        </label>
+      )}
+      {crossUsed && (
+        <label class="general-row">
+          <span>Crosshair size</span>
+          <input type="range" data-setting="pointerCrossSize" min={CROSS_SIZE.min} max={CROSS_SIZE.max} value={p.crossSize} onInput={(e) => setPointer({ crossSize: Number((e.target as HTMLInputElement).value) })} />
+          <span class="num-out">{p.crossSize} px</span>
+        </label>
+      )}
+      {(dotUsed || crossUsed) && (
+        <label class="general-row">
+          <span>Dot and crosshair colour</span>
+          <select
+            data-setting="pointerColorMode"
+            value={p.color === 'auto' ? 'auto' : 'custom'}
+            onChange={(e) => setPointer({ color: (e.target as HTMLSelectElement).value === 'auto' ? 'auto' : custom })}
+          >
+            <option value="auto">Automatic (light with a dark edge)</option>
+            <option value="custom">Pick a colour</option>
+          </select>
+          {p.color !== 'auto' && (
+            <input
+              type="color"
+              data-setting="pointerColor"
+              value={p.color}
+              onInput={(e) => {
+                const c = (e.target as HTMLInputElement).value;
+                setCustom(c);
+                setPointer({ color: c });
+              }}
+            />
+          )}
+        </label>
+      )}
+      <label class="general-row">
+        <span>Different pointer for the eraser</span>
+        <input type="checkbox" data-setting="pointerEraserOwn" checked={p.eraserOwn} onChange={(e) => setPointer({ eraserOwn: (e.target as HTMLInputElement).checked })} />
+      </label>
+      {p.eraserOwn && (
+        <label class="general-row">
+          <span>Eraser pointer</span>
+          <ShapeSelect setting="pointerEraser" value={p.eraserShape} onPick={(eraserShape) => setPointer({ eraserShape })} />
+          <PointerPreview shape={p.eraserShape} />
+        </label>
+      )}
+    </>
+  );
+}
+
+/** Settings for fitting into Windows: light or dark, where files from Explorer open, the pointer, the paste key and what a capture does. */
 function GeneralSettings() {
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -370,6 +477,11 @@ function GeneralSettings() {
           <option value="window">A new tab</option>
           <option value="here">The tab showing</option>
         </select>
+      </label>
+      <PointerSettings />
+      <label class="general-row">
+        <span>Clean up rough shapes</span>
+        <input type="checkbox" data-setting="cleanUp" checked={cleanUp.on} onChange={(e) => setCleanUp((e.target as HTMLInputElement).checked)} />
       </label>
       {platform.isTauri && (
         <>

@@ -1,7 +1,9 @@
 import { rasterizeCurrentLayer, rememberColor, settle } from '../app/actions';
 import { clampView, growBoardForPointer } from '../app/board';
 import { paintBlocked } from '../app/layers';
-import { app, changed, cursorSignal, tabs } from '../app/store';
+import { pointerCss, pointerShapeOf } from '../app/pointer';
+import { ringWidth } from '../app/pointerStyle';
+import { app, changed, cursorSignal, tabs, uiSignal } from '../app/store';
 import { carryTo, HOVER_MS, markTarget, tabAt } from '../app/tabDrag';
 import { currentSize, currentTool, notBuiltYet, setSize, settingsOf } from '../app/tools';
 import { isOpen } from '../engine/board';
@@ -40,17 +42,25 @@ export class CanvasController {
   private last: { sx: number; sy: number } | null = null;
   /** A carried selection or shapes resting on another tab, which switches to it after a moment (F14.3). */
   private hover: { index: number; at: { clientX: number; clientY: number }; timer: number } | null = null;
+  /** The brush size (picture pixels) while the size circle stands in for the pointer, else null (F17). */
+  private ring: number | null = null;
+  /** The cursor last handed to the canvas, so an unchanged one isn't set again on every move. */
+  private cursorNow = '';
 
   constructor(
     private readonly el: HTMLCanvasElement,
     private readonly renderer: Renderer,
+    private readonly ringEl: HTMLElement | null = null,
   ) {
+    // The pointer follows a brush size, zoom, tool or setting change at once, without the mouse moving.
+    uiSignal.on(() => (this.drag ? this.syncRing() : this.updateCursor()));
     el.addEventListener('pointerdown', (e) => this.down(e));
     el.addEventListener('pointermove', (e) => this.move(e));
     el.addEventListener('pointerup', (e) => this.up(e));
     el.addEventListener('pointercancel', (e) => this.up(e));
     el.addEventListener('pointerleave', () => {
       this.last = null;
+      this.syncRing();
       if (!this.drag) {
         app.cursor = null;
         cursorSignal.emit();
@@ -160,6 +170,8 @@ export class CanvasController {
     // Alt + right-drag sets the tool's size, with a circle showing it.
     const size = currentSize();
     if (e.altKey && e.button === 2 && size) {
+      this.ring = null;
+      this.syncRing();
       this.drag = { kind: 'size', startX: s.x, startSize: size.value };
       app.sizePreview = { x: s.x, y: s.y, size: size.value };
       this.renderer.request();
@@ -224,7 +236,11 @@ export class CanvasController {
 
   private startTool(tool: ToolDrag): void {
     this.drag = { kind: 'tool', tool };
-    if (tool.cursor) this.el.style.cursor = tool.cursor;
+    if (tool.cursor) {
+      this.ring = null;
+      this.setCursor(this.dragCursor(tool.cursor));
+      this.syncRing();
+    }
   }
 
   private move(e: PointerEvent): void {
@@ -234,6 +250,7 @@ export class CanvasController {
     const p = v.toDoc(s.x, s.y);
     app.cursor = { x: Math.floor(p.x), y: Math.floor(p.y) };
     cursorSignal.emit();
+    this.placeRing();
 
     const d = this.drag;
     if (!d) {
@@ -343,14 +360,70 @@ export class CanvasController {
   }
 
   private updateCursor(): void {
-    this.el.style.cursor = this.cursorFor();
+    this.ring = null;
+    this.setCursor(this.cursorFor());
+    this.syncRing();
+  }
+
+  private setCursor(c: string): void {
+    if (c === this.cursorNow) return;
+    this.cursorNow = c;
+    this.el.style.cursor = c;
+  }
+
+  /**
+   * The pointer the setting picks for the tool showing, or `fallback` (the arrow, the text I-beam) when
+   * that's the arrow, the tool isn't a drawing tool, or the pointer is off the picture. A dot or crosshair
+   * is a CSS cursor; the circle hides the system pointer and sets `ring` for `syncRing` to draw.
+   */
+  private chosen(fallback: string, p: Point | null): string {
+    const tool = currentTool();
+    const shape = pointerShapeOf(tool.id);
+    if (shape === 'arrow') return fallback;
+    // A picture has an edge to be over; a whiteboard and a capture are drawn on all over.
+    if (!p || !(isOpen(app.doc) || (p.x >= 0 && p.y >= 0 && p.x < app.doc.width && p.y < app.doc.height))) return fallback;
+    if (shape === 'circle') {
+      const size = currentSize();
+      if (!size) return pointerCss('dot');
+      this.ring = size.value;
+      return 'none';
+    }
+    return pointerCss(shape);
+  }
+
+  /** A drag's own cursor, except that the arrow and I-beam of drawing a shape or text give way to the chosen pointer. */
+  private dragCursor(c: string): string {
+    if (c !== 'default' && c !== 'text') return c;
+    const at = this.last;
+    return this.chosen(c, at ? app.viewport.toDoc(at.sx, at.sy) : null);
+  }
+
+  /** Shows the size circle where `ring` says, at the mouse, or hides it. */
+  private syncRing(): void {
+    const el = this.ringEl;
+    if (!el) return;
+    if (this.ring === null || !this.last) {
+      if (!el.hidden) el.hidden = true;
+      return;
+    }
+    const w = ringWidth(this.ring, app.viewport.zoom);
+    el.style.width = el.style.height = `${w}px`;
+    el.hidden = false;
+    this.placeRing();
+  }
+
+  private placeRing(): void {
+    const el = this.ringEl;
+    if (!el || this.ring === null || !this.last) return;
+    const w = ringWidth(this.ring, app.viewport.zoom);
+    el.style.transform = `translate(${this.last.sx - w / 2}px, ${this.last.sy - w / 2}px)`;
   }
 
   private cursorFor(): string {
     const d = this.drag;
     if (d?.kind === 'pan') return 'grabbing';
     if (d?.kind === 'resize') return CURSORS[d.edge];
-    if (d?.kind === 'tool' && d.tool.cursor) return d.tool.cursor;
+    if (d?.kind === 'tool' && d.tool.cursor) return this.dragCursor(d.tool.cursor);
     if (this.spaceDown) return 'grab';
     const tool = currentTool();
     const at = this.last;
@@ -372,10 +445,10 @@ export class CanvasController {
     if (app.selection && !isSelectTool(tool.id)) return 'default';
     if (tool.planned) return 'not-allowed';
     if ((this.altDown && usesColors()) || tool.id === 'picker') return PICKER_CURSOR;
-    if (tool.id === 'text') return 'text';
+    if (tool.id === 'text') return this.chosen('text', p);
     if (tailHandleAt(at.sx, at.sy)) return 'grab';
     if (tool.id === 'crop') return cropCursor(at.sx, at.sy, p);
-    return 'default';
+    return this.chosen('default', p);
   }
 }
 
