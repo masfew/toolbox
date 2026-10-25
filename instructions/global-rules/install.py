@@ -10,7 +10,8 @@ Installs the global-rules instructions for Claude Code. Safe to rerun.
     python install.py --instructions     add the import lines without asking
     python install.py --no-instructions  leave the import lines out (or take them out)
 
-The rule files, in the rules folder: decide-dont-ask, subagent-model-and-effort.
+The rule files, in the rules folder: decide-dont-ask, subagent-model-and-effort,
+next-step-buttons.
 
 What it does:
 1. Checks that Python is new enough.
@@ -86,7 +87,7 @@ NEEDS_REAL_APPDATA = False
 INSTRUCTIONS = ""  # set in main() from the rule files chosen
 
 # The rule files in the rules folder, in the order their import lines go in.
-RULES = ["decide-dont-ask", "subagent-model-and-effort"]
+RULES = ["decide-dont-ask", "subagent-model-and-effort", "next-step-buttons"]
 
 # Steps only the person can do, listed after "Setup complete": accounts,
 # secrets typed into a hidden prompt, clicks in other apps. Keep each one a
