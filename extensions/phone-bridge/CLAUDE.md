@@ -72,6 +72,14 @@ The Siri Shortcut sends through the Telegram app's Shortcuts "Send Message" acti
 - Claude Code's auto mode may refuse to run a live launch from a session, because it drives the Claude app's window. Switch the session to Accept edits or Manual for those steps if it does.
 - Test launches leave "Phone launcher test …" sessions in the sidebar. List them for the user and ask before archiving.
 
+## The local app request folder
+
+- The README's request folder protocol is the contract with whatever app answers (`core/local_app.py`, optional `local_app` in the config). `core/local_app.py` imports only `core/bridge.py`. Add an action only with its row in the README's table, and keep the app's own naming out of this tool: the folder path and display name live in the user's `~/.claude/phone-bridge.json`, never in the repo.
+- Fall back to the desktop app only on `NO_APP` (no folder, or the request was still there when the timeout ran out, and is deleted). A request the app took and then left unanswered raises `AppError` and is reported, never retried through the desktop app: the app may be running it, so a fallback could start the same session twice.
+- The app route writes no launcher marker and does not turn pushes on itself: `start` carries `"notify": true` and the app writes the flag after the hook has decided on the first prompt. A marker would only expire unmatched, and a test marker would turn the session's pushes off. The launcher sends the 🚀 push through `notify_hook.push_for` (the launcher imports `notify_hook`; the listener still never does).
+- A local app session in an `/archive` or `/notify_me` button has `app:` before its key (`conversationId`, else `id`) in the button's data; Telegram allows 64 bytes, so a longer one is left off the list. `archive_session` in `core/listener.py` is the one place that routes an archive to the right app.
+- Tests use `FakeApp` (a thread watching a temporary folder). Never send a request to the user's real app from a test or a session's check: `start` starts a real session, `archive` archives one and `notify` writes flag files. `launch.py --test` on this route starts a real session too (with `notify` false and no push), so it's for a live test the user asked for, like the launcher tests below.
+
 ## The installer
 
 - `install.py` is built on toolbox's `.github/template/install.py`. Its shared functions must stay identical to the template's; only the functions marked `# differs from the template:` (today `main()`) may differ. Put new behaviour in the marked functions or in the bot and feature section, not in the shared ones; if a shared function has to change, change the template first.

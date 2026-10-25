@@ -27,6 +27,12 @@ Exits 0 whenever it dealt with the command, including replying about a failure.
 Logs one line per decision to ~/.claude/phone-bridge/launcher.log, never the
 prompt or the bot token.
 
+With "local_app" set in the config (core/local_app.py) and answering, the session
+is started through that app's request folder instead: no waiting for a quiet PC,
+no screens woken, no window touched. The folder comes from the saved
+environment's folder, or "default_folder" for a message that names none; with
+neither, or when the app doesn't answer, the Claude desktop app is driven as above.
+
   --test PROMPT [--env NAME]  runs a launch from the command line: no Telegram
                   replies (they go to the log and the console), and a test
                   marker, so the started session sends no pushes.
@@ -53,7 +59,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).absolute().parents[1]))
 # The config holds telegram_token and telegram_chat_id (never logged), and this
 # launcher's settings under "launcher".
+from core import local_app  # noqa: E402
 from core.bridge import MARKER_DIR, PRESENCE_FILE, STATE_DIR, read_config, read_json, telegram_call  # noqa: E402
+from notify import notify_hook  # noqa: E402
+from notify.sessions import host_info  # noqa: E402
 
 SETTINGS_KEY = "launcher"
 LOG_FILE = STATE_DIR / "launcher.log"
@@ -183,22 +192,36 @@ def environment_name(text):
     return match.group("env").strip() if match and match.group("env") else None
 
 
-def environments():
-    """The desktop app's saved environments, most recently used first, or None
-    if the app's file can't be read."""
+def presets():
+    """The desktop app's saved environments as dicts (name, folder, model, effort,
+    worktree), most recently used first, one per name; None if the app's file
+    can't be read. A preset that doesn't run on this computer has no folder."""
     for var, pattern in PRESET_FILES:
         for path in sorted(glob.glob(os.path.join(os.environ.get(var, ""), pattern))):
             data = read_json(Path(path))
             if not data:
                 continue
-            presets = [p for account in (data.get("byAccount") or {}).values() if isinstance(account, dict)
-                       for p in account.get("presets") or [] if isinstance(p, dict) and p.get("name")]
-            names = []
-            for p in sorted(presets, key=lambda p: -(p.get("lastUsedAt") or 0)):
-                if p["name"] not in names:
-                    names.append(p["name"])
-            return names
+            found = [p for account in (data.get("byAccount") or {}).values() if isinstance(account, dict)
+                     for p in account.get("presets") or [] if isinstance(p, dict) and p.get("name")]
+            listed, seen = [], set()
+            for p in sorted(found, key=lambda p: -(p.get("lastUsedAt") or 0)):
+                if p["name"] in seen:
+                    continue
+                seen.add(p["name"])
+                target = p.get("target") if isinstance(p.get("target"), dict) else {}
+                options = p.get("settings") if isinstance(p.get("settings"), dict) else {}
+                folder = target.get("cwd") if target.get("kind") == "local" and isinstance(target.get("cwd"), str) else None
+                listed.append({"name": p["name"], "folder": folder or None, "model": options.get("modelId"),
+                               "effort": options.get("effort"), "worktree": options.get("worktree")})
+            return listed
     return None
+
+
+def environments():
+    """The desktop app's saved environments' names, most recently used first, or
+    None if the app's file can't be read."""
+    found = presets()
+    return None if found is None else [p["name"] for p in found]
 
 
 def resolve(name, names, nicknames):
@@ -557,6 +580,53 @@ def launch(message, prompt, conf, marker, environment=None):
     return "the launch kept being interrupted"
 
 
+def refuse_long_prompt(message, link):
+    log(f"not started: the link would be {link} characters")
+    reply(message, "Couldn't start: the prompt is too long for the app's link")
+
+
+def start_in_app(message, prompt, conf, app, environment):
+    """Starts the session through the local app's request folder. True when the
+    command was dealt with (started, or the app refused and the reply says why);
+    False to go on with the Claude desktop app: no folder to give it, or nothing
+    answered."""
+    options = {"prompt": prompt, "mode": conf["permission_mode"]}
+    if environment:
+        preset = next((p for p in presets() or [] if p["name"] == environment), None) or {}
+        options["cwd"] = preset.get("folder")
+        for key in ("model", "effort"):
+            if isinstance(preset.get(key), str) and preset[key]:
+                options[key] = preset[key]
+        if isinstance(preset.get("worktree"), bool):
+            options["environment"] = "worktree" if preset["worktree"] else "local"
+        why = f"the saved environment {environment} has no folder"
+    else:
+        options["cwd"] = app["default_folder"]
+        why = "no environment named and no default_folder set"
+    if not options["cwd"]:
+        log(f"{app['name']} not used: {why}")
+        return False
+    try:
+        session = local_app.start(app, options, notify=not test_mode)
+    except local_app.AppError as e:
+        log(f"couldn't start in {app['name']}: {e}")
+        reply(message, f"Couldn't start: {e}")
+        return True
+    if session is local_app.NO_APP:
+        log(f"{app['name']} didn't answer: using the Claude desktop app")
+        return False
+    session = session if isinstance(session, dict) else {}
+    log(f"started in {app['name']}: message {message.get('message_id')}, prompt of {len(prompt)} characters"
+        + (f", in {environment}" if environment else "") + (", session " + str(session["id"])[:8] if session.get("id") else ""))
+    if test_mode:
+        print(f"started push (not sent, test): {session.get('title') or 'New session'}")
+    elif session.get("id"):
+        key = local_app.session_key(session)
+        title = str(session.get("title") or "").strip() or "New session"
+        notify_hook.push_for(key, f"{title} · started", prompt, "rocket", host_info(key).get("link", ""))
+    return True
+
+
 def handle(message):
     conf = settings()
     config = read_config()
@@ -576,10 +646,10 @@ def handle(message):
         log(f"not started: {problem}")
         reply(message, problem)
         return
+    app = local_app.settings(config)
     link = len("claude://code/new?q=" + urllib.parse.quote(prompt, safe=""))
-    if link > conf["max_link_chars"]:
-        log(f"not started: the link would be {link} characters")
-        reply(message, "Couldn't start: the prompt is too long for the app's link")
+    if link > conf["max_link_chars"] and not app:
+        refuse_long_prompt(message, link)
         return
     environment, typed = None, environment_name(message.get("text"))
     if typed:
@@ -597,6 +667,11 @@ def handle(message):
             listed = ", ".join(names) if names else "none saved in the app"
             reply(message, f"No environment called {typed} exists. These do: {listed}.")
             return
+    if app and start_in_app(message, prompt, conf, app, environment):
+        return
+    if link > conf["max_link_chars"]:
+        refuse_long_prompt(message, link)
+        return
     log(f"start: message {message.get('message_id')}, prompt of {len(prompt)} characters, "
         f"{prompt.count(chr(10)) + 1} lines" + (f", in {environment}" if environment else ""))
     marker = f"{message.get('message_id') or 'test'}-{int(time.time())}"

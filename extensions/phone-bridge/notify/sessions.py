@@ -22,6 +22,12 @@ TRANSCRIPT_DIR = Path.home() / ".claude" / "projects"
 # it when the turn ends with nothing left running, so /notify_me can find working
 # sessions, including ones outside the desktop app.
 ACTIVE_SUFFIX = ".active"
+# Another app that runs Claude Code sessions (one with its own window) can say
+# what the session is called there and where it opens, in <session-id>.host.json
+# beside the flag: {"app": ..., "title": ..., "link": ...}. A "link" of "" means
+# the session has no page, so its pushes carry no link.
+HOST_SUFFIX = ".host.json"
+HOST_TITLE_LIMIT = 200
 # A marker this new is never cleared as stale: its turn's first entries may not
 # be in the transcript yet.
 MARKER_GRACE = 60  # seconds
@@ -123,9 +129,30 @@ def project_name(cwd):
     return path.name
 
 
-def session_title(record, cwd):
-    """The session's title in the app, or else its folder, as pushes are titled."""
-    return record.get("title") or project_name(cwd) or "Claude Code"
+def host_info(session_id):
+    """What the app hosting the session says about it in its host file, checked:
+    "title" (text) and "link" ("" or an https:// address), each only when given.
+    {} when there's no host file or it can't be read."""
+    try:
+        raw = json.loads((FLAG_DIR / (session_id + HOST_SUFFIX)).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError, TypeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    info = {}
+    title = raw.get("title")
+    if isinstance(title, str) and title.strip():
+        info["title"] = " ".join(title.split())[:HOST_TITLE_LIMIT]
+    link = raw.get("link")
+    if isinstance(link, str) and (link == "" or link.startswith("https://")):
+        info["link"] = link
+    return info
+
+
+def session_title(record, cwd, host=None):
+    """The session's title in the app hosting it (its host file, else the desktop
+    app's record), or else its folder, as pushes are titled."""
+    return (host or {}).get("title") or record.get("title") or project_name(cwd) or "Claude Code"
 
 
 def is_server_or_watcher(args):
@@ -362,7 +389,8 @@ def new_entry(session_id, record, cwd, title, working=False, tasks=()):
     return {
         "id": session_id, "record": record.get("sessionId"),
         "parent": (record.get("spawnedFrom") or {}).get("sessionId"),
-        "title": session_title(record, cwd) if record else (title or project_name(cwd) or "Claude Code"),
+        "title": (host_info(session_id).get("title") or session_title(record, cwd) if record
+                  else host_info(session_id).get("title") or title or project_name(cwd) or "Claude Code"),
         "working": working, "tasks": list(tasks), "pushes": pushes_mode(session_id), "subs": [],
     }
 

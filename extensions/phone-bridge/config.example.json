@@ -13,5 +13,12 @@
     "step_timeout": 20,
     "attempts": 5,
     "nicknames": {}
+  },
+  "local_app": {
+    "requests": "REPLACE_WITH_THE_APPS_REQUEST_FOLDER",
+    "name": "Some App",
+    "timeout_seconds": 5,
+    "start_timeout_seconds": 30,
+    "default_folder": ""
   }
 }

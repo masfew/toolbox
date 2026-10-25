@@ -20,6 +20,11 @@ that take commands through the same bot plug into this one instead of polling.
         session again and archives it from the app's sidebar; Archive All does
         that for every session still listed, one after another.
 
+With "local_app" set in the config and the app answering (core/local_app.py),
+/notify_me and /archive also cover that app's sessions, named with its "name":
+/notify_me turns pushes on for its working sessions and /archive offers its
+finished ones. When it doesn't answer, both work on the desktop app alone.
+
 An archived session's pushes are deleted from the chat (cleanup.py): right
 after /archive archives it, or within SWEEP_EVERY seconds of archiving it at the PC.
 
@@ -84,6 +89,7 @@ from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).absolute().parents[1]))
+from core import local_app  # noqa: E402
 from core.bridge import LISTENER_FILE as STATE_FILE  # noqa: E402
 from core.bridge import log, read_config, resolve_run, set_snooze, snoozed_until, telegram_call  # noqa: E402
 # The built-in commands come from the notifications, which every install has.
@@ -111,6 +117,8 @@ SNOOZE_HOURS = (1, 4, 12, 24)
 ARCHIVE_COMMAND = re.compile(r"^/archive(\x40\w+)?$", re.IGNORECASE)
 ARCHIVE_LIST = 40  # buttons at most in one /archive reply
 ARCHIVE_ALL = "archive_all"  # the data of the Archive All button under an /archive list
+APP_PREFIX = "app:"  # in a button's data, before the ID of a local app's session
+CALLBACK_LIMIT = 64  # bytes Telegram allows in a button's data
 SLASH = re.compile(r"^/([A-Za-z0-9_]+)(?:\x40\w+)?(?=\s|$)")  # "/new_session fix it", maybe with the username
 FILLED = re.compile(r"^\x40\w*bot\s+([^:\n]+?)\s*:\s*(.*)$", re.IGNORECASE | re.DOTALL)  # "@<bot-username> Work: fix it"
 COMMAND_NAME = re.compile(r"^[a-z0-9_]{1,32}$")  # what Telegram allows in the command menu
@@ -190,31 +198,92 @@ def guarded(handler, *args):
         note("listener", f"{handler.__name__} failed: {type(e).__name__}")
 
 
+def button_title(title):
+    return title[: BUTTON_TITLE - 1].rstrip() + "…" if len(title) > BUTTON_TITLE else title
+
+
 def button_label(entry):
-    title = entry["title"]
-    if len(title) > BUTTON_TITLE:
-        title = title[: BUTTON_TITLE - 1].rstrip() + "…"
-    return f"{title} · {describe(entry)}"
+    return f"{button_title(entry['title'])} · {describe(entry)}"
+
+
+def app_sessions(config):
+    """(app settings, its open sessions) when the local app is set up and
+    answers; (None, []) when it isn't set, doesn't answer or refuses, which
+    leaves everything to the Claude desktop app."""
+    app = local_app.settings(config)
+    if not app:
+        return None, []
+    try:
+        listed = local_app.sessions(app)
+    except local_app.AppError as e:
+        note("listener", f"{app['name']} list refused: {str(e)[:100]}")
+        return None, []
+    if listed is local_app.NO_APP:
+        note("listener", f"{app['name']} didn't answer")
+        return None, []
+    return app, listed
+
+
+def app_button_data(prefix, session):
+    """A button's data for a local app session, or None when it wouldn't fit."""
+    data = prefix + APP_PREFIX + local_app.session_key(session)
+    return data if len(data.encode("utf-8")) <= CALLBACK_LIMIT else None
+
+
+def turn_on_in_app(app, working):
+    """Turns pushes on for the local app's working sessions: (how many, a line
+    for each, as "title · status" or why it failed)."""
+    done, lines = 0, []
+    for s in working:
+        title = local_app.title_of(s)
+        try:
+            result = local_app.notify(app, local_app.session_key(s))
+        except local_app.AppError as e:
+            lines.append(f"• {title} · couldn't turn pushes on ({str(e)[:100]})")
+            continue
+        if result is local_app.NO_APP:
+            lines.append(f"• {title} · couldn't turn pushes on ({app['name']} stopped answering)")
+            continue
+        done += 1
+        lines.append(f"• {title} · {s.get('status') or 'working'}")
+        note(local_app.session_key(s), f"pushes on (all): telegram /notify_me ({app['name']})")
+    return done, lines
 
 
 def handle_notify_me(config, message):
     sessions = sessions_without_pushes()
+    app, listed = app_sessions(config)
+    app_working = local_app.working_sessions(listed) if app else []
     if NOTIFY_ME_ALL:
         turned_on = [s for e in sessions for s in (e, *e["subs"]) if not s["pushes"]]
         for s in turned_on:
             turn_pushes_on(s["id"])
             note(s["id"], "pushes on (all): telegram /notify_me")
-        count = len(turned_on)
-        send(config, f"Done. All notifications are on (turned on for {count} session{'s' if count != 1 else ''})."
-             if turned_on else "Done. All notifications were already on.")
+        in_app, app_lines = turn_on_in_app(app, app_working) if app_working else (0, [])
+        count = len(turned_on) + in_app
+        failed = len(app_lines) - in_app
+        if count:
+            text = f"Done. All notifications are on (turned on for {count} session{'s' if count != 1 else ''})."
+        elif failed:
+            text = "Couldn't turn pushes on for every session:"
+        else:
+            text = "Done. All notifications were already on."
+        if app_lines:
+            text += f"\n\n{app['name']}:\n" + "\n".join(app_lines)
+        send(config, text)
         note("listener", f"/notify_me: {count} turned on")
         return
-    if sessions:
-        keyboard = [[{"text": button_label(e), "callback_data": f"on:{e['id']}"}] for e in sessions]
+    keyboard = [[{"text": button_label(e), "callback_data": f"on:{e['id']}"}] for e in sessions]
+    for s in app_working:
+        data = app_button_data("on:", s)
+        if data:
+            keyboard.append([{"text": f"{button_title(local_app.title_of(s))} · {app['name']}, "
+                                      f"{s.get('status') or 'working'}", "callback_data": data}])
+    if keyboard:
         send(config, "Working sessions with pushes off. Tap one to turn its pushes on:", keyboard)
     else:
         send(config, "No active sessions with pushes off.")
-    note("listener", f"/notify_me: {len(sessions)} listed")
+    note("listener", f"/notify_me: {len(keyboard)} listed")
 
 
 def find_session(session_id):
@@ -226,14 +295,33 @@ def find_session(session_id):
     return None
 
 
+def app_tap(config, key, tapped):
+    """(toast, line) for a tap on a local app session's button in /notify_me."""
+    app = local_app.settings(config)
+    title = tapped.split(" · ")[0]
+    if not app:
+        return "The local app isn't set up", f"⏹ {title}: the local app isn't set up, pushes left off"
+    try:
+        result = local_app.notify(app, key)
+    except local_app.AppError as e:
+        note(key, f"telegram tap: {app['name']} refused: {str(e)[:100]}")
+        return "Couldn't turn pushes on", f"⚠️ {title}: couldn't turn pushes on ({str(e)[:100]})"
+    if result is local_app.NO_APP:
+        return "Couldn't reach the app", f"⚠️ {title}: {app['name']} didn't answer, pushes left off"
+    note(key, f"pushes on (all): telegram ({app['name']})")
+    return "Pushes on", f"✅ {result or title}: pushes on"
+
+
 def handle_tap(config, query):
     data = query.get("data") or ""
     session_id = data.removeprefix("on:")
     message = query.get("message") or {}
     keyboard = (message.get("reply_markup") or {}).get("inline_keyboard") or []
     tapped = next((b["text"] for row in keyboard for b in row if b.get("callback_data") == data), "That session")
-    entry = find_session(session_id)
-    if entry is None:
+    entry = None if session_id.startswith(APP_PREFIX) else find_session(session_id)
+    if session_id.startswith(APP_PREFIX):
+        toast, line = app_tap(config, session_id.removeprefix(APP_PREFIX), tapped)
+    elif entry is None:
         # It finished between the list and the tap: nothing is left to push about.
         toast, line = "That session has finished.", f"⏹ {tapped}: finished, pushes left off"
         note(session_id, "telegram tap: session no longer active")
@@ -342,7 +430,25 @@ def note_cleared(key, deleted, error):
 
 def clear_pushes(config, local_id):
     """Deletes a session's pushes from the chat once /archive has archived it."""
-    note_cleared(local_id, *cleanup.delete_session(local_id, chat_call(config)))
+    key = local_id.removeprefix(APP_PREFIX)
+    note_cleared(key, *cleanup.delete_session(key, chat_call(config)))
+
+
+def archive_session(config, key):
+    """archive.archive's (outcome, detail) for the desktop app's session `key`,
+    or, for a key starting with app:, for the local app's."""
+    if not key.startswith(APP_PREFIX):
+        return archive.archive(key)
+    app = local_app.settings(config)
+    if not app:
+        return "failed", "the local app isn't set up any more"
+    try:
+        result = local_app.archive(app, key.removeprefix(APP_PREFIX))
+    except local_app.AppError as e:
+        return "busy", str(e)[:200]  # the app says why it won't, such as a turn still running
+    if result is local_app.NO_APP:
+        return "failed", f"{app['name']} isn't answering"
+    return ("archived", "") if result[0] else ("failed", f"{app['name']} didn't archive it")
 
 
 def sweep_archived():
@@ -361,23 +467,37 @@ def sweep_archived():
 
 def handle_archive(config, message):
     finished, others, app_start = archive.review()
-    if not app_start:
+    app, listed = app_sessions(config)
+    in_app = [s for s in local_app.finished_sessions(listed) if app_button_data("archive:", s)] if app else []
+    if not app_start and not app:
         send(config, "Claude isn't running on the PC, so nothing can be archived.")
-    elif finished:
+    elif (finished and app_start) or in_app:
         # The full titles go in the text, which wraps: Telegram shows a button's
         # text on one line and cuts a long one off.
-        shown = finished[:ARCHIVE_LIST]
-        lines = [f"{n}. {e['title']} ({finished_clock(e['finished'])})" for n, e in enumerate(shown, 1)]
-        more = len(finished) - ARCHIVE_LIST
-        send(config, "Finished sessions that aren't archived, newest first, with when each finished. "
-             + ("Tap one to archive it, or Archive All at the bottom:\n\n" if len(shown) > 1
+        desktop = finished[:ARCHIVE_LIST] if app_start else []
+        rows = [(e["id"], e["title"], f"{e['title']} ({finished_clock(e['finished'])})") for e in desktop]
+        for s in in_app[: max(0, ARCHIVE_LIST - len(rows))]:
+            title = local_app.title_of(s)
+            rows.append((APP_PREFIX + local_app.session_key(s), f"{title} · {app['name']}", title))
+        lines = []
+        for n, (_, _, text) in enumerate(rows, 1):
+            if app and n == 1:  # with two apps' sessions in one list, headings say which is which
+                lines.append("Claude desktop app:" if desktop else f"{app['name']}:")
+            elif app and desktop and n == len(desktop) + 1:
+                lines.append(f"{app['name']}:")
+            lines.append(f"{n}. {text}")
+        more = (len(finished) if app_start else 0) + len(in_app) - len(rows)
+        send(config, "Finished sessions that aren't archived"
+             + (". " if app else ", newest first, with when each finished. ")
+             + ("Tap one to archive it, or Archive All at the bottom:\n\n" if len(rows) > 1
                 else "Tap it to archive it:\n\n")
              + "\n".join(lines)
              + (f"\n\n({more} more not shown: send /archive again after these.)" if more > 0 else ""),
-             archive_keyboard([(e["id"], e["title"]) for e in shown]))
+             archive_keyboard([(key, label) for key, label, _ in rows]))
     else:
         send(config, "No finished sessions to archive.")
-    note("listener", f"/archive: {len(finished)} listed, {len(others)} not finished")
+    note("listener", f"/archive: {len(finished)} listed, {len(others)} not finished"
+         + (f", {len(in_app)} in {app['name']}" if app else ""))
 
 
 def handle_archive_tap(config, query):
@@ -389,7 +509,7 @@ def handle_archive_tap(config, query):
     keyboard = (message.get("reply_markup") or {}).get("inline_keyboard") or []
     tapped = next((b["text"] for row in keyboard for b in row if b.get("callback_data") == data), "That session")
     title = tapped.rsplit(" · idle ", 1)[0]  # buttons sent before 2026-10-22 end with " · idle 3 h"
-    outcome, detail = archive.archive(data.removeprefix("archive:"))
+    outcome, detail = archive_session(config, data.removeprefix("archive:"))
     toast, line = archive_result(title, outcome, detail)
     note("listener", f"archive tap: {outcome}{': ' + detail if detail else ''}")
     call(config, "answerCallbackQuery", {"callback_query_id": query["id"], "text": toast})
@@ -435,7 +555,7 @@ def handle_archive_all(config, query):
         archived, lines, kept = 0, [], []
         for done, (local_id, label) in enumerate(sessions, 1):
             title = label.rsplit(" · idle ", 1)[0]
-            outcome, detail = archive.archive(local_id)
+            outcome, detail = archive_session(config, local_id)
             note("listener", f"archive all: {outcome}{': ' + detail if detail else ''}")
             if outcome in ("archived", "already"):
                 clear_pushes(config, local_id)

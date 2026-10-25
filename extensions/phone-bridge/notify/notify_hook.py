@@ -29,8 +29,8 @@ from core.bridge import (  # noqa: E402
 )
 from notify.cleanup import remember  # noqa: E402
 from notify.sessions import (  # noqa: E402
-    FLAG_DIR, HOST_SESSION_VAR, background_work_pending, clear_active, desktop_record, is_prompt,
-    mark_active, prompts_queued, result_text, session_title,
+    FLAG_DIR, HOST_SESSION_VAR, background_work_pending, clear_active, desktop_record, host_info,
+    is_prompt, mark_active, prompts_queued, result_text, session_title,
 )
 
 # ---- Settings ----
@@ -167,9 +167,18 @@ def push(title, message, tags, url=CODE_URL):
     return result.startswith("ok")
 
 
+def push_for(session_key, title, message, tags, url):
+    """A push for a session another program started, logged and remembered under
+    session_key (the phone launcher's "started" push for a local app's session)."""
+    global push_session, push_record
+    push_session = push_record = session_key
+    return push(title, message, tags, url)
+
+
 def send_telegram(config, title, message, tags, url, silent=False):
     """A message to your chat with the bot: the kind's emoji and the title in bold,
-    the message below, and the session's link written out on the last line. The
+    the message below, and the session's link written out on the last line (none
+    when the url is "", for a session with no page). The
     link is shown in full because Telegram opens a visible link in one tap, but asks
     "Open this link?" first for a button or a link behind a label. The banner shows
     the text plain under the bot's name, about four lines, so the link stays out of
@@ -177,7 +186,7 @@ def send_telegram(config, title, message, tags, url, silent=False):
     emoji = PUSH_KINDS.get(tags, ("",))[0]
     message = message.strip()[:MESSAGE_LIMIT]
     escaped = (f"<b>{html.escape(title, quote=False)}</b>\n{html.escape(message, quote=False)}"
-               f"\n\n{html.escape(url, quote=False)}")
+               + (f"\n\n{html.escape(url, quote=False)}" if url else ""))
     body = {
         "chat_id": config["telegram_chat_id"], "text": f"{emoji} {escaped}".strip(), "parse_mode": "HTML",
         "link_preview_options": {"is_disabled": True},
@@ -194,7 +203,7 @@ def send_telegram(config, title, message, tags, url, silent=False):
         if status == 400 and "can't parse entities" in description and "parse_mode" in body:
             # Escaping should prevent this; if Telegram still can't read the formatting, send it plain.
             body = {k: v for k, v in body.items() if k != "parse_mode"}
-            body["text"] = f"{emoji} {title}\n{message}\n\n{url}".strip()
+            body["text"] = (f"{emoji} {title}\n{message}" + (f"\n\n{url}" if url else "")).strip()
         elif status == 429 and not waited and wait is not None and wait <= TELEGRAM_MAX_RETRY_WAIT:
             waited = True  # several sessions finished at once: wait out flood control once
             time.sleep(wait)
@@ -636,8 +645,10 @@ def main():
         if event == "UserPromptSubmit":
             log(session_id, None, "ignored: claude run by another session")
         return
-    # Pushes are titled with the session's title in the app, or else its folder.
-    title = session_title(record, data.get("cwd"))
+    # Pushes are titled with the session's title in the app (an app's host file
+    # first, then the desktop app's record), or else its folder.
+    host = host_info(session_id)
+    title = session_title(record, data.get("cwd"), host)
 
     # Every session's turns are tracked, pushes on or off, so /notify_me can list the
     # ones that are working. App-generated prompts start turns too.
@@ -720,6 +731,8 @@ def main():
         return
     bridge = record.get("bridgeSessionIds") or []
     url = f"{CODE_URL}/{bridge[-1]}" if bridge else session_url(data.get("transcript_path"))
+    if "link" in host:
+        url = host["link"]  # the hosting app's own page for the session, or "" for none
 
     if event == "PreToolUse" and data.get("tool_name") == "AskUserQuestion":
         # The emoji leading each push says its kind, so ❓, ⚠️ and ✅ titles are the session's alone.

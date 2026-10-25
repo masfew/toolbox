@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -22,7 +23,7 @@ FAKE_HOME = tempfile.TemporaryDirectory(prefix="phone-bridge-test-")
 os.environ["HOME"] = os.environ["USERPROFILE"] = FAKE_HOME.name
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from core import bridge  # noqa: E402
+from core import bridge, local_app  # noqa: E402
 from launcher import launch  # noqa: E402
 
 assert str(bridge.CLAUDE_DIR).startswith(FAKE_HOME.name), "the tests must never see the real home folder"
@@ -790,6 +791,549 @@ class WaitingPushes(unittest.TestCase):
         self.config.write_text(json.dumps({"waiting_pushes": True}))
         self.stop()
         self.assertEqual(self.sent, ["hourglass_flowing_sand"])
+
+
+class HostFile(unittest.TestCase):
+    """Another app hosting a session titles its pushes and gives (or drops) the link."""
+
+    def setUp(self):
+        from notify import sessions
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.hook = load_hook()
+        self.flags = root / "flags"
+        self.flags.mkdir()
+        (self.flags / "s1").write_text("all")
+        self.sent = []
+        self.patches = [
+            mock.patch.object(bridge, "CONFIG_FILE", root / "phone-bridge.json"),
+            mock.patch.object(self.hook, "FLAG_DIR", self.flags),
+            mock.patch.object(sessions, "FLAG_DIR", self.flags),
+            mock.patch.object(self.hook, "run_by_another_claude", lambda: False),
+            mock.patch.object(self.hook, "presence_state", lambda: {"heartbeat": time.time()}),
+            mock.patch.object(self.hook, "listener_running", lambda: True),
+            mock.patch.object(self.hook, "clear_active", lambda *a: None),
+            mock.patch.object(self.hook, "session_started_this_turn", lambda path: False),
+            mock.patch.object(self.hook, "prompts_queued", lambda path: False),
+            mock.patch.object(self.hook, "background_work_pending", lambda path: []),
+            mock.patch.object(self.hook, "push", lambda title, text, tags, url=None: self.sent.append((title, url))),
+            mock.patch.dict(os.environ, {self.hook.HOST_SESSION_VAR: ""}),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def stop(self):
+        data = json.dumps({"hook_event_name": "Stop", "session_id": "s1", "cwd": str(Path(self.tmp.name) / "shop-game"),
+                           "transcript_path": str(Path(self.tmp.name) / "none.jsonl")}).encode()
+        with mock.patch.object(sys, "stdin", mock.Mock(buffer=mock.Mock(read=lambda: data))), \
+                mock.patch.object(sys, "argv", ["notify_hook.py"]):
+            self.hook.main()
+
+    def host(self, value):
+        (self.flags / "s1.host.json").write_text(value if isinstance(value, str) else json.dumps(value), encoding="utf-8")
+
+    def test_without_one_the_folder_titles_it_and_the_code_tab_links(self):
+        self.stop()
+        self.assertEqual(self.sent, [("shop-game", self.hook.CODE_URL)])
+
+    def test_its_title_and_an_empty_link(self):
+        self.host({"app": "Some App", "title": "Shop card:  price", "link": ""})
+        self.stop()
+        self.assertEqual(self.sent, [("Shop card: price", "")])
+
+    def test_its_own_link(self):
+        self.host({"title": "Shop card", "link": "https://example.com/s/1"})
+        self.stop()
+        self.assertEqual(self.sent, [("Shop card", "https://example.com/s/1")])
+
+    def test_a_bad_file_or_link_is_left_out(self):
+        self.host("{ not json")
+        self.stop()
+        self.host({"title": 7, "link": "javascript:alert(1)"})
+        self.stop()
+        self.assertEqual(self.sent, [("shop-game", self.hook.CODE_URL)] * 2)
+
+    def test_no_link_line_in_the_message(self):
+        sent = []
+        with mock.patch.object(self.hook, "telegram_call", lambda token, method, body: (sent.append(body) or (200, {"ok": True, "result": {"message_id": 1}}))):
+            self.hook.send_telegram({"telegram_chat_id": 1, "telegram_token": "t"}, "Title", "Done.", "white_check_mark", "")
+        self.assertTrue(sent[0]["text"].endswith("Done."), sent[0]["text"])
+
+
+class FakeApp:
+    """A local app: a thread that watches a request folder the way the protocol
+    describes, takes each <name>.json, and answers with <name>.reply.json (written
+    to a temporary name and renamed). `answer(body)` returns the reply object, or
+    None to take the request and never answer."""
+
+    def __init__(self, folder, answer):
+        self.folder, self.answer, self.seen = Path(folder), answer, []
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def run(self):
+        while not self.stopped.is_set():
+            for path in self.folder.glob("*.json"):
+                if path.name.endswith(".reply.json"):
+                    continue
+                try:
+                    body = json.loads(path.read_text(encoding="utf-8"))
+                    path.unlink()
+                except (OSError, ValueError):
+                    continue
+                self.seen.append(body)
+                reply = self.answer(body)
+                if reply is not None:
+                    tmp = self.folder / (path.stem + ".reply.tmp")
+                    tmp.write_text(json.dumps(reply), encoding="utf-8")
+                    os.replace(tmp, self.folder / (path.stem + ".reply.json"))
+            time.sleep(0.01)
+
+    def stop(self):
+        self.stopped.set()
+        self.thread.join(2)
+
+
+def app_config(folder, **extra):
+    return {"requests": str(folder), "name": "Some App", "timeout_seconds": 0.5, "start_timeout_seconds": 0.5, **extra}
+
+
+class LocalAppRequests(unittest.TestCase):
+    """core/local_app.py: the request folder protocol, with a fake app."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.tmp.name) / "requests"
+        self.folder.mkdir()
+        self.conf = local_app.settings({"local_app": app_config(self.folder)})
+        self.app = None
+
+    def tearDown(self):
+        if self.app:
+            self.app.stop()
+        self.tmp.cleanup()
+
+    def serve(self, answer):
+        self.app = FakeApp(self.folder, answer)
+        return self.app
+
+    def test_not_set_up(self):
+        for config in ({}, {"local_app": "x"}, {"local_app": {}}, {"local_app": {"requests": "  "}},
+                       {"local_app": {"requests": 5}}, {"local_app": {"requests": "REPLACE_WITH_THE_APPS_REQUEST_FOLDER"}}):
+            self.assertIsNone(local_app.settings(config), config)
+
+    def test_defaults_and_expansion(self):
+        with mock.patch.dict(os.environ, {"SOME_APP_DATA": "/data"}):
+            conf = local_app.settings({"local_app": {"requests": "$SOME_APP_DATA/in", "default_folder": "$SOME_APP_DATA/p",
+                                                     "timeout_seconds": "x", "start_timeout_seconds": -1, "other": 1}})
+        self.assertEqual((conf["name"], conf["timeout_seconds"], conf["start_timeout_seconds"]), ("Local app", 5, 30))
+        self.assertNotIn("other", conf)
+        self.assertEqual((conf["requests"], conf["default_folder"]), ("/data/in", "/data/p"))
+
+    def test_request_returns_the_value_and_leaves_nothing_behind(self):
+        app = self.serve(lambda body: {"ok": True, "value": [1, 2]})
+        self.assertEqual(local_app.request(self.conf, {"action": "list"}), [1, 2])
+        self.assertEqual(app.seen, [{"action": "list"}])
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_request_file_is_written_whole_under_a_safe_name(self):
+        names = []
+        real_replace = os.replace
+
+        def spy(src, dst):
+            names.append((Path(src).name, Path(dst).name))
+            return real_replace(src, dst)
+
+        self.serve(lambda body: {"ok": True, "value": None})
+        with mock.patch.object(local_app.os, "replace", spy):
+            local_app.request(self.conf, {"action": "list"})
+        (tmp_name, final_name), = [n for n in names if not n[1].endswith(".reply.json")]  # not the app's own reply
+        self.assertRegex(final_name, r"^[0-9a-f]{32}\.json$")
+        self.assertEqual(tmp_name, final_name[:-5] + ".tmp")
+
+    def test_an_error_reply_raises_with_the_apps_text(self):
+        self.serve(lambda body: {"ok": False, "error": "a turn is running"})
+        with self.assertRaises(local_app.AppError) as caught:
+            local_app.request(self.conf, {"action": "archive", "session": "s"})
+        self.assertEqual(str(caught.exception), "a turn is running")
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_a_missing_folder_is_no_app_at_once(self):
+        conf = {**self.conf, "requests": str(Path(self.tmp.name) / "nowhere")}
+        started = time.monotonic()
+        self.assertIs(local_app.request(conf, {"action": "list"}, timeout=30), local_app.NO_APP)
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertFalse(Path(conf["requests"]).exists())
+
+    def test_nobody_listening_deletes_the_request_and_is_no_app(self):
+        started = time.monotonic()
+        self.assertIs(local_app.request(self.conf, {"action": "list"}), local_app.NO_APP)
+        self.assertGreaterEqual(time.monotonic() - started, 0.5)
+        self.assertEqual(list(self.folder.iterdir()), [], "a late app must not find the request")
+
+    def test_taken_but_never_answered_is_an_error_not_a_fallback(self):
+        # The app may be running it, so a caller that fell back could do the work twice.
+        app = self.serve(lambda body: None)
+        with self.assertRaises(local_app.AppError):
+            local_app.request(self.conf, {"action": "start", "options": {}})
+        self.assertEqual(len(app.seen), 1)
+
+    def test_too_large_a_request_is_refused_before_writing(self):
+        with self.assertRaises(local_app.AppError):
+            local_app.request(self.conf, {"action": "start", "options": {"prompt": "x" * local_app.MAX_BODY}})
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_an_unreadable_reply_is_an_error_and_is_cleaned_up(self):
+        self.assertIsNone(local_app.read_reply(self.folder / "missing.reply.json"))
+        (self.folder / "y.reply.json").write_text("not json")
+        self.assertEqual(local_app.read_reply(self.folder / "y.reply.json"),
+                         {"ok": False, "error": "the reply wasn't readable"})
+        self.assertFalse((self.folder / "y.reply.json").exists())
+
+    def test_the_actions_send_their_bodies(self):
+        replies = {"start": {"id": "s1", "title": "New"}, "list": [{"id": "s1"}, {"nope": 1}, "x"],
+                   "archive": {"archived": True, "title": "Old"}, "notify": {"title": "Busy"}}
+        app = self.serve(lambda body: {"ok": True, "value": replies[body["action"]]})
+        options = {"cwd": "/p", "prompt": "hi"}
+        self.assertEqual(local_app.start(self.conf, options), {"id": "s1", "title": "New"})
+        self.assertEqual(local_app.sessions(self.conf), [{"id": "s1"}])
+        self.assertEqual(local_app.archive(self.conf, "c1"), (True, "Old"))
+        self.assertEqual(local_app.notify(self.conf, "c1"), "Busy")
+        self.assertEqual(app.seen, [{"action": "start", "options": options, "notify": True},
+                                    {"action": "list"}, {"action": "archive", "session": "c1"},
+                                    {"action": "notify", "session": "c1"}])
+
+    def test_start_waits_for_its_own_longer_timeout(self):
+        self.serve(lambda body: time.sleep(0.4) or {"ok": True, "value": {"id": "s1"}})
+        conf = {**self.conf, "timeout_seconds": 0.1, "start_timeout_seconds": 2}
+        self.assertEqual(local_app.start(conf, {"cwd": "/p", "prompt": "x"}), {"id": "s1"})
+
+    def test_which_sessions_count(self):
+        listed = [
+            {"id": "a", "status": "finished", "working": False},
+            {"id": "b", "status": "idle", "working": False},
+            {"id": "c", "status": "failed", "working": False},
+            {"id": "d", "status": "working", "working": True},
+            {"id": "e", "status": "needs-you", "working": False},
+            {"id": "f", "status": "finished", "working": True},
+            {"id": "g", "status": "finished", "working": False},
+            {"id": "h", "status": "working", "working": True, "parent": "g"},
+            {"id": "i", "status": "finished", "working": False, "parent": "a"},
+        ]
+        self.assertEqual([s["id"] for s in local_app.finished_sessions(listed)], ["a", "b", "c", "i"])
+        self.assertEqual([s["id"] for s in local_app.working_sessions(listed)], ["d", "f", "h"])
+        self.assertEqual(local_app.session_key({"id": "s", "conversationId": "c"}), "c")
+        self.assertEqual(local_app.session_key({"id": "s"}), "s")
+        self.assertEqual(local_app.title_of({"id": "s", "title": " "}), "Untitled")
+
+
+class LocalAppLaunch(unittest.TestCase):
+    """The launcher starting a session through the local app, or falling back."""
+
+    PRESETS = [{"name": "Work", "folder": "/projects/work", "model": "model-x", "effort": "high", "worktree": False},
+               {"name": "Cloud", "folder": None, "model": None, "effort": None, "worktree": None}]
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.folder = root / "requests"
+        self.folder.mkdir()
+        self.config = root / "phone-bridge.json"
+        self.write_config(local_app=app_config(self.folder, default_folder="/projects/default"))
+        self.replies, self.launches, self.pushes = [], [], []
+        self.reply_to_start = lambda body: {"ok": True, "value": {"id": "s1", "conversationId": "c1", "title": "Fix it"}}
+        self.app = FakeApp(self.folder, lambda body: self.reply_to_start(body))
+        self.patches = [
+            mock.patch.object(bridge, "CONFIG_FILE", self.config),
+            mock.patch.object(launch, "LOG_FILE", root / "launcher.log"),
+            mock.patch.object(launch, "MARKER_DIR", root / "markers"),
+            mock.patch.object(launch, "reply", lambda message, text: self.replies.append(text)),
+            mock.patch.object(launch, "launch", lambda m, p, c, k, e=None: self.launches.append((p, e))),
+            mock.patch.object(launch, "presets", lambda: self.PRESETS),
+            mock.patch.object(launch, "environments", lambda: [p["name"] for p in self.PRESETS]),
+            mock.patch.object(launch.notify_hook, "push_for", lambda *a: self.pushes.append(a)),
+            mock.patch.object(launch, "host_info", lambda key: {}),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        self.app.stop()
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def write_config(self, **extra):
+        self.config.write_text(json.dumps({"telegram_token": "x", "telegram_chat_id": 42, **extra}))
+
+    def command(self, text):
+        now = time.time()
+        launch.handle({"chat_id": 42, "message_id": 7, "date": now, "received_at": now, "text": text})
+
+    def test_starts_in_the_default_folder_without_the_desktop_app(self):
+        self.command("Start a new session\nFix it")
+        self.assertEqual(self.app.seen, [{"action": "start", "notify": True, "options": {
+            "cwd": "/projects/default", "prompt": "Fix it", "mode": "Auto"}}])
+        self.assertEqual((self.launches, self.replies), ([], []))
+        self.assertEqual(self.pushes, [("c1", "Fix it · started", "Fix it", "rocket", "")])
+
+    def test_a_saved_environment_brings_its_folder_and_settings(self):
+        self.command("Start a new session in work\nFix it")
+        self.assertEqual(self.app.seen[0]["options"], {"cwd": "/projects/work", "prompt": "Fix it", "mode": "Auto",
+                                                       "model": "model-x", "effort": "high", "environment": "local"})
+        self.assertEqual(self.launches, [])
+
+    def test_a_worktree_environment(self):
+        self.PRESETS = [{**self.PRESETS[0], "worktree": True}]
+        self.command("Start a new session in Work\nFix it")
+        self.assertEqual(self.app.seen[0]["options"]["environment"], "worktree")
+
+    def test_the_launchers_permission_mode_is_passed(self):
+        self.write_config(local_app=app_config(self.folder, default_folder="/p"), launcher={"permission_mode": "Plan"})
+        self.command("/new_session hi")
+        self.assertEqual(self.app.seen[0]["options"]["mode"], "Plan")
+
+    def test_a_long_prompt_has_no_link_limit_through_the_app(self):
+        self.command("Start a new session\n" + "\U0001F600" * 3000)
+        self.assertEqual((len(self.app.seen), self.replies), (1, []))
+
+    def test_no_folder_to_give_means_the_desktop_app(self):
+        self.write_config(local_app=app_config(self.folder))
+        self.command("Start a new session\nFix it")
+        self.assertEqual((self.app.seen, self.launches), ([], [("Fix it", None)]))
+
+    def test_an_environment_without_a_folder_means_the_desktop_app(self):
+        self.command("Start a new session in Cloud\nFix it")
+        self.assertEqual((self.app.seen, self.launches), ([], [("Fix it", "Cloud")]))
+
+    def test_a_missing_folder_falls_back_at_once(self):
+        self.write_config(local_app=app_config(Path(self.tmp.name) / "nowhere", default_folder="/p"))
+        started = time.monotonic()
+        self.command("Start a new session\nFix it")
+        self.assertLess(time.monotonic() - started, 0.4)
+        self.assertEqual((self.launches, self.replies, self.pushes), ([("Fix it", None)], [], []))
+
+    def test_an_app_that_never_answers_falls_back_and_leaves_no_request(self):
+        self.app.stop()
+        self.command("Start a new session\nFix it")
+        self.assertEqual((self.launches, self.replies), ([("Fix it", None)], []))
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_an_app_that_refuses_is_reported_not_worked_around(self):
+        self.reply_to_start = lambda body: {"ok": False, "error": "that folder isn't allowed"}
+        self.command("Start a new session\nFix it")
+        self.assertEqual((self.launches, self.replies), ([], ["Couldn't start: that folder isn't allowed"]))
+
+    def test_an_app_that_takes_the_request_and_goes_quiet_is_not_run_twice(self):
+        self.reply_to_start = lambda body: None
+        self.command("Start a new session\nFix it")
+        self.assertEqual(self.launches, [])
+        self.assertTrue(self.replies[0].startswith("Couldn't start: Some App took the request"), self.replies)
+
+    def test_an_untitled_session_is_called_new_session(self):
+        self.reply_to_start = lambda body: {"ok": True, "value": {"id": "s9"}}
+        self.command("Start a new session\nFix it")
+        self.assertEqual(self.pushes, [("s9", "New session · started", "Fix it", "rocket", "")])
+
+    def test_the_hosts_link_goes_in_the_push(self):
+        with mock.patch.object(launch, "host_info", lambda key: {"link": "https://example.com/s/" + key}):
+            self.command("Start a new session\nFix it")
+        self.assertEqual(self.pushes[0][4], "https://example.com/s/c1")
+
+    def test_a_test_launch_asks_for_no_pushes_and_sends_none(self):
+        with mock.patch.object(launch, "test_mode", True), mock.patch.object(launch, "bot", lambda *a: None), \
+                mock.patch("builtins.print"):
+            launch.handle({"message_id": None, "date": time.time(), "received_at": time.time(),
+                           "text": "Start a new session\nFix it"})
+        self.assertEqual((self.app.seen[0]["notify"], self.pushes), (False, []))
+
+    def test_without_local_app_nothing_changes(self):
+        self.write_config()
+        self.command("Start a new session\nFix it")
+        self.assertEqual((self.app.seen, self.launches), ([], [("Fix it", None)]))
+
+    def test_old_presets_file_still_gives_folders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "Packages" / "Claude_abc" / "LocalCache" / "Roaming" / "Claude"
+            folder.mkdir(parents=True)
+            (folder / "ccd-session-presets.json").write_text(json.dumps({"byAccount": {"a": {"presets": [
+                {"name": "Work", "lastUsedAt": 9, "target": {"kind": "local", "cwd": "/w"},
+                 "settings": {"modelId": "m", "effort": "low", "worktree": True}},
+                {"name": "Cloud", "lastUsedAt": 5, "target": {"kind": "remote"}},
+                {"name": "Bare", "lastUsedAt": 1}]}}}))
+            with mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp, "APPDATA": str(Path(tmp) / "none")}), \
+                    mock.patch.object(launch, "presets", self.real_presets):
+                found = launch.presets()
+        self.assertEqual(found, [
+            {"name": "Work", "folder": "/w", "model": "m", "effort": "low", "worktree": True},
+            {"name": "Cloud", "folder": None, "model": None, "effort": None, "worktree": None},
+            {"name": "Bare", "folder": None, "model": None, "effort": None, "worktree": None}])
+
+    real_presets = staticmethod(launch.presets)
+
+
+class LocalAppListener(unittest.TestCase):
+    """/archive and /notify_me covering the local app's sessions."""
+
+    LISTED = [
+        {"id": "s1", "conversationId": "c1", "title": "Old chat", "status": "finished", "working": False},
+        {"id": "s2", "conversationId": "c2", "title": "Busy one", "status": "working", "working": True},
+        {"id": "s3", "title": "Waiting", "status": "needs-you", "working": False},
+        {"id": "s4", "conversationId": "c4", "title": "Failed run", "status": "failed", "working": False},
+    ]
+
+    def setUp(self):
+        self.tc = load_listener()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.tmp.name) / "requests"
+        self.folder.mkdir()
+        self.config = {"telegram_token": "x", "telegram_chat_id": 42, "local_app": app_config(self.folder)}
+        self.sent, self.edited, self.cleared = [], [], []
+        self.answers = {"list": lambda body: {"ok": True, "value": self.LISTED},
+                        "archive": lambda body: {"ok": True, "value": {"archived": True, "title": "x"}},
+                        "notify": lambda body: {"ok": True, "value": {"title": "x"}}}
+        self.app = FakeApp(self.folder, lambda body: self.answers[body["action"]](body))
+        self.desktop_archived = []
+        self.review = ([], [], 1234)
+        self.patches = [
+            mock.patch.object(self.tc, "call", self.fake_call),
+            mock.patch.object(self.tc, "note", lambda *a: None),
+            mock.patch.object(self.tc, "sessions_without_pushes", lambda: []),
+            mock.patch.object(self.tc.archive, "review", lambda: self.review),
+            mock.patch.object(self.tc.archive, "archive", lambda key: self.desktop_archived.append(key) or ("archived", "")),
+            mock.patch.object(self.tc, "clear_pushes", lambda config, key: self.cleared.append(key)),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        self.app.stop()
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def fake_call(self, config, method, body):
+        (self.edited if method == "editMessageText" else self.sent).append((method, body))
+        return {"ok": True, "result": {"message_id": 500}}
+
+    def last_text(self):
+        return self.sent[-1][1]["text"]
+
+    def buttons(self):
+        return [b["callback_data"] for row in self.sent[-1][1]["reply_markup"]["inline_keyboard"] for b in row]
+
+    def test_archive_offers_the_apps_finished_sessions_by_app(self):
+        self.review = ([{"id": "local_1", "title": "Desktop chat", "finished": time.time()}], [], 1234)
+        self.tc.handle_archive(self.config, {})
+        text = self.last_text()
+        self.assertIn("Claude desktop app:\n1. Desktop chat (", text)
+        self.assertIn("Some App:\n2. Old chat\n3. Failed run", text)
+        self.assertNotIn("Busy one", text)
+        self.assertNotIn("Waiting", text)
+        self.assertEqual(self.buttons(), ["archive:local_1", "archive:app:c1", "archive:app:c4", "archive_all"])
+        labels = [b["text"] for row in self.sent[-1][1]["reply_markup"]["inline_keyboard"] for b in row]
+        self.assertEqual(labels[:3], ["Desktop chat", "Old chat · Some App", "Failed run · Some App"])
+
+    def test_archive_works_with_only_the_app_when_the_desktop_app_is_off(self):
+        self.review = ([], [], None)
+        self.tc.handle_archive(self.config, {})
+        self.assertIn("Some App:\n1. Old chat", self.last_text())
+        self.assertNotIn("Claude desktop app:", self.last_text())
+
+    def test_archive_when_the_app_does_not_answer_is_as_before(self):
+        self.app.stop()
+        self.review = ([{"id": "local_1", "title": "Desktop chat", "finished": time.time()}], [], 1234)
+        self.tc.handle_archive(self.config, {})
+        self.assertTrue(self.last_text().startswith("Finished sessions that aren't archived, newest first, with when each finished."))
+        self.assertNotIn("Some App", self.last_text())
+        self.assertEqual(self.buttons(), ["archive:local_1"])
+        self.review = ([], [], None)
+        self.tc.handle_archive(self.config, {})
+        self.assertEqual(self.last_text(), "Claude isn't running on the PC, so nothing can be archived.")
+
+    def test_archive_with_nothing_finished_anywhere(self):
+        self.LISTED = [self.LISTED[1]]
+        self.tc.handle_archive(self.config, {})
+        self.assertEqual(self.last_text(), "No finished sessions to archive.")
+
+    def test_a_tap_archives_through_the_app_by_conversation_id(self):
+        seen = []
+        self.answers["archive"] = lambda body: seen.append(body) or {"ok": True, "value": {"archived": True, "title": "Old chat"}}
+        query = {"id": "q", "data": "archive:app:c1", "message": {"message_id": 9, "chat": {"id": 42}, "text": "list",
+                 "reply_markup": {"inline_keyboard": [[{"text": "Old chat · Some App", "callback_data": "archive:app:c1"}]]}}}
+        self.tc.handle_archive_tap(self.config, query)
+        self.assertEqual(seen, [{"action": "archive", "session": "c1"}])
+        self.assertEqual(self.desktop_archived, [])
+        self.assertIn("🗄 Old chat · Some App: archived", self.edited[-1][1]["text"])
+        self.assertEqual(self.cleared, ["app:c1"])
+
+    def test_a_session_the_app_will_not_archive_stays_listed_with_its_reason(self):
+        self.answers["archive"] = lambda body: {"ok": False, "error": "a turn is running"}
+        query = {"id": "q", "data": "archive:app:c1", "message": {"message_id": 9, "chat": {"id": 42}, "text": "list",
+                 "reply_markup": {"inline_keyboard": [[{"text": "Old chat · Some App", "callback_data": "archive:app:c1"}]]}}}
+        self.tc.handle_archive_tap(self.config, query)
+        self.assertIn("⏳ Old chat · Some App: not archived, a turn is running", self.edited[-1][1]["text"])
+        self.assertIn("archive:app:c1", str(self.edited[-1][1]["reply_markup"]))
+        self.assertEqual(self.cleared, [])
+
+    def test_archive_all_mixes_both_apps(self):
+        keyboard = [[{"text": "Desktop chat", "callback_data": "archive:local_1"}],
+                    [{"text": "Old chat · Some App", "callback_data": "archive:app:c1"}],
+                    [{"text": "Archive All", "callback_data": "archive_all"}]]
+        seen = []
+        self.answers["archive"] = lambda body: seen.append(body["session"]) or {"ok": True, "value": {"archived": True}}
+        self.tc.handle_archive_all(self.config, {"id": "q", "message": {"message_id": 9, "chat": {"id": 42}, "text": "list",
+                                                                        "reply_markup": {"inline_keyboard": keyboard}}})
+        self.assertEqual((self.desktop_archived, seen), (["local_1"], ["c1"]))
+        self.assertIn("Archived 2 of 2", self.edited[-1][1]["text"])
+
+    def test_notify_me_turns_on_the_apps_working_sessions_and_lists_them(self):
+        seen = []
+        self.answers["notify"] = lambda body: seen.append(body["session"]) or {"ok": True, "value": {"title": "Busy one"}}
+        self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(seen, ["c2"])
+        self.assertEqual(self.last_text(),
+                         "Done. All notifications are on (turned on for 1 session).\n\nSome App:\n• Busy one · working")
+
+    def test_notify_me_with_nothing_working_is_as_before(self):
+        self.LISTED = [self.LISTED[0]]
+        self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(self.last_text(), "Done. All notifications were already on.")
+
+    def test_notify_me_reports_a_session_the_app_refuses(self):
+        self.answers["notify"] = lambda body: {"ok": False, "error": "no such session"}
+        self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(self.last_text(), "Couldn't turn pushes on for every session:\n\nSome App:\n"
+                                           "• Busy one · couldn't turn pushes on (no such session)")
+
+    def test_notify_me_without_an_answering_app_is_as_before(self):
+        self.app.stop()
+        self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(self.last_text(), "Done. All notifications were already on.")
+
+    def test_one_button_per_session_when_notify_me_all_is_off(self):
+        with mock.patch.object(self.tc, "NOTIFY_ME_ALL", False):
+            self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(self.buttons(), ["on:app:c2"])
+        self.assertEqual(self.sent[-1][1]["reply_markup"]["inline_keyboard"][0][0]["text"], "Busy one · Some App, working")
+        seen = []
+        self.answers["notify"] = lambda body: seen.append(body["session"]) or {"ok": True, "value": {"title": "Busy one"}}
+        query = {"id": "q", "data": "on:app:c2", "message": {"message_id": 9, "chat": {"id": 42}, "text": "Tap one",
+                 "reply_markup": {"inline_keyboard": [[{"text": "Busy one · Some App, working", "callback_data": "on:app:c2"}]]}}}
+        self.tc.handle_tap(self.config, query)
+        self.assertEqual(seen, ["c2"])
+        self.assertIn("✅ Busy one: pushes on", self.edited[-1][1]["text"])
+
+    def test_a_session_id_too_long_for_a_button_is_left_off(self):
+        self.LISTED = [{"id": "s", "conversationId": "c" * 80, "title": "Long", "status": "finished", "working": False}]
+        self.tc.handle_archive(self.config, {})
+        self.assertEqual(self.last_text(), "No finished sessions to archive.")
 
 
 class Installer(unittest.TestCase):
