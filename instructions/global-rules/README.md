@@ -1,6 +1,6 @@
 # global-rules
 
-Version 1.0.1. See the [changes](#changes) at the end.
+Version 1.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -10,7 +10,7 @@ There are two rule files. Install one or both:
 
 | File | What it changes |
 |---|---|
-| `rules/decide-dont-ask.md` | Claude makes implementation choices itself and names them in the reply, and asks only when you'd notice the result, it reaches outside the project, it could be unsafe, or it isn't confident. A question you ask gets an answer rather than an offer to do something. When it does ask, the context comes first and the question last |
+| `rules/decide-dont-ask.md` | Claude makes implementation choices itself and names them in the reply, and asks only when you'd notice the result, it reaches outside the project (including a run that would use a large share of your plan's usage limits), it could be unsafe, or it isn't confident. A question you ask gets an answer rather than an offer to do something. When it does ask, the context comes first and the question last |
 | `rules/subagent-model-and-effort.md` | Every subagent Claude starts gets a model and effort picked from a table by the kind of work: a small model for finding and reading, a mid-size one for summaries and routine edits, the largest only when the result has to match a full session |
 
 Before and after, for a session asked to add a "clear finished" button to a to-do app:
@@ -93,6 +93,7 @@ There's nothing to run once it's installed. You'll see the difference in what se
 - **"What's left on this?"** gets the list, not a question asking whether to start on it.
 - **A question it does need to ask** comes after the explanation: what it found and what each option changes, then the question.
 - **A search across a large codebase** goes to a subagent on the small model at low effort, and Claude says how many subagents and which model before starting more than 10.
+- **A big test run or fan-out**, such as an eval that starts dozens of sessions, waits for your go-ahead first, since it can use a large share of a smaller plan's limits. A few subagents and checks that start no sessions go ahead without asking.
 
 ## How It Works
 
@@ -167,5 +168,6 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.1.0: Sessions now ask before a run that would use a large share of the plan's usage limits, such as a test suite, eval or subagent fan-out that starts dozens of sessions. Case 2 of "Decide, don't ask" used to say "spending beyond the session's normal Claude usage", which reads as money, so a big test run on a smaller plan could pass as normal usage. The subagent rule's more-than-10 line now says the same. Nothing to do: `git pull` picks it up.
 - 1.0.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
 - 1.0.0: First public version.

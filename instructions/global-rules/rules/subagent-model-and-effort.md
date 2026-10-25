@@ -14,5 +14,5 @@ This section is the user's standing instruction on subagent model and effort. On
 - When the work fits two rows, pick the cheaper one. If a subagent's result comes back thin or wrong, rerun that one subagent a row up, rather than starting everything on the largest model.
 - An agent type whose definition sets its own model keeps that model unless the work needs a different row; still pass `effort`.
 - Fewer subagents save more than cheaper ones: each starts with tens of thousands of tokens of fresh context. Don't start a subagent for what a few direct tool calls can do, and don't repeat a run whose result will come out the same.
-- Before starting more than 10 subagents for one task, say in the reply how many, on which model, and why.
+- Before starting more than 10 subagents for one task, say in the reply how many, on which model, and why. Ask first if that's a large share of the plan's usage limits.
 - A brief for another session doesn't need to repeat this table, since every session loads it. Name a model or effort in a brief only when the work needs something other than the table.
