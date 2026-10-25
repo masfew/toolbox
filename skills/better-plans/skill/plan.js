@@ -1,5 +1,5 @@
 /* Fills in the progress count, makes each step card's status match the overview, sets each phase card's status
-   from its steps, collapses every card not in progress, folds finished phases in the overview to one row each, makes
+   from its steps, collapses every card not in progress, folds finished phases in the overview to one row each (and runs of them to one group row), makes
    overview rows (and phase cells) open and jump to their card,
    runs the future ideas' Accept, Reject and Reset buttons, idea details, drag-to-reorder and groups, and shows step statuses
    saved in the database since the page was last published.
@@ -39,6 +39,7 @@
   if (!main) return;
   var lastBuilt = null, waiting = false;
   var foldChoice = {};   // overview phases the reader folded or unfolded ({folded, finished}), by phase name, kept through rebuilds
+  var groupChoice = {};  // overview groups of finished phases the reader unfolded (core, future: true when folded), kept through rebuilds
   // The snapshot as parsed, before boot() changes anything, for the first comparison with what the entries build.
   var original = (function () {
     var m = markers(), holder = document.createElement('div');
@@ -913,6 +914,91 @@
         body.classList.toggle('can-fold', list.length > 0);
         setFold(body, list.length > 0 && (choice ? choice.folded : finished), st, list.length);
       });
+      regroup();
+    }
+
+    // Finished phases also fold together, into one group row: the core phases once every one is finished (GROUP_MIN_CORE or
+    // more), and the done planned features at the top of Future Ideas once there are GROUP_MIN_FUTURE or more (the ones in
+    // progress, not started or skipped stay out, below it). The group row shows the number range, a count and the status, and
+    // starts folded; a click on it unfolds the group (each phase in it still folded by itself), and a row under the last one
+    // folds it again. Unfolding the planned features glides down to the last finished ones and the next one or two after
+    // them; folding glides back up to the group row when it's out of view.
+    var GROUP_MIN_CORE = 2, GROUP_MIN_FUTURE = 10;
+    var CHEVRON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
+    function regroup() {
+      Array.prototype.forEach.call(table.querySelectorAll('tbody.group, tbody.group-end'), function (b) { b.parentNode.removeChild(b); });
+      Array.prototype.forEach.call(table.querySelectorAll('tbody.in-group'), function (b) { b.classList.remove('in-group', 'group-hidden'); });
+      var core = [], future = [], afterSplit = false, leading = true;
+      Array.prototype.forEach.call(table.tBodies, function (body) {
+        if (body.classList.contains('split')) { afterSplit = true; return; }
+        if (!body.hasAttribute('data-phase')) return;
+        var list = stepStatuses(body), st = phaseStatus(list);
+        if (!afterSplit) core.push({ body: body, st: st, steps: list.length });
+        else if (leading && st === 'done' && !body.classList.contains('is-reset')) future.push({ body: body, st: st, steps: list.length });
+        else leading = false;
+      });
+      var coreDone = core.filter(function (x) { return x.st === 'done'; }).length;
+      if (core.length >= GROUP_MIN_CORE && coreDone && core.every(function (x) { return isFinished(x.st); })) {
+        var skipped = core.length - coreDone;
+        makeGroup('core', core, 'Build Plan', 'All ' + core.length + ' phases ' + (skipped ? 'finished (' + skipped + ' skipped)' : 'done'));
+      }
+      if (future.length >= GROUP_MIN_FUTURE) makeGroup('future', future, 'Finished', future.length + ' planned features done');
+    }
+    function makeGroup(key, members, name, text) {
+      var folded = key in groupChoice ? groupChoice[key] : true;
+      var first = members[0].body.getAttribute('data-phase'), last = members[members.length - 1].body.getAttribute('data-phase');
+      var steps = members.reduce(function (n, x) { return n + x.steps; }, 0);
+      var head = document.createElement('tbody');
+      head.className = 'group can-fold' + (folded ? ' is-folded' : '');
+      head.setAttribute('data-group', key);
+      head.innerHTML = '<tr class="fold-row group-row"><th class="phase" scope="row"><span class="ph"><span class="ph-num"></span>' +
+        '<span class="ph-name"></span></span></th><td class="fold-count"></td><td class="st"><span class="status" data-status="done">' +
+        LABELS.done + '</span></td></tr>';
+      head.querySelector('.ph-num').textContent = first + '–' + last;
+      head.querySelector('.ph-name').textContent = name;
+      head.querySelector('.fold-count').textContent = text + ', ' + steps + (steps === 1 ? ' step' : ' steps');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fold-btn group-btn';
+      btn.innerHTML = CHEVRON;
+      var label = folded ? 'Show the ' + members.length + ' finished' : 'Hide the ' + members.length + ' finished';
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-expanded', String(!folded));
+      head.querySelector('th.phase').insertBefore(btn, head.querySelector('.ph'));
+      table.insertBefore(head, members[0].body);
+      members.forEach(function (x) { x.body.classList.add('in-group'); x.body.classList.toggle('group-hidden', folded); });
+      if (folded) return;
+      var end = document.createElement('tbody');
+      end.className = 'group-end';
+      end.setAttribute('data-group', key);
+      end.innerHTML = '<tr><td colspan="3"><button type="button" class="group-hide">' + CHEVRON + '<span></span></button></td></tr>';
+      end.querySelector('span').textContent = 'Hide the ' + members.length + ' finished ' + (key === 'core' ? 'phases' : 'features');
+      table.insertBefore(end, members[members.length - 1].body.nextSibling);
+    }
+    function toggleGroup(key) {
+      var keyboard = document.activeElement && document.activeElement.closest && document.activeElement.closest('tbody.group, tbody.group-end');
+      var head = table.querySelector('tbody.group[data-group="' + key + '"]');
+      var folded = !(head && head.classList.contains('is-folded'));
+      // Read before the rows change: the browser's scroll anchoring may shift the page under rows that open above the view.
+      var vh = window.innerHeight, y0 = window.scrollY;
+      groupChoice[key] = folded;
+      regroup();
+      head = table.querySelector('tbody.group[data-group="' + key + '"]');
+      if (!head) return;
+      if (keyboard) head.querySelector('.group-btn').focus({ preventScroll: true });
+      var y = window.scrollY;   // what the positions below are measured against
+      if (folded) {
+        var top = head.getBoundingClientRect().top;
+        if (top < 0 || top > vh - 96) glideTo(top + y - vh / 4);
+      } else if (key === 'future') {
+        // Down to the bottom of the next one or two phases after the group, without pushing the group's end above 40% of the window.
+        var end = table.querySelector('tbody.group-end[data-group="future"]'), next = [];
+        for (var b = end.nextElementSibling; b && next.length < 2; b = b.nextElementSibling) if (b.hasAttribute('data-phase')) next.push(b);
+        var bottom = (next.length ? next[next.length - 1] : end).getBoundingClientRect().bottom + y;
+        var to = Math.min(bottom - vh + 24, end.getBoundingClientRect().top + y - vh * 0.4);
+        if (to > y0) glideTo(to);
+      }
     }
     function toggleFold(body) {
       var keyboard = document.activeElement && document.activeElement.classList.contains('fold-btn');
@@ -1589,6 +1675,11 @@
       glide(target, id);
     }
     table.addEventListener('click', function (e) {
+      var group = e.target.closest('tbody.group, tbody.group-end');
+      if (group && table.contains(group)) {
+        if (group.classList.contains('group') || e.target.closest('.group-hide')) toggleGroup(group.getAttribute('data-group'));
+        return;
+      }
       var fold = e.target.closest('.fold-btn, tr.fold-row > td');
       if (fold && table.contains(fold)) { toggleFold(fold.closest('tbody')); return; }
       var el = e.target.closest('[data-target]');

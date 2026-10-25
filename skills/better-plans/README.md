@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.1.0. See the [changes](#changes) at the end.
+Version 1.2.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -91,7 +91,7 @@ Ask for a plan as usual. Claude builds the page, publishes it as an Artifact tit
 - *"I've updated my future ideas."* After you press ✓ or ✕ on idea cards, or wrote changes in a planned feature's edit box, Claude turns accepted ideas into planned features with steps and makes your edits.
 - *"Read the plan and build step 3.2."* A session reads only the outline and the parts it needs, not the whole page.
 
-On the page, a round button in the bottom-right corner takes you to the next step that isn't finished. Finished phases fold up in the overview. Drag a planned feature by the dots left of its header to change its order.
+On the page, a round button in the bottom-right corner takes you to the next step that isn't finished. Finished phases fold up in the overview, and once the whole build plan is finished, or 10 or more planned features are done, those fold together into one row. Drag a planned feature by the dots left of its header to change its order.
 
 **Snapshots.** A plan's content lives in the page's database, and the page builds itself from it every time it opens. The page's HTML is a snapshot for people who can't load the database (signed out, or a tool that doesn't run the page's script). When you open a plan that has changed and whose snapshot is over a day old (or more than 30 updates behind), the page saves a fresh snapshot by itself. The **Save Snapshot** line under the summary saves one whenever you want.
 
@@ -173,5 +173,6 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.2.0: Finished phases in the plan overview now also fold together. Once every core phase is finished, the build plan folds into one row; once 10 or more planned features at the top of Future Ideas are done, they fold into one row, with the ones in progress, not started or skipped left below it. Opening the finished features scrolls down to the last of them and the next one or two, and hiding them (from a row at the bottom) scrolls back up. Published plans pick this up the next time their look is refreshed.
 - 1.1.0: A phase or planned feature whose status moves it into another group (finished, reopened, skipped or brought back) now moves only as far as it must, to the end of its new group going up or the top going down, and stays there, instead of jumping back to wherever it first sat. Published plans pick this up the next time their look is refreshed.
 - 1.0.0: First public version.
