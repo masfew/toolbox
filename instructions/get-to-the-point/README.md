@@ -31,7 +31,7 @@ In the desktop app, the Safari gap becomes a question in the app's next-step box
 From the root of the cloned repo (PowerShell, or bash with `python3` on macOS and Linux):
 
 ```bash
-cd output-styles/get-to-the-point
+cd instructions/get-to-the-point
 python install.py
 ```
 
@@ -45,7 +45,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install get-to
 
 1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 2.
 2. Tells you the install makes Get to the Point the default output style for every new session, in every project, and runs it once you agree.
-3. Runs `python install.py` from `output-styles/get-to-the-point`, and checks it ends with **Setup complete**.
+3. Runs `python install.py` from `instructions/get-to-the-point`, and checks it ends with **Setup complete**.
 
 **You do:**
 
@@ -122,7 +122,7 @@ From the root of the cloned repo, pull the new version, then rerun the install (
 
 ```bash
 git pull
-cd output-styles/get-to-the-point
+cd instructions/get-to-the-point
 python install.py
 ```
 
@@ -133,7 +133,7 @@ To stay on a version, check out its tag instead, then rerun the install (PowerSh
 ```bash
 git fetch --tags
 git checkout get-to-the-point-v1.0.0
-cd output-styles/get-to-the-point
+cd instructions/get-to-the-point
 python install.py
 ```
 
