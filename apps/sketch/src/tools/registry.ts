@@ -78,6 +78,14 @@ const transparentSel: OptionSpec = {
   default: false,
   hint: 'Leave out the second colour when moving the selection, as Paint does',
 };
+
+const removeBackground: OptionSpec = {
+  kind: 'action',
+  key: 'removeBackground',
+  label: 'Remove Background',
+  command: 'adjust.removeBackground',
+  hint: 'Cut out the person or object in front, onto a new layer',
+};
 const heads = [
   { value: 'none', label: 'None' },
   { value: 'open', label: 'Open' },
@@ -122,14 +130,14 @@ function line(id: string, name: string, icon: string, startHead: string, endHead
 }
 
 export const TOOLS: ToolSpec[] = [
-  { id: 'select-rect', name: 'Rectangle Select', icon: 'select-rect', slot: 'select', options: [transparentSel] },
-  { id: 'select-free', name: 'Freehand Select', icon: 'select-free', slot: 'select', options: [transparentSel] },
+  { id: 'select-rect', name: 'Rectangle Select', icon: 'select-rect', slot: 'select', options: [transparentSel, removeBackground] },
+  { id: 'select-free', name: 'Freehand Select', icon: 'select-free', slot: 'select', options: [transparentSel, removeBackground] },
   {
     id: 'magic-wand',
     name: 'Magic Wand',
     icon: 'magic-wand',
     slot: 'select',
-    options: [{ kind: 'range', key: 'tolerance', label: 'Tolerance', min: 0, max: 100, default: 32, unit: '%' }, transparentSel],
+    options: [{ kind: 'range', key: 'tolerance', label: 'Tolerance', min: 0, max: 100, default: 32, unit: '%' }, transparentSel, removeBackground],
   },
   {
     id: 'crop',

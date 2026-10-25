@@ -290,3 +290,21 @@ The user asked for one key to finish marking up a capture: copy it and close it,
 - **Which pictures.** Any screen capture (`doc.edges` set), quick or not. A quick capture (F9) closes without asking; any other asks about unsaved changes as closing always does, since a copy isn't a save. Whiteboards and ordinary pictures keep Cut disabled with nothing selected.
 - **What it copies and closes.** The same copy as Ctrl+Shift+C (`copy(true)`: every layer, shapes, text and what's drawn round the capture). Only when the copy works does it close, and it closes the capture's tab, not the window: captures open as tabs of the window used last (F14), so other pictures there stay. The last tab closes the window, as Ctrl+F4 does.
 - **Check.** `check:native` marks up a quick capture, presses Ctrl+X, and checks the clipboard holds the capture, its tab closed with no dialog and the window stayed open.
+
+## Decisions for Remove Background (F13)
+
+- **The model is U²-Net** (Apache 2.0, the ONNX copy rembg publishes), picked by the user on 25 Oct 2026 from a comparison on photos, a screenshot and a drawing, timed on a 32-thread desktop through ONNX Runtime 1.31 on the processor:
+
+  | Model | 1080p | 4K | Load | Add-on |
+  |---|---|---|---|---|
+  | U²-Netp | 0.10 s | 0.26 s | 0.07 s | 22 MB |
+  | U²-Net | 0.15 s | 0.32 s | 0.3 s | 193 MB |
+  | BiRefNet Lite (half precision) | 3.6 s | 4.0 s | 3.4 s | 132 MB |
+
+  U²-Netp left ghosts of the backdrop on photos; BiRefNet had the cleanest edges and kept every object in front (U²-Net keeps only the main one, so a car photo lost the person beside it) but missed the 2-second budget. RMBG was left out: both versions are for non-commercial use only, and Sketch is MIT. No model handles flat drawings well.
+- **An add-on, not in the installer.** ONNX Runtime (`onnxruntime.dll`, 17 MB) and the model (176 MB) download on first use into the data folder's `cutout` folder, from the `sketch-cutout-1` release of the toolbox repo (a tag with no `-v`, so the release workflow leaves it alone). `ort` is built with `load-dynamic`, so Sketch loads the runtime from there at run time and nothing of it is in the exe. Each file is checked by its size and SHA-256 (pinned in `cutout.rs`) before it's kept; a `.part` file is written first, so a cancelled or broken download never looks finished. A new model or runtime needs a new release tag and new hashes.
+- **The page shrinks, Rust only runs the model.** The page draws the area at 320 × 320 (the model's size) and sends those raw pixels (400 KB); the mask comes back at 320 × 320 and the page scales it up with smoothing on the GPU, which also softens the edge. Picture-sized pixels never cross to Rust (the CLAUDE.md trap).
+- **The model loads for each use** (0.3 s) and is dropped after, so it holds no memory between uses (U²-Net takes about 200 MB while loaded). A 1080p cut-out still takes well under the plan's 2 seconds end to end.
+- **Where the cut-out goes.** On a layer, a copy goes on a new layer straight above it (`<name> cut out`, same opacity) and the original is hidden, as one step ("Remove background"), so the result shows and the original is never lost. With a selection, only the picked pixels are cut out: the model sees the selection's box, and pixels outside the outline stay. A lifted or pasted selection is cut out before it's placed, as the Adjust menu changes one. Locked and hidden layers refuse, as for adjustments.
+- **Where it lives.** Remove Background is in the Adjust menu and the command palette, and is a button on the options bar of the three select tools, since that's where a selection is being made. Its first use opens a box offering the download, with its size, then shows the download's progress, with Cancel; a failed download says why and offers Try Again. In a plain browser it says it works only in the app.
+- **Checks**: `check:native` serves the add-on from its own test server (`SKETCH_CUTOUT_URL`, files from `SKETCH_TEST_CUTOUT_FILES` or the installed Sketch's copy), so the download and its checks run as they would from GitHub. It cuts out an orange ball on a sky-to-grass backdrop at 1080p (corner see-through, middle solid, original hidden), undoes it, and times a second cut-out with no box.

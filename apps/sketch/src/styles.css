@@ -432,6 +432,11 @@ kbd {
   accent-color: var(--accent);
 }
 
+.dialog progress.download {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .opt input.num {
   width: 44px;
   font: inherit;

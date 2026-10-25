@@ -1,10 +1,10 @@
 # Sketch
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 1.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
-A fast, simple paint app for Windows: as quick to open as Microsoft Paint, with modern tools such as layers, editable shapes, arrows and text, mark-up for screenshots, whiteboards, tabs and a screen capture key that works anywhere. It's for anyone who wants Paint's speed without its limits, and is built with Tauri 2, TypeScript, Vite and Preact.
+A fast, simple paint app for Windows: as quick to open as Microsoft Paint, with modern tools such as layers, editable shapes, arrows and text, background removal, mark-up for screenshots, whiteboards, tabs and a screen capture key that works anywhere. It's for anyone who wants Paint's speed without its limits, and is built with Tauri 2, TypeScript, Vite and Preact.
 
 ![Sketch with a picture open, marked up with an arrow and two numbered markers, beside its tool rail, options bar and history panel](docs/screenshot.png)
 
@@ -152,6 +152,14 @@ The Mark-Up slot holds tools for screenshots. Everything they draw is an object 
 
 The Adjust menu changes the selection, or the whole current pixel layer when nothing is selected. **Brightness and Contrast** and **Hue and Saturation** open a small dialog beside the picture, which shows the change live as the sliders move (double-click a slider to reset it). **Black and White**, **Invert Colours** (Ctrl+Shift+I) and **Auto Level** (Ctrl+Shift+L) happen at once. Auto Level stretches the picture to full black and white with one stretch for all colours, so greys stay grey.
 
+### Remove Background
+
+**Remove Background** (in the Adjust menu, the command palette, and on the options bar of the select tools) cuts out the person or object in front and makes everything else see-through. It runs a model on your PC, so pictures never leave it. On a layer, the cut-out goes on a new layer above it and the original layer is hidden underneath, so nothing is lost: show the original again in the Layers panel, or undo (one step). With a selection, only the selected pixels are cut out; a pasted or moved selection is cut out before it's placed. Copying or saving as PNG keeps the transparency.
+
+The model works best on photos with one clear subject; on flat drawings and icons it may keep the wrong part. A 1080p picture takes about half a second.
+
+The first time, Sketch offers a one-time download of 193 MB: the U²-Net model (Apache 2.0) and Microsoft's ONNX Runtime (MIT), which runs it. They come from the `sketch-cutout-1` release on the repo's [releases page](https://github.com/masfew/toolbox/releases), Sketch checks each file's fingerprint (SHA-256) before using it, and they're kept in `%LOCALAPPDATA%\app.sketch.desktop\cutout`. Delete that folder to free the space; Sketch offers the download again next time.
+
 ### Whiteboards
 
 **File > New Whiteboard** (Ctrl+Alt+N) starts an endless board for diagrams and notes instead of a picture. It's white with a light dot grid, and has no edges: pan and draw in any direction and the board grows to hold whatever you draw. Every tool works on it except the ones for a picture's size (Crop, Resize, Canvas Size, Trim to Content), which are hidden; Rotate and Flip turn only a selection. Ctrl+0, or the fit button in the status bar, zooms to fit everything on the board. Fill fills inside closed outlines only, since empty space on a board never ends. Pastes land in the middle of the view, and a picture dropped from Explorer lands where you drop it.
@@ -227,7 +235,7 @@ Every action lives in one command list (`src/app/commandList.ts`) that feeds the
 
 The install folder, `%LOCALAPPDATA%\Sketch`, holds a small launcher as `sketch.exe`, `current.json` naming the version to open, and one `app-<commit>` folder per version (the current one and the one before it are kept). The Start menu, taskbar pins, Explorer's "Edit with Sketch" and the capture key's sign-in entry all go through the launcher. If the newest version can't open, the launcher opens the one before and Sketch says so. The capture helper, `sketch-capture.exe`, runs from the version folder whenever a capture key is set, with a sign-in entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
-Settings, autosaves, waiting captures and update builds live in `%LOCALAPPDATA%\app.sketch.desktop`, apart from the install folder, so uninstalling never takes them.
+Settings, autosaves, waiting captures, update builds and the Remove Background add-on live in `%LOCALAPPDATA%\app.sketch.desktop`, apart from the install folder, so uninstalling never takes them.
 
 `install.py` changes nothing else. It builds in this folder (`node_modules`, `dist` and `src-tauri\target`, all ignored by git), runs Sketch's own NSIS installer, and puts this tool at `~/.claude/tools/sketch` with a record of the install in `~/.claude/tools/sketch.install.json`, so `--remove` works from there even if this folder is gone.
 
@@ -245,10 +253,10 @@ Updates need the same build tools as the install, on the PATH. The build log is 
 - `src/view` viewport maths, renderer, mouse and pen input
 - `src/io` file formats, encoder worker, BMP, `.sktch`
 - `src/platform` Tauri calls with browser fallbacks
-- `src/app` app state, actions, a whiteboard growing with the view kept still (`board.ts`), autosave and recovery (`recovery.ts`), the mouse speed slider (`mouse.ts`), launches and windows (`launch.ts`), updates (`update.ts`), layer actions (`layers.ts`), the Adjust menu (`adjust.ts`), the command list and key bindings, tool state, colours, saved settings
+- `src/app` app state, actions, a whiteboard growing with the view kept still (`board.ts`), autosave and recovery (`recovery.ts`), the mouse speed slider (`mouse.ts`), launches and windows (`launch.ts`), updates (`update.ts`), layer actions (`layers.ts`), the Adjust menu (`adjust.ts`), Remove Background (`cutout.ts`), the command list and key bindings, tool state, colours, saved settings
 - `src/tools` the tool list with each tool's options (`registry.ts`), strokes, fill and its worker, selection, the transform box, crop, text, shapes and lines (`shapes.ts`), the mark-up tools (`marks.ts`) and callouts (`callout.ts`), and snapping and lining up (`snap.ts`)
 - `src/ui` Preact components: menu bar, tool rail, options bar, colour popover, side panel with the layers panel, dialogs, palette, shortcuts sheet, settings
-- `src-tauri` Rust side: file reading and writing, clipboard, URL fetch, start-up probe, windows and launches (`lib.rs`), one running Sketch (`instance.rs`), the mouse speed (`mouse.rs`), screen capture and its overlay (`capture.rs`), its notification (`note.rs`), the capture helper `sketch-capture.exe` (`helper.rs`, started by `src/bin/sketch-capture.rs`), the launcher (`src/bin/sketch-launcher.rs`) and the install layout (`layout.rs`), autosave slots (`recovery.rs`), updates and the quiet restart (`update.rs`), jump list and the paste and capture keys (`shell.rs`), and the installer's launcher layout, Explorer integration and capture helper (`windows/hooks.nsh`)
+- `src-tauri` Rust side: file reading and writing, clipboard, URL fetch, start-up probe, windows and launches (`lib.rs`), one running Sketch (`instance.rs`), the mouse speed (`mouse.rs`), Remove Background's add-on download and model (`cutout.rs`), screen capture and its overlay (`capture.rs`), its notification (`note.rs`), the capture helper `sketch-capture.exe` (`helper.rs`, started by `src/bin/sketch-capture.rs`), the launcher (`src/bin/sketch-launcher.rs`) and the install layout (`layout.rs`), autosave slots (`recovery.rs`), updates and the quiet restart (`update.rs`), jump list and the paste and capture keys (`shell.rs`), and the installer's launcher layout, Explorer integration and capture helper (`windows/hooks.nsh`)
 - `scripts` the checks, the build stamp (`build-info.mjs`, which also writes the installer's `src-tauri/windows/version.nsh`), the update build (`update-build.mjs`) and developer updates after a push (`dev-update.mjs`, started by the repo's `.github/hooks/pre-push`)
 
 ## Development
@@ -273,7 +281,7 @@ npm test                 # unit tests (history, viewport, tiles, BMP encoder, ke
 npm run tauri build      # release app and NSIS installer
 npm run check:size       # installer must be under 15 MB
 npm run check:startup    # median start-up must be under 1 second
-npm run check:native     # drives the built app: paste, copy, shapes copy and paste, file dialogs, fill, drag and drop, close prompt, Mica, colour theme, saved settings, autosave and recovery, tabs, more than one window, mouse speed, screen capture, the capture helper, the Copy button
+npm run check:native     # drives the built app: paste, copy, shapes copy and paste, file dialogs, fill, drag and drop, close prompt, Mica, colour theme, saved settings, autosave and recovery, tabs, more than one window, Remove Background, mouse speed, screen capture, the capture helper, the Copy button
 npm run check:speed      # 4K paste under 200 ms, brush at 60 fps on 4K, and timings of mark-up, copy and autosave
 npm run check:fuzz       # random edits with undo and redo for 3 minutes (add 60 for the hour-long run)
 npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher
@@ -284,7 +292,7 @@ The full performance audit's process, budgets and results are in [docs/performan
 
 CI runs the first four on `windows-latest` when anything in this folder changes (`.github/workflows/sketch.yml` at the repo's root).
 
-The `check:` scripts after `check:startup` run locally only. They open the release app, drive its page through WebView2's debugging port (127.0.0.1 only) and fill the Open and Save dialogs with window messages, so they don't move the mouse. They replace whatever is on the clipboard. The capture checks cover the screens with the capture overlay for a moment and show a magenta test window; they drive the overlay with window messages, not the mouse. They never change your mouse speed (the app changes a stand-in file instead). Each gives the app its own data folder (`SKETCH_DATA_DIR`), so they never touch your autosaves or updates or reach a Sketch you have open. The helpers are in `scripts/native-driver.mjs`. `check:update` lays out a scratch install folder of its own and never touches the installed Sketch, its shortcuts or the registry. Its quiet restart step waits for 2 seconds with no keyboard or mouse input, so leave the PC alone while it runs.
+The `check:` scripts after `check:startup` run locally only. They open the release app, drive its page through WebView2's debugging port (127.0.0.1 only) and fill the Open and Save dialogs with window messages, so they don't move the mouse. They replace whatever is on the clipboard. The capture checks cover the screens with the capture overlay for a moment and show a magenta test window; they drive the overlay with window messages, not the mouse. They never change your mouse speed (the app changes a stand-in file instead). Each gives the app its own data folder (`SKETCH_DATA_DIR`), so they never touch your autosaves or updates or reach a Sketch you have open. The helpers are in `scripts/native-driver.mjs`. The Remove Background checks download the add-on from `check:native`'s own local server, which serves it from the folder in `SKETCH_TEST_CUTOUT_FILES` (holding `onnxruntime.dll` and `u2net.onnx`) or from your installed Sketch's copy; with neither, they're skipped. `check:update` lays out a scratch install folder of its own and never touches the installed Sketch, its shortcuts or the registry. Its quiet restart step waits for 2 seconds with no keyboard or mouse input, so leave the PC alone while it runs.
 
 ### Developer Updates
 
@@ -356,4 +364,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.1.0: Remove Background cuts out the person or object in front onto a new layer, with a model that runs on the PC. Its first use downloads a 193 MB add-on.
 - 1.0.0: First release in the toolbox. Updates follow the clone and folder Sketch was built from, wherever they are; a build worktree left by another clone is made again instead of failing. `install.py` builds and installs it, or installs a release's installer with `--setup`, and releases attach the installer.

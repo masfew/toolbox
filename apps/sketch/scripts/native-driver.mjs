@@ -10,15 +10,18 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- Test pictures ----------
 
-/** A PNG of the given size: red, with the left half see-through. */
-export function png(width, height) {
+/** A PNG of the given size: red, with the left half see-through, or `pixel(x, y)`'s [r, g, b, a]. */
+export function png(width, height, pixel = null) {
   const row = 1 + width * 4;
   const raw = Buffer.alloc(row * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * row + 1 + x * 4;
-      raw[i] = 220;
-      raw[i + 3] = x < width / 2 ? 0 : 255;
+      if (pixel) raw.set(pixel(x, y), i);
+      else {
+        raw[i] = 220;
+        raw[i + 3] = x < width / 2 ? 0 : 255;
+      }
     }
   }
   const chunk = (type, data) => {

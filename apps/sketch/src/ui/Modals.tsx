@@ -4,6 +4,7 @@ import { app, type FileFormat } from '../app/store';
 import type { Adjustment } from '../engine/adjust';
 import { MAX_SIZE } from '../engine/document';
 import { encodeDocument, FORMATS } from '../io/formats';
+import * as platform from '../platform';
 
 function Dialog(props: { title: string; children: ComponentChildren; onCancel: () => void; onConfirm?: () => void; side?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -359,6 +360,8 @@ export function Modals() {
       return <AdjustDialog adjust={m.adjust} preview={m.preview} resolve={m.resolve} />;
     case 'about':
       return <AboutDialog resolve={m.resolve} />;
+    case 'cutout-download':
+      return <CutoutDownloadDialog resolve={m.resolve} />;
   }
 }
 
@@ -382,6 +385,45 @@ function AboutDialog(props: { resolve: (v: null) => void }) {
         <button type="button" class="primary" onClick={() => props.resolve(null)} data-autofocus>
           OK
         </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Remove Background's first use: offers the add-on, then shows its download. Resolves true once it's there. */
+function CutoutDownloadDialog(props: { resolve: (v: boolean) => void }) {
+  const [state, setState] = useState<{ step: 'ask' } | { step: 'loading'; share: number } | { step: 'failed'; error: string }>({ step: 'ask' });
+  const start = () => {
+    setState({ step: 'loading', share: 0 });
+    platform
+      .installCutout((share) => setState({ step: 'loading', share }))
+      .then(() => props.resolve(true))
+      .catch((e) => (String(e) === 'cancelled' ? props.resolve(false) : setState({ step: 'failed', error: String(e) })));
+  };
+  // While downloading, cancelling stops the download, which then resolves false.
+  const cancel = () => (state.step === 'loading' ? void platform.cancelCutoutDownload() : props.resolve(false));
+  return (
+    <Dialog title="Download Remove Background?" onCancel={cancel} onConfirm={state.step === 'loading' ? undefined : start}>
+      <p>Remove Background cuts out the person or object in front using a model that runs on this PC, so your pictures never leave it.</p>
+      {state.step === 'ask' && <p class="hint">It's a one-time download of {platform.CUTOUT_DOWNLOAD_MB} MB.</p>}
+      {state.step === 'loading' && (
+        <>
+          <progress class="download" max={1} value={state.share} aria-label="Download progress" />
+          <p class="hint">
+            {Math.round(state.share * platform.CUTOUT_DOWNLOAD_MB)} of {platform.CUTOUT_DOWNLOAD_MB} MB
+          </p>
+        </>
+      )}
+      {state.step === 'failed' && <p class="hint">The download didn't finish: {state.error}.</p>}
+      <div class="actions">
+        <button type="button" onClick={cancel}>
+          Cancel
+        </button>
+        {state.step !== 'loading' && (
+          <button type="button" class="primary" onClick={start} data-autofocus>
+            {state.step === 'failed' ? 'Try Again' : 'Download'}
+          </button>
+        )}
       </div>
     </Dialog>
   );

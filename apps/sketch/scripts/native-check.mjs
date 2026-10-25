@@ -2,8 +2,9 @@
 // clipboard paste (bitmap, Explorer file, image link), copy with transparency, copying and pasting shapes,
 // the native Open and Save dialogs, Ctrl+S, drag and drop, "Open with" and the close prompt, tabs,
 // plus the app shell: Mica, menu Paste, tool shortcuts, the screen colour picker and settings
-// that survive a restart, the mouse speed slider, screen capture with the capture helper
-// (sketch-capture.exe) that keeps it ready while Sketch is closed, and the Copy button.
+// that survive a restart, Remove Background with its add-on download, the mouse speed slider,
+// screen capture with the capture helper (sketch-capture.exe) that keeps it ready while Sketch is
+// closed, and the Copy button.
 // Usage: node scripts/native-check.mjs [path-to-exe]
 //
 // It talks to the page through WebView2's debugging port (127.0.0.1 only) and fills the
@@ -11,7 +12,7 @@
 // It does replace whatever is on the clipboard. Windows only.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { attach, captureTarget, clipboard, fillFileDialog, helper, holdHotkey, keys, launch, notesInCentre, overlay, png, pngSize, postClose, ps, screen, sleep } from './native-driver.mjs';
@@ -34,6 +35,27 @@ writeFileSync(small, png(300, 200));
 writeFileSync(big, png(2000, 1500));
 writeFileSync(linked, png(64, 48));
 writeFileSync(dropped, png(120, 90));
+// For Remove Background: an orange ball on a sky-to-grass backdrop, 1080p.
+const subject = join(work, 'subject.png');
+writeFileSync(
+  subject,
+  png(1920, 1080, (x, y) => {
+    const d = Math.hypot(x - 960, y - 540);
+    if (d < 300) {
+      const light = 1 - 0.35 * Math.hypot(x - 860, y - 440) / 400;
+      return [Math.round(240 * light), Math.round(130 * light), Math.round(30 * light), 255];
+    }
+    const t = y / 1080;
+    return [Math.round(150 - 90 * t), Math.round(200 - 10 * t), Math.round(240 - 190 * t), 255];
+  }),
+);
+
+// The Remove Background add-on (ONNX Runtime and the model, 193 MB) is served by the test server,
+// from SKETCH_TEST_CUTOUT_FILES or the installed Sketch's own copy, so the app downloads and checks it
+// as it would from GitHub. With neither, the Remove Background checks are skipped.
+const cutoutFiles = [process.env.SKETCH_TEST_CUTOUT_FILES, join(process.env.LOCALAPPDATA ?? '', 'app.sketch.desktop', 'cutout')].find(
+  (d) => d && existsSync(join(d, 'u2net.onnx')) && existsSync(join(d, 'onnxruntime.dll')),
+);
 
 // ---------- The checks ----------
 
@@ -62,9 +84,14 @@ function expect(cond, message) {
 }
 
 const server = createServer((req, res) => {
+  const addOn = /^\/cutout\/(onnxruntime\.dll|u2net\.onnx)$/.exec(req.url ?? '');
   if (req.url === '/linked.png') {
     res.writeHead(200, { 'content-type': 'image/png' });
     res.end(readFileSync(linked));
+  } else if (addOn && cutoutFiles) {
+    const file = join(cutoutFiles, addOn[1]);
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': statSync(file).size });
+    createReadStream(file).pipe(res);
   } else {
     res.writeHead(404);
     res.end();
@@ -623,6 +650,58 @@ try {
     await app.press('Escape');
   });
   await app.quit();
+
+  // ---------- Remove Background (F13) ----------
+
+  if (!cutoutFiles) console.log('SKIP  Remove Background: set SKETCH_TEST_CUTOUT_FILES to a folder with onnxruntime.dll and u2net.onnx');
+  else {
+    const cutout = dataFor('cutout');
+    app = await launch(exe, work, [subject], null, { ...cutout.env, SKETCH_CUTOUT_URL: `http://127.0.0.1:${serverPort}/cutout/` });
+    // The flattened picture's see-through-ness at a corner (backdrop) and the middle (the ball), and the layers.
+    const picture = () =>
+      app.evaluate(`(() => {
+        const s = window.sketch;
+        const c = s.flatten(s.app.doc);
+        const alpha = (x, y) => c.getContext('2d').getImageData(x, y, 1, 1).data[3];
+        return { layers: s.app.doc.layers.map((l) => l.name + (l.visible ? '' : ' (hidden)')).join(', '), corner: alpha(20, 20), middle: alpha(960, 540), undo: s.app.history.undoLabel };
+      })()`);
+
+    await check('Remove Background offers its download first, then cuts the ball out onto a new layer and hides the original', async () => {
+      await app.waitFor('the test picture', (s) => s.title === 'subject.png - Sketch');
+      await app.evaluate(`window.sketch.run('adjust.removeBackground')`);
+      await app.waitFor('the download box', (s) => s.dialog === 'Download Remove Background?');
+      await app.clickButton('Download');
+      await app.waitFor('the cut-out', (s) => (s.toast ?? '').startsWith('Background removed'), 45000);
+      const p = await picture();
+      expect(p.layers === 'Background (hidden), Background cut out' || /\(hidden\), .* cut out$/.test(p.layers), `Layers: ${p.layers}`);
+      expect(p.corner < 15 && p.middle > 240, `Corner alpha ${p.corner}, middle alpha ${p.middle}`);
+      expect(p.undo === 'Remove background', `Undo step: ${p.undo}`);
+      const files = readdirSync(join(cutout.dir, 'cutout')).sort().join(', ');
+      expect(files === 'onnxruntime.dll, u2net.onnx', `Add-on folder holds: ${files}`);
+    });
+
+    await check('Undo puts the picture back as it was', async () => {
+      await app.press('z', ctrl);
+      const p = await picture();
+      expect(!/hidden|cut out/.test(p.layers) && p.corner === 255, `Layers: ${p.layers}, corner alpha ${p.corner}`);
+    });
+
+    await check('Once downloaded, Remove Background asks nothing and cuts out a 1080p picture in under 2 seconds', async () => {
+      // The first cut-out's message may still show, so wait for the step itself.
+      const took = await app.evaluate(`(async () => {
+        const s = window.sketch;
+        const started = performance.now();
+        s.run('adjust.removeBackground');
+        while (s.app.history.undoLabel !== 'Remove background' && !document.querySelector('.dialog') && performance.now() - started < 10000) await new Promise((r) => setTimeout(r, 10));
+        return Math.round(performance.now() - started);
+      })()`);
+      expect(!(await app.state()).dialog, 'A box opened');
+      expect((await picture()).corner < 15, 'Nothing was cut out');
+      expect(took < 2000, `It took ${took} ms`);
+      console.log(`      Cut-out of 1920 x 1080: ${took} ms`);
+    });
+    await app.quit();
+  }
 
   // ---------- Mouse speed ----------
 

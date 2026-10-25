@@ -26,7 +26,8 @@ export type ModalSpec =
   | { kind: 'save-as'; initial: FileFormat; resolve: (v: { format: FileFormat; quality: number } | null) => void }
   | { kind: 'resize'; resolve: (v: { width: number; height: number; pixelArt: boolean } | null) => void }
   | { kind: 'canvas-size'; resolve: (v: { width: number; height: number; ax: number; ay: number } | null) => void }
-  | { kind: 'adjust'; adjust: 'brightness' | 'hue'; preview: (a: Adjustment | null) => void; resolve: (v: Adjustment | null) => void };
+  | { kind: 'adjust'; adjust: 'brightness' | 'hue'; preview: (a: Adjustment | null) => void; resolve: (v: Adjustment | null) => void }
+  | { kind: 'cutout-download'; resolve: (v: boolean) => void };
 
 export type Overlay = 'palette' | 'shortcuts' | 'settings';
 

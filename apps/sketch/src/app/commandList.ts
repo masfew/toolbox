@@ -3,6 +3,7 @@ import * as platform from '../platform';
 import * as actions from './actions';
 import * as layers from './layers';
 import { adjustNow, adjustWithDialog } from './adjust';
+import { removeBackground } from './cutout';
 import { fromWindowsHotkey, isCaptureHotkey, keyMap, resolveBindings } from './keys';
 import { loadPref, savePref } from './prefs';
 import { app, changed, openModal, tabs } from './store';
@@ -162,6 +163,13 @@ export const COMMANDS: AppCommand[] = [
   { id: 'adjust.bw', label: 'Black and White', group: 'Adjust', run: () => adjustNow({ kind: 'bw' }), keywords: 'adjust greyscale grayscale monochrome' },
   { id: 'adjust.invert', label: 'Invert Colours', group: 'Adjust', keys: ['Ctrl+Shift+I'], run: () => adjustNow({ kind: 'invert' }), keywords: 'adjust negative' },
   { id: 'adjust.autoLevel', label: 'Auto Level', group: 'Adjust', keys: ['Ctrl+Shift+L'], run: () => adjustNow('auto'), keywords: 'adjust levels contrast fix colour cast' },
+  {
+    id: 'adjust.removeBackground',
+    label: 'Remove Background',
+    group: 'Adjust',
+    run: () => void removeBackground(),
+    keywords: 'cut out cutout subject person object isolate transparent erase backdrop',
+  },
 
   // View
   { id: 'view.zoomIn', label: 'Zoom In', group: 'View', keys: ['Ctrl+=', 'Ctrl+Shift+='], run: () => actions.zoomStep(1), icon: 'zoom-in' },
@@ -414,7 +422,7 @@ export const MENUS: { name: MenuName; items: MenuItem[] }[] = [
       'image.flatten',
     ],
   },
-  { name: 'Adjust', items: ['adjust.brightness', 'adjust.hue', '-', 'adjust.bw', 'adjust.invert', 'adjust.autoLevel'] },
+  { name: 'Adjust', items: ['adjust.brightness', 'adjust.hue', '-', 'adjust.bw', 'adjust.invert', 'adjust.autoLevel', '-', 'adjust.removeBackground'] },
   { name: 'View', items: ['view.zoomIn', 'view.zoomOut', 'view.fit', 'view.actual', '-', 'view.grid', 'view.snapping', 'view.panel', '-', 'view.palette'] },
   { name: 'Help', items: ['help.shortcuts', '-', 'help.about', 'app.update'] },
 ];

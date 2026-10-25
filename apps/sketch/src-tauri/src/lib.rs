@@ -1,5 +1,6 @@
 mod capture;
 mod clip;
+mod cutout;
 mod helper;
 mod instance;
 mod layout;
@@ -813,7 +814,11 @@ pub fn run() {
             update::update_start_note,
             mouse::mouse_speed_set,
             mouse::mouse_ctrl,
-            mouse::mouse_speed_force
+            mouse::mouse_speed_force,
+            cutout::cutout_ready,
+            cutout::cutout_install,
+            cutout::cutout_cancel,
+            cutout::cutout_mask
         ])
         .build(tauri::generate_context!())
         .expect("error while running Sketch")

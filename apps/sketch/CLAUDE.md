@@ -6,7 +6,7 @@ Design decisions for each phase, and why, are in [docs/decisions.md](docs/decisi
 
 ## Checks
 
-The local checks of the real app are `check:native` (73 checks), `check:speed`, `check:fuzz`, `check:update` (8 checks; README, Build and Check) and the timings `npm run perf`. A tool or command not built yet goes in `src/tools/registry.ts` or `src/app/commandList.ts` with `planned: '<step>'`, and shows greyed out until its step. Release build: installer 1.8 MB, start-up median under 0.7 s. Building needs what the README's Requirements list; Rust from rustup lives in `%USERPROFILE%\.cargo\bin`, which may need adding to PATH in a new shell.
+The local checks of the real app are `check:native` (77 checks; the Remove Background ones need `SKETCH_TEST_CUTOUT_FILES`, README), `check:speed`, `check:fuzz`, `check:update` (8 checks; README, Build and Check) and the timings `npm run perf`. A tool or command not built yet goes in `src/tools/registry.ts` or `src/app/commandList.ts` with `planned: '<step>'`, and shows greyed out until its step. Release build: installer 1.8 MB, start-up median under 0.7 s. Building needs what the README's Requirements list; Rust from rustup lives in `%USERPROFILE%\.cargo\bin`, which may need adding to PATH in a new shell.
 
 ## Speed check before committing
 
@@ -49,4 +49,5 @@ Before offering to commit any change, time what it touches: work out which actio
 - Shrinking a picture-sized canvas to under half size with `imageSmoothingQuality` `high` (or `medium`) makes the WebView rebuild its downscaled copies every frame: 37 ms a frame at 8K. The renderer's `drawShrunk` halves big canvases with plain smoothing first; draw any new picture-sized canvas through it.
 - Handing data from the page to Rust costs about 10 ms per MB (a 4K picture's raw pixels took 0.3 s). Send encoded bytes (PNG, as Copy does with `copy_png`), never raw pixels, for anything picture-sized.
 - Copies and captures go on the clipboard through `clip.rs` (PNG first, then CF_DIBV5, as arboard writes them), not arboard's `set_image`, which encoded the PNG slowly. Reading the clipboard still uses arboard.
+- Remove Background's add-on (F13) downloads from the `sketch-cutout-1` release, with each file's size and SHA-256 pinned in `cutout.rs`. A new model or runtime gets a new `sketch-cutout-<n>` release and new pins, never a tag with `-v`, which the release workflow takes for a Sketch version.
 - The release build is `opt-level = "s"` except the image-coding crates (`png`, `fdeflate`, `image` and friends in `Cargo.toml`), which are built for speed.

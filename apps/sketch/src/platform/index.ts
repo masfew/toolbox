@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { Channel, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -64,6 +64,37 @@ export function download(name: string, bytes: Uint8Array): void {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+// ---------- Remove Background (F13) ----------
+
+/** The cutout model's input and mask size, in pixels each way. */
+export const CUTOUT_SIZE = 320;
+/** What the cutout add-on downloads: ONNX Runtime and the model. */
+export const CUTOUT_DOWNLOAD_MB = 193;
+
+/** True once the cutout add-on is downloaded. */
+export async function cutoutReady(): Promise<boolean> {
+  return isTauri ? invoke<boolean>('cutout_ready') : false;
+}
+
+/** Downloads the cutout add-on; `onProgress` gets how far it has got, 0 to 1. Rejects with "cancelled" after `cancelCutoutDownload`. */
+export async function installCutout(onProgress: (share: number) => void): Promise<void> {
+  const progress = new Channel<number>();
+  progress.onmessage = (n) => onProgress(n / 1000);
+  await invoke('cutout_install', { progress });
+}
+
+export async function cancelCutoutDownload(): Promise<void> {
+  if (isTauri) await invoke('cutout_cancel');
+}
+
+/**
+ * How much of each pixel is the object in front, one byte per pixel, from raw RGBA at
+ * CUTOUT_SIZE × CUTOUT_SIZE. That's small enough to send raw (400 KB, a few ms).
+ */
+export async function cutoutMask(rgba: Uint8Array): Promise<Uint8Array> {
+  return new Uint8Array(await invoke<ArrayBuffer>('cutout_mask', rgba));
 }
 
 /**
