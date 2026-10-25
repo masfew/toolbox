@@ -6,6 +6,9 @@ name: Sketch
 
 on:
   push:
+    # Branches only: GitHub ignores paths on tag pushes, so without this every
+    # tool's release tag would rebuild Sketch.
+    branches: ['**']
     paths:
       - 'apps/sketch/**'
       - '.github/workflows/sketch.yml'
