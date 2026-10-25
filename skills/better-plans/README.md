@@ -42,7 +42,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
 
 **Claude does:**
 
-1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1.
+1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
 2. Asks you two questions with its question tool, before running anything:
    - whether to add the lines in [Install](#install) step 2 to `~/.claude/CLAUDE.md`, which make every session use the skill for plans
    - whether to install artifact-style too, the matching look for every other Artifact page (plans look the same either way)
@@ -140,7 +140,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `better-plans` folder inside it. The install copies the tool to `~/.claude/tools/better-plans`, so the unzipped folder can be deleted afterwards.
 
-If the tool's folder moves or is renamed (for example when the repo is reorganised), the install keeps working as it is. Rerunning `python install.py` from the new folder points `~/.claude/tools/better-plans` there and takes out anything stale.
+If the tool's folder moves or is renamed (for example when a `git pull` reorganises the repo), what happens depends on how it was installed. In a git clone, `~/.claude/tools/better-plans` is a link to the folder, so the link is left pointing at a folder that's gone and the tool's hooks and skills stop working until you rerun `python install.py` from the new folder, which points the link there and takes out anything stale. An install made as a copy (an unzipped release, or `--copy`) keeps working as it is, and rerunning from the new folder switches it over.
 
 Published plans keep the `plan.css` and `plan.js` they were published with, so an update doesn't change them. Ask Claude to refresh a plan's look to give it the new files.
 
@@ -154,7 +154,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/better-plans` instead.
 
-This removes everything the install added: the skill link, the hook in `~/.claude/settings.json`, the lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/better-plans` and its install record, even if the install was made from a different folder. It leaves artifact-style installed; remove that with its own `install.py --remove`. Your published plans stay as they are, and the hook's log, `~/.claude/better-plans-session-resume.log`, can be deleted by hand.
+This removes everything the install added: the skill link, the hook in `~/.claude/settings.json`, the lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/better-plans` and its install record, even if the install was made from a different folder. `~/.claude/settings.json` and `~/.claude/CLAUDE.md` are backed up before they're changed, and the `settings.json.bak-<date>-<time>` and `CLAUDE.md.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them. It leaves artifact-style installed; remove that with its own `install.py --remove`. Your published plans stay as they are, and the hook's log, `~/.claude/better-plans-session-resume.log`, can be deleted by hand.
 
 ## Troubleshooting
 

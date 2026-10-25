@@ -43,9 +43,10 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install get-to
 
 **Claude does:**
 
-1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 2.
+1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 2. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
 2. Tells you the install makes Get to the Point the default output style for every new session, in every project, and runs it once you agree.
 3. Runs `python install.py` from `instructions/get-to-the-point`, and checks it ends with **Setup complete**.
+4. Checks that `~/.claude/output-styles/get-to-the-point.md` exists and that `outputStyle` in `~/.claude/settings.json` is `"Get to the Point"`.
 
 **You do:**
 
@@ -128,16 +129,14 @@ python install.py
 
 Where the style is a link, `git pull` alone updates it, and the rerun just checks everything. Where it's a copy (Windows without Developer Mode), the rerun is what refreshes it.
 
-To stay on a version, check out its tag instead, then rerun the install (PowerShell or bash):
+To stay on a version, check out its tag instead, then rerun the install. Releases up to get-to-the-point-v1.0.1 have the tool's folder at the root of the repo, as this example does; for a later release, use `cd instructions/get-to-the-point` instead (PowerShell or bash):
 
 ```bash
 git fetch --tags
 git checkout get-to-the-point-v1.0.0
-cd instructions/get-to-the-point
+cd get-to-the-point
 python install.py
 ```
-
-Releases up to get-to-the-point-v1.0.1 have the tool's folder at the root of the repo, so after checking out one of those, it's `cd get-to-the-point` instead.
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. If you installed from a release zip instead, unzip the new release and run `python install.py` from its `get-to-the-point` folder: it replaces the earlier copy.
 
@@ -153,7 +152,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/get-to-the-point` instead.
 
-This removes the style from `~/.claude/output-styles`, and `~/.claude/tools/get-to-the-point` with its install record, even if you installed from a different folder. If `outputStyle` in `~/.claude/settings.json` still says `"Get to the Point"`, it goes back to the style you had before the install, or is taken out so new sessions use Claude Code's default style. If you've switched to another style since, that setting is left alone. `settings.json` is backed up before it's changed, and deleted only if the install created it and nothing else is in it.
+This removes the style from `~/.claude/output-styles`, and `~/.claude/tools/get-to-the-point` with its install record, even if you installed from a different folder. If `outputStyle` in `~/.claude/settings.json` still says `"Get to the Point"`, it goes back to the style you had before the install, or is taken out so new sessions use Claude Code's default style. If you've switched to another style since, that setting is left alone. `settings.json` is backed up before it's changed, and deleted only if the install created it and nothing else is in it. The `settings.json.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them.
 
 ## Troubleshooting
 

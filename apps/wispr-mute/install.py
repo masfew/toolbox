@@ -37,7 +37,10 @@ install added that this one doesn't, so a rerun from a moved or renamed
 folder leaves nothing stale behind.
 
 --remove stops both, takes out the Startup shortcuts, ~/.claude/tools/wispr-mute
-and the record.
+and the record, and deletes the notification app ID the helper registered (the
+Toolbox.WisprMute key under HKCU Software/Classes/AppUserModelId). It leaves Wispr
+Flow's own tray icon pin (HKCU Control Panel/NotifyIconSettings): that's Wispr
+Flow's setting, not this tool's.
 
 Ends with "Setup complete" (or "Removed"), or exits with status 1 and a
 FAILED message saying what to do.
@@ -116,6 +119,9 @@ BLOCK_END = f"<!-- {TOOL_NAME}: end -->"
 OUTSIDE_PACKAGE = "TOOLBOX_INSTALL_OUTSIDE_PACKAGE"  # set on the rerun outside the app's package
 COPY_IGNORE = shutil.ignore_patterns(".git", "__pycache__", "*.pyc")
 WISPR_FLOW = Path(os.environ.get("LOCALAPPDATA", "")) / "WisprFlow" / "Wispr Flow.exe"
+# The app ID the helper registers at run time for its notifications (APP_ID in tray_pin.py).
+APP_ID = "Toolbox.WisprMute"
+APP_ID_KEY = r"Software\Classes\AppUserModelId"
 
 
 def fail(msg):
@@ -863,7 +869,25 @@ def install(mode, instructions=None):
     print_human_steps()
 
 
+def remove_app_id(app_id=APP_ID):
+    """Deletes the notification app ID key the helper registered, and nothing else under it.
+    A missing key is fine. Wispr Flow's tray icon pin is left alone: it's Wispr Flow's setting."""
+    if os.name != "nt":
+        return
+    import winreg
+    path = APP_ID_KEY + "\\" + app_id
+    try:
+        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+        print("removed the notification app ID HKCU\\" + path)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        print(f"couldn't delete HKCU\\{path} ({e}). It only sets the name and icon of the "
+              "notifications, so it does no harm to leave.")
+
+
 def remove():
+    # differs from the template: also deletes the notification app ID the helper registered
     os.chdir(Path.home())  # so this script's own folder can be deleted if it's the installed copy
     record = read_record()
     if STARTUP or (record and record.get("startup")):
@@ -883,6 +907,7 @@ def remove():
             remove_startup(startup_dir() / f"{name}.lnk" for name, _script, _arguments in STARTUP)
     remove_instructions(bool(record and record.get("claude_md_created")))
     remove_stable_dir()
+    remove_app_id()
     if RECORD_FILE.exists():
         RECORD_FILE.unlink()
     try:

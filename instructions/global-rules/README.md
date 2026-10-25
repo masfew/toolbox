@@ -46,10 +46,10 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install global
 
 **Claude does:**
 
-1. Checks Python 3.9 or newer is installed (`python --version`, or `python3 --version` on macOS and Linux), and asks before installing it if it's missing, with the command from [Install](#install) step 1.
+1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all. Then `python --version` (`python3 --version` on macOS and Linux) shows the version.
 2. Tells you what each rule file changes (the table in [What It Does](#what-it-does)), and asks which you want: all of them, or only some.
 3. Shows you the import lines the install adds to `~/.claude/CLAUDE.md` (in [Install](#install) step 2) and asks whether to add them.
-4. Runs the install from `instructions/global-rules` (`python3` on macOS and Linux), with `--only` followed by the names of the files you chose, and checks it ends with **Setup complete** and that `~/.claude/CLAUDE.md` now holds one line per file. For example, all three:
+4. Runs the install from `instructions/global-rules` (`python3` on macOS and Linux), with `--only` followed by the names of the files you chose, and checks it ends with **Setup complete** and that `~/.claude/CLAUDE.md` now holds one line per file. For example, all three (PowerShell, or bash with `python3` on macOS and Linux):
 
    ```bash
    python install.py --instructions --only decide-dont-ask subagent-model-and-effort next-step-buttons
@@ -143,7 +143,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `global-rules` folder inside it. The install copies the tool to `~/.claude/tools/global-rules`, so the unzipped folder can be deleted afterwards.
 
-If the tool's folder moves or is renamed (for example when the repo is reorganised), the install keeps working as it is. Rerunning `python install.py` from the new folder points `~/.claude/tools/global-rules` there and takes out anything stale.
+If the tool's folder moves or is renamed (for example when a `git pull` reorganises the repo), what happens depends on how it was installed. In a git clone, `~/.claude/tools/global-rules` is a link to the folder, so the link is left pointing at a folder that's gone and the tool's hooks and skills stop working until you rerun `python install.py` from the new folder, which points the link there and takes out anything stale. An install made as a copy (an unzipped release, or `--copy`) keeps working as it is, and rerunning from the new folder switches it over.
 
 ## Uninstall
 
@@ -155,7 +155,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/global-rules` instead.
 
-This removes everything the install added: the import lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/global-rules` and its install record, even if the install was made from a different folder. Your own additions outside the marked block stay, and so do the `CLAUDE.md.bak-<date>` backups the install made before each change; delete those yourself if you don't need them.
+This removes everything the install added: the import lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/global-rules` and its install record, even if the install was made from a different folder. Your own additions outside the marked block stay, and so do the `CLAUDE.md.bak-<date>-<time>` backups the install made before each change; delete those yourself if you don't need them.
 
 ## Troubleshooting
 

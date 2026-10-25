@@ -1,6 +1,6 @@
 # Wispr Mute
 
-Version 1.0.0. See the [changes](#changes) at the end.
+Version 1.0.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -45,7 +45,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install wispr-
 
 **Claude does:**
 
-1. Checks this is Windows, that Python 3.9 or newer is installed, and that Wispr Flow is installed (`%LOCALAPPDATA%\WisprFlow\Wispr Flow.exe` exists). It asks before installing Python if it's missing, with the command from [Install](#install) step 1. It can't install Wispr Flow for you.
+1. Checks this is Windows, that Python 3.9 or newer is installed, and that Wispr Flow is installed (`%LOCALAPPDATA%\WisprFlow\Wispr Flow.exe` exists). On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all. It asks before installing Python if it's missing, with the command from [Install](#install) step 1. It can't install Wispr Flow for you.
 2. Tells you the install adds two Startup shortcuts, so Wispr Mute starts every time you sign in, and starts it now, and waits for your yes.
 3. Runs `python install.py` from `apps/wispr-mute`, and checks it ends with **Setup complete**.
 4. Runs `python wispr_mute.py status` from `apps/wispr-mute`, and checks it says the helper and the tray icon are running.
@@ -53,7 +53,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install wispr-
 **You do:**
 
 1. In Wispr Flow, turn off **Settings → System → Sound → Mute music while dictating**, so the two don't both mute.
-2. Drag the Wispr Mute tray icon out of the **^** overflow next to the clock. Or turn it on under **Settings → Personalization → Taskbar → Other system tray icons**, where it's listed as **Python**.
+2. Move the Wispr Mute tray icon out of the **^** overflow. The **^** is the small up-arrow at the left end of the taskbar's icon area, next to the clock: click it and a small panel of hidden icons opens. Drag the Wispr Mute icon (Wispr Flow's icon with a badge) from the panel onto the taskbar, beside the clock, and let go. Or turn it on under **Settings → Personalization → Taskbar → Other system tray icons**, where it's listed as **Python**.
 3. Dictate something with music playing, to check it goes silent and comes back.
 
 ## Install
@@ -67,7 +67,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install wispr-
    - when the Claude desktop app runs the install, reruns itself outside the app's package, so the shortcuts land in your real Startup folder. It says so when it does.
    - saves what it installed to `~/.claude/tools/wispr-mute.install.json`
 3. In Wispr Flow, turn off **Settings → System → Sound → Mute music while dictating**.
-4. Windows 11 puts new tray icons in the **^** overflow. Drag the Wispr Mute icon next to the clock, or turn it on under **Settings → Personalization → Taskbar → Other system tray icons**, where it's listed as **Python** (the tray icon runs under `pythonw.exe`).
+4. Windows 11 puts new tray icons in the **^** overflow, the small up-arrow at the left end of the taskbar's icon area, next to the clock. Click it, then drag the Wispr Mute icon from the panel onto the taskbar beside the clock. Or turn it on under **Settings → Personalization → Taskbar → Other system tray icons**, where it's listed as **Python** (the tray icon runs under `pythonw.exe`).
 
 The install is safe to rerun, and restarts both. Your settings in `~/.claude/wispr-mute/` are kept.
 
@@ -150,6 +150,8 @@ At sign-in (the Startup shortcut runs `run --at-login`), if Wispr Flow isn't run
 
 The helper and the tray icon run as separate processes, so a problem in the tray icon can't affect muting. The tray icon only reads and writes the config, and notices changes made elsewhere within a second.
 
+Only one Wispr Mute runs per Windows sign-in. The helper and the tray icon each hold a named mutex and listen for a named stop event in Windows' per-sign-in `Local\` namespace, which every copy of the tool shares. So installing, rerunning or removing a second copy, for example one in a test folder, stops the one that's running. Restart it afterwards from its **Wispr Mute** and **Wispr Mute tray** Startup shortcuts, or rerun `install.py` from the copy you want to keep.
+
 Everything the install adds points at `~/.claude/tools/wispr-mute`, never at the folder you installed from: both Startup shortcuts run the scripts there, from `~/.claude` as their working folder. Only `~/.claude/tools/wispr-mute` itself points at that folder (or holds a copy of it). The install also keeps a record of what it added, in `~/.claude/tools/wispr-mute.install.json`. A rerun reads it first and takes out anything the earlier install added that the new one doesn't, and `--remove` reads it to undo everything.
 
 ## Updating
@@ -175,7 +177,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `wispr-mute` folder inside it. The install copies the tool to `~/.claude/tools/wispr-mute`, so the unzipped folder can be deleted afterwards.
 
-If the tool's folder moves or is renamed, the install keeps working as it is. Rerunning `python install.py` from the new folder points `~/.claude/tools/wispr-mute` there and takes out anything stale.
+If the tool's folder moves or is renamed, for example when a `git pull` moves it, a link install stops working: `~/.claude/tools/wispr-mute` (a junction to the folder, the default in a git clone) then points at nothing, and the Startup shortcuts fail at the next sign-in until you rerun `python install.py` from the new folder. A copy install (from a release zip, or with `--copy`) keeps working, since it doesn't depend on the original folder. Rerunning the install from the new folder points `~/.claude/tools/wispr-mute` there and takes out anything stale.
 
 ## Uninstall
 
@@ -187,7 +189,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/wispr-mute` instead.
 
-This stops the helper and the tray icon, and removes the Startup shortcuts, `~/.claude/tools/wispr-mute` and its install record. It leaves your settings and logs in `~/.claude/wispr-mute/`; delete that folder yourself if you don't need it. Turn Wispr Flow's own muting back on if you want it, under **Settings → System → Sound → Mute music while dictating**.
+This stops the helper and the tray icon, and removes the Startup shortcuts, `~/.claude/tools/wispr-mute`, its install record and the notification app ID the helper registered (`Toolbox.WisprMute` under `HKCU\Software\Classes\AppUserModelId`). It leaves your settings and logs in `~/.claude/wispr-mute/`; delete that folder yourself if you don't need it. It also leaves Wispr Flow's tray icon pinned next to the clock (the `IsPromoted` value under `HKCU\Control Panel\NotifyIconSettings`): that's Windows' pin preference for Wispr Flow's own icon, not something Wispr Mute created, so it stays. To unpin it, drag Wispr Flow's icon back into the **^** overflow. Turn Wispr Flow's own muting back on if you want it, under **Settings → System → Sound → Mute music while dictating**.
 
 ## Troubleshooting
 
@@ -209,4 +211,5 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.0.1: `--remove` now also deletes the `Toolbox.WisprMute` notification app ID that Wispr Mute registers in the registry and used to leave behind. Wispr Flow's tray icon pin stays on purpose, and Uninstall now says so. The README also says that only one Wispr Mute runs per sign-in (installing, rerunning or removing a second copy stops the running one), where the **^** overflow is and how to drag the icon out of it, and that a link install needs `python install.py` rerun after the tool's folder moves. Rerun `python install.py` to update; nothing else to do.
 - 1.0.0: First public version.

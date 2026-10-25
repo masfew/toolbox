@@ -39,17 +39,18 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install sketch
 
 **Claude does:**
 
-1. Checks this is Windows (in PowerShell, `$env:OS` is `Windows_NT`) and that Python 3.9 or newer is installed.
+1. Checks this is Windows (in PowerShell, `$env:OS` is `Windows_NT`) and that Python 3.9 or newer is installed. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
 2. Checks the build tools: `git --version`, `node --version` (24 or newer), `rustc -vV` (its `host:` line ends in `msvc`), the C++ build tools and WebView2. `python install.py` checks all five before it builds anything and names any that are missing, so running it is also the check. If `rustc` says rustup has no default toolchain, Rust counts as missing its toolchain: the fix is `rustup default stable-msvc` (a download of about 300 MB).
 3. If any are missing, asks you once, listing each with its winget command from [Install](#install), step 1, whether to install them, or to use the ready-made installer from the latest sketch release instead, which needs none of the build tools. With your yes it installs them one at a time. If a tool still isn't found afterwards, Claude Code's own PATH is out of date: restart Claude Code and ask again. For the release installer, it downloads it with `gh release download --repo github.com/masfew/toolbox --pattern "*.exe" <latest sketch-v tag>` when the GitHub CLI is installed, after asking; otherwise you download it (You do, step 1).
 4. Tells you the install adds Sketch to the Start menu, makes `.sktch` files open in it, adds **Edit with Sketch** to pictures' right-click menu and lists it in Open with, and waits for your yes.
-5. Waits for you to close Sketch if it's open (You do, step 2), then runs `python install.py` from `apps/sketch`, or `python install.py --setup <path to the downloaded installer>`, and checks it ends with **Setup complete**. The first build takes 3 to 10 minutes.
+5. Waits for you to close Sketch if it's open (You do, step 3), then runs `python install.py` from `apps/sketch`, or `python install.py --setup <path to the downloaded installer>`, and checks it ends with **Setup complete**. The first build takes 3 to 10 minutes.
 
 **You do:**
 
-1. Only if a build tool's install shows a Windows admin prompt (the Visual Studio C++ build tools do), approve it. Only if you chose the release installer and Claude can't download it: download `Sketch_<version>_x64-setup.exe` from the latest sketch release on the [releases page](https://github.com/masfew/toolbox/releases) and tell Claude where it is.
-2. Before Claude runs the installer: close every Sketch window, if you have an older Sketch installed.
-3. Afterwards, open Sketch from the Start menu and check it starts.
+1. Only if a build tool's install shows a Windows admin prompt (the Visual Studio C++ build tools do), approve it. Only if you chose the release installer and Claude can't download it: download `Sketch_<version>_x64-setup.exe` from the latest sketch release on the [releases page](https://github.com/masfew/toolbox/releases) and tell Claude where it is. Windows SmartScreen may warn about that installer, since it isn't signed: in the blue window, choose **More info**, then **Run anyway**.
+2. Only if a build tool still isn't found after Claude installed it: fully quit and reopen Claude Code, then ask Claude to install Sketch again.
+3. Before Claude runs the installer: close every Sketch window, if you have an older Sketch installed.
+4. Afterwards, open Sketch from the Start menu and check it starts.
 
 ## Install
 
@@ -63,7 +64,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install sketch
    | Visual Studio 2022 C++ build tools | `winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"` |
    | WebView2 runtime | `winget install Microsoft.EdgeWebView2Runtime` |
 
-2. **Or skip building:** download `Sketch_<version>_x64-setup.exe` from the latest sketch release on the [releases page](https://github.com/masfew/toolbox/releases), and pass it to the installer with `--setup`. Windows SmartScreen may warn about it, since it isn't signed. A copy installed this way doesn't update itself; install a newer release the same way.
+2. **Or skip building:** download `Sketch_<version>_x64-setup.exe` from the latest sketch release on the [releases page](https://github.com/masfew/toolbox/releases), and pass it to the installer with `--setup`. Windows SmartScreen may warn about it, since it isn't signed: in the blue window, choose **More info**, then **Run anyway**. A copy installed this way doesn't update itself; install a newer release the same way.
 3. **Close Sketch**, if an older copy is open. The installer stops while it's running.
 4. From this folder, run `python install.py` (or `python install.py --setup <path to the installer>`) in PowerShell. It:
    - checks the build tools and names the winget command for any that are missing
@@ -254,6 +255,8 @@ Updates need the same build tools as the install, on the PATH. The build log is 
 
 ### Run It
 
+From the `apps/sketch` folder (PowerShell):
+
 ```powershell
 npm install
 npm run tauri dev
@@ -262,6 +265,8 @@ npm run tauri dev
 The drawing code also runs in a plain browser for testing: `npm run dev`, then open http://127.0.0.1:1420. Native features (file dialogs, Explorer file paste, clipboard with transparency, drag and drop of files from Explorer) only work in the Tauri app.
 
 ### Build and Check
+
+From the `apps/sketch` folder (PowerShell):
 
 ```powershell
 npm test                 # unit tests (history, viewport, tiles, BMP encoder, keys, search, colours, tools, fill, selection box, text, shapes, snapping, mark-up, adjustments, whiteboards)

@@ -49,8 +49,9 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install usage-
 
 **Claude does:**
 
-1. Checks `claude --version` is 2.1.275 or newer. If it's older, it stops and tells you to update Claude Code.
+1. Checks `claude --version` is 2.1.275 or newer. If `claude` isn't on the PATH, it tries `~/.local/bin/claude` (`claude.exe` on Windows), where Claude Code's native installer puts it and where `install.py` looks too. If it's older than 2.1.275, it stops and tells you to update Claude Code. For the clone install it also checks Python 3.9 or newer, and asks before installing it if it's missing. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
 2. Runs `python install.py` from `extensions/usage-rings` (the [From a clone](#from-a-clone-of-the-repo) install), and checks it ends with **Setup complete**. Asked to install it without a clone, it runs the [Quick Start](#quick-start) command instead.
+3. Checks that `claude plugin list` shows `usage-rings@toolbox` enabled.
 
 **You do:**
 
@@ -155,16 +156,14 @@ python install.py
 
 Then start a new session, or run `/reload-plugins` in an open one.
 
-To stay on a version, check out its tag in a clone, then rerun the install (PowerShell or bash):
+To stay on a version, check out its tag in a clone, then rerun the install. Releases up to usage-rings-v2.0.0 have the tool's folder at the root of the repo, as this example does; for a later release, use `cd extensions/usage-rings` instead (PowerShell or bash):
 
 ```bash
 git fetch --tags
 git checkout usage-rings-v1.0.0
-cd extensions/usage-rings
+cd usage-rings
 python install.py
 ```
-
-Releases up to usage-rings-v2.0.0 have the tool's folder at the root of the repo, so after checking out one of those, it's `cd usage-rings` instead.
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install.
 
@@ -187,7 +186,7 @@ claude plugin marketplace remove toolbox
 
 Skip the second command if you use other plugins from the `toolbox` marketplace. Sessions that are already open keep the rings until they restart.
 
-Whichever way you installed, `claude plugin uninstall usage-rings@toolbox` removes the mod itself.
+Whichever way you installed, `claude plugin uninstall usage-rings@toolbox` removes the mod itself. Claude Code keeps an orphaned copy of it under `~/.claude/plugins/cache/toolbox/usage-rings/<version>/`, marked with an `.orphaned_at` file, and cleans that up itself.
 
 ## Troubleshooting
 

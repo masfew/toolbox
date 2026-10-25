@@ -48,7 +48,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install artifa
 
 **Claude does:**
 
-1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1.
+1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
 2. Shows you the two lines the install adds to `~/.claude/CLAUDE.md` (in [Install](#install) step 2), which make every session load the skill before writing an Artifact page, and asks whether you want them.
 3. Runs `python install.py --instructions` from `skills/artifact-style` if you said yes, or `python install.py --no-instructions` if you said no (`python3` on macOS and Linux), and checks it ends with **Setup complete** and that `~/.claude/skills/artifact-style/SKILL.md` now exists.
 
@@ -131,7 +131,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `artifact-style` folder inside it. The install copies the tool to `~/.claude/tools/artifact-style`, so the unzipped folder can be deleted afterwards.
 
-If the tool's folder moves or is renamed (for example when the repo is reorganised), the install keeps working as it is. Rerunning `python install.py` from the new folder points `~/.claude/tools/artifact-style` there and takes out anything stale.
+If the tool's folder moves or is renamed (for example when a `git pull` reorganises the repo), what happens depends on how it was installed. In a git clone, `~/.claude/tools/artifact-style` is a link to the folder, so the link is left pointing at a folder that's gone and the tool's hooks and skills stop working until you rerun `python install.py` from the new folder, which points the link there and takes out anything stale. An install made as a copy (an unzipped release, or `--copy`) keeps working as it is, and rerunning from the new folder switches it over.
 
 ## Uninstall
 
@@ -143,7 +143,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/artifact-style` instead.
 
-This removes everything the install added: the skill link, the lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/artifact-style` and its install record, even if the install was made from a different folder.
+This removes everything the install added: the skill link, the lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/artifact-style` and its install record, even if the install was made from a different folder. `~/.claude/CLAUDE.md` is backed up before the lines come out, and the `CLAUDE.md.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them.
 
 ## Troubleshooting
 

@@ -43,7 +43,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install instru
 
 **Claude does:**
 
-1. Checks Python 3.9 or newer is installed (`python --version`, or `python3 --version` on macOS and Linux), and asks before installing it if it's missing, with the command from [Install](#install) step 1.
+1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all. Then `python --version` (`python3 --version` on macOS and Linux) shows the version.
 2. Tells you the install adds a hook to `~/.claude/settings.json` (the [edit guard](#how-it-works)) and asks whether you also want the line it can add to `~/.claude/CLAUDE.md` (shown in [Install](#install)).
 3. Runs `python install.py --instructions` or `python install.py --no-instructions` from `skills/instruction-manager` (`python3` on macOS and Linux), following your answer, and checks it ends with **Setup complete**.
 4. Runs `python -I ~/.claude/skills/instruction-manager/scripts/check_skill.py --show-config` and tells you which skill folders it covers. If your own skills live somewhere other than `~/.claude/skills`, it offers to add their folders to `~/.claude/instruction-manager.json` ([Configuration](#configuration)).
@@ -51,7 +51,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install instru
 **You do:**
 
 1. Start a new Claude Code session, so it loads the skill and the hook.
-2. For trigger tests, if you haven't used the Claude Code CLI before: run `claude` in a terminal and type `/login` once.
+2. For trigger tests, if you haven't used the Claude Code CLI before: run `claude` in a terminal and type `/login` once. The trigger tests start their own Claude Code sessions through the CLI, and a CLI that isn't signed in ends each of them at once. `/login` opens a page in your browser to sign in to your Claude account; when you've finished there, the terminal tells you you're logged in, and you can close it with `/exit`. If `claude` already runs for you without asking you to sign in, skip this.
 
 ## Install
 
@@ -156,7 +156,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `instruction-manager` folder inside it. The install copies the tool to `~/.claude/tools/instruction-manager`, so the unzipped folder can be deleted afterwards.
 
-If the tool's folder moves or is renamed (for example when the repo is reorganised), the install keeps working as it is. Rerunning `python install.py` from the new folder points `~/.claude/tools/instruction-manager` there and takes out anything stale.
+If the tool's folder moves or is renamed (for example when a `git pull` reorganises the repo), what happens depends on how it was installed. In a git clone, `~/.claude/tools/instruction-manager` is a link to the folder, so the link is left pointing at a folder that's gone and the tool's hooks and skills stop working until you rerun `python install.py` from the new folder, which points the link there and takes out anything stale. An install made as a copy (an unzipped release, or `--copy`) keeps working as it is, and rerunning from the new folder switches it over.
 
 ## Uninstall
 
@@ -168,7 +168,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/instruction-manager` instead.
 
-This removes everything the install added, including the skill link, the edit guard hook, the `CLAUDE.md` lines, `~/.claude/tools/instruction-manager` and its install record, even if the install was made from a different folder. It leaves your config file, `~/.claude/instruction-manager.json`, and each skill's `evals/` folder in place. Delete them yourself if you don't need them.
+This removes everything the install added, including the skill link, the edit guard hook, the `CLAUDE.md` lines, `~/.claude/tools/instruction-manager` and its install record, even if the install was made from a different folder. It leaves your config file, `~/.claude/instruction-manager.json`, and each skill's `evals/` folder in place. Delete them yourself if you don't need them. `~/.claude/settings.json` and `~/.claude/CLAUDE.md` are backed up before they're changed, and the `settings.json.bak-<date>-<time>` and `CLAUDE.md.bak-<date>-<time>` backups it and the install made stay in place; delete those yourself too.
 
 ## Troubleshooting
 
