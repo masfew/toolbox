@@ -1,7 +1,7 @@
 {
   "name": "sketch",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "check:speed": "node scripts/speed-check.mjs",
     "check:fuzz": "node scripts/fuzz-check.mjs",
     "check:update": "node scripts/update-check.mjs",
+    "check:uninstall": "node scripts/uninstall-check.mjs",
     "perf": "node scripts/perf.mjs",
     "dev:hooks": "node scripts/dev-update.mjs --hooks",
     "dev:update": "node scripts/dev-update.mjs"

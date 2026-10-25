@@ -6,7 +6,10 @@ rerun builds and installs this folder's current version.
 
     python install.py                build Sketch and install it
     python install.py --setup PATH   install a downloaded Sketch_x.y.z_x64-setup.exe instead of building
-    python install.py --remove       uninstall Sketch and undo everything the install added
+    python install.py --remove       uninstall Sketch and undo everything the install added,
+                                     and remove Sketch's data folder (settings, autosaves, add-ons)
+    python install.py --remove --keep-data
+                                     the same, but keep the data folder
 
 Close Sketch first: the install stops if it's running.
 
@@ -35,9 +38,13 @@ origin/main gets a newer commit that changes Sketch's folder (git pull, or a
 push of your own); see the README's Updates section.
 
 --remove runs Sketch's own uninstaller silently, which removes the program,
-its shortcuts, file types and Explorer menu items, then removes
-~/.claude/tools/sketch and the record. Your autosaves and settings in
-%LOCALAPPDATA%/app.sketch.desktop are left; the end of the output says where.
+its shortcuts, file types and Explorer menu items, and Sketch's data folder,
+%LOCALAPPDATA%/app.sketch.desktop: settings, autosaves (including pictures
+never saved), waiting captures, update builds and the Remove Background
+add-on. Then it removes ~/.claude/tools/sketch and the record. With
+--keep-data the uninstaller is told to keep the data folder (/KEEPDATA), and
+the end of the output says where it is. An uninstaller from before Sketch
+1.2.0 always keeps it, so --remove then removes it itself.
 
 Ends with "Setup complete" (or "Removed"), or exits with status 1 and a
 FAILED message saying what to do.
@@ -913,8 +920,9 @@ def run_setup(setup):
     print(f"installed Sketch in {INSTALL_DIR}")
 
 
-def run_uninstaller():
-    """Runs Sketch's own uninstaller silently, and waits for it to finish."""
+def run_uninstaller(keep_data):
+    """Runs Sketch's own uninstaller silently, and waits for it to finish. It removes the data folder
+    unless told /KEEPDATA."""
     import winreg
     command = registry_value(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY, "UninstallString")
     if not command:
@@ -927,7 +935,7 @@ def run_uninstaller():
         fail(f"Sketch's uninstaller ({uninstaller}) is missing. Delete {INSTALL_DIR} and its Start menu "
              "entry yourself.")
     print("running Sketch's uninstaller silently...")
-    subprocess.run([uninstaller, "/S"], capture_output=True, text=True)
+    subprocess.run([uninstaller, "/S"] + ["/KEEPDATA"] * keep_data, capture_output=True, text=True)
     # The uninstaller copies itself elsewhere and returns at once, so wait for it to finish.
     for _ in range(120):
         if not registry_value(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY, "UninstallString"):
@@ -936,6 +944,26 @@ def run_uninstaller():
         time.sleep(1)
     fail("Sketch's uninstaller didn't finish within 2 minutes. Uninstall Sketch from Settings > Apps, "
          "then rerun.")
+
+
+def remove_data_dir():
+    """Removes Sketch's data folder, as its uninstaller does from 1.2.0 on (an older one leaves it). The
+    update build's folder is a git worktree of the clone Sketch was built from, so that clone's record
+    of it is pruned once the folder is gone. Files still in use (Sketch closing) get 5 seconds."""
+    if not DATA_DIR.exists():
+        return
+    worktree = DATA_DIR / "build" / "sketch-update-build"
+    common = ""
+    if (worktree / ".git").exists():
+        common = output(["git", "-C", str(worktree), "rev-parse", "--path-format=absolute", "--git-common-dir"])
+    for _ in range(20):
+        shutil.rmtree(DATA_DIR, ignore_errors=True)
+        if not DATA_DIR.exists():
+            print(f"removed Sketch's data folder {DATA_DIR}")
+            break
+        time.sleep(0.25)
+    if common:
+        output(["git", "--git-dir", common, "worktree", "prune"])
 
 
 # --- Install and remove ----------------------------------------------------
@@ -978,8 +1006,8 @@ def install(mode, instructions=None):
     print_human_steps()
 
 
-def remove():
-    # differs from the template: also says where Sketch's own data folder is left
+def remove(keep_data=False):
+    # differs from the template: also says what happened to Sketch's own data folder
     os.chdir(Path.home())  # so this script's own folder can be deleted if it's the installed copy
     record = read_record()
     if STARTUP or (record and record.get("startup")):
@@ -1008,9 +1036,12 @@ def remove():
     print(f"\nRemoved {TOOL_NAME}.")
     if CONFIG_FILE.exists():
         print(f"Your config is still at {CONFIG_FILE}. Delete it if you don't need it.")
-    if DATA_DIR.exists():
-        print(f"Your autosaves, settings and update builds are still in {DATA_DIR}. "
+    if keep_data and DATA_DIR.exists():
+        print(f"Your settings, autosaves and the Remove Background add-on are kept in {DATA_DIR}. "
               "Delete it if you don't need them.")
+    elif DATA_DIR.exists():
+        print(f"Some of Sketch's data was still in use and is left in {DATA_DIR}. "
+              "Delete it once Sketch has closed.")
 
 
 def main():
@@ -1023,8 +1054,10 @@ def main():
     action.add_argument("--link", action="store_const", const="link", dest="action",
                         help="link ~/.claude/tools to this folder, even outside a git clone")
     action.add_argument("--remove", action="store_const", const="remove", dest="action",
-                        help="undo everything the install added")
+                        help="undo everything the install added, and remove Sketch's data folder")
     p.add_argument("--setup", help="install this Sketch_x.y.z_x64-setup.exe (from a release) instead of building one")
+    p.add_argument("--keep-data", action="store_true",
+                   help="with --remove: keep Sketch's settings, autosaves and add-ons in its data folder")
     if INSTRUCTIONS:
         choice = p.add_mutually_exclusive_group()
         choice.add_argument("--instructions", action="store_const", const=True, dest="instructions",
@@ -1032,6 +1065,8 @@ def main():
         choice.add_argument("--no-instructions", action="store_const", const=False, dest="instructions",
                             help=f"leave the tool's lines out of {CLAUDE_MD}, or take them out")
     args = p.parse_args()
+    if args.keep_data and args.action != "remove":
+        p.error("--keep-data only goes with --remove")
     SETUP_PATH = str(Path(args.setup).resolve()) if args.setup else None
     if os.environ.get(OUTSIDE_PACKAGE):  # the rerun outside the app's package: its output goes back through a file
         sys.stdout = sys.stderr = open(os.environ[OUTSIDE_PACKAGE], "w", encoding="utf-8", buffering=1)
@@ -1047,10 +1082,13 @@ def main():
         fail(f"{SETUP_PATH} doesn't exist.")
     if (STARTUP or NEEDS_REAL_APPDATA) and in_app_package():
         rerun_outside_app_package([f"--{args.action}"] * bool(args.action)
-                                  + ["--setup", SETUP_PATH] * bool(SETUP_PATH))
+                                  + ["--setup", SETUP_PATH] * bool(SETUP_PATH)
+                                  + ["--keep-data"] * args.keep_data)
     if args.action == "remove":
-        run_uninstaller()
-        remove()
+        run_uninstaller(args.keep_data)
+        if not args.keep_data:
+            remove_data_dir()
+        remove(args.keep_data)
     else:
         check_dependencies()
         run_setup(Path(SETUP_PATH))

@@ -49,6 +49,90 @@
 ; The capture helper's sign-in entry (src-tauri/src/helper.rs).
 !define SKETCH_RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 
+!include LogicLib.nsh
+
+; Sketch's data folder ($LOCALAPPDATA\<identifier>, data_dir() in src-tauri/src/lib.rs) holds its
+; settings, autosaves, waiting captures, update builds, the Remove Background add-on and WebView2's
+; profile. Uninstalling removes it, unless the person ticks the box on the confirm page or passes
+; /KEEPDATA. The box is Tauri's own "Delete the application data" box, relabelled "Keep ..." in
+; windows/English.nsh, so ticked now means keep; NSIS_HOOK_PREUNINSTALL turns Tauri's removal off and
+; NSIS_HOOK_POSTUNINSTALL does its own. An update (/UPDATE) keeps it, and so does an uninstaller run in
+; place, which is how Tauri's installer removes the installed version before installing again (a
+; normal uninstall copies itself to the temp folder first). check:uninstall runs this on scratch folders.
+Var SketchKeepData
+Var SketchConfirmText
+!define MUI_CUSTOMFUNCTION_UNGUIINIT un.SketchGuiInit
+!define MUI_UNCONFIRMPAGE_TEXT_TOP "$SketchConfirmText"
+; windows/English.nsh replaces Tauri's language file whole, so a string a newer Tauri adds fails the
+; build instead of showing as blank text. Copy the new string from Tauri's English.nsh.
+!pragma warning error 6040
+
+Function un.SketchGuiInit
+  ${If} $EXEDIR == $INSTDIR
+    StrCpy $SketchConfirmText "Sketch will be uninstalled from the folder below before it's installed again. Its settings, autosaves and Remove Background add-on stay."
+  ${Else}
+    StrCpy $SketchConfirmText "Sketch will be uninstalled from the folder below, along with its settings, autosaves (including pictures you haven't saved) and Remove Background add-on. To keep those, tick the box."
+  ${EndIf}
+FunctionEnd
+
+; Sets $SketchKeepData to 1 when this uninstall keeps the data folder. $DeleteAppDataCheckboxState is
+; the box (empty when the page didn't show: silent, passive).
+!macro SKETCH_KEEP_DATA_CHOICE
+  StrCpy $SketchKeepData 0
+  ${If} $DeleteAppDataCheckboxState = 1
+  ${OrIf} $UpdateMode = 1
+  ${OrIf} $EXEDIR == $INSTDIR
+    StrCpy $SketchKeepData 1
+  ${EndIf}
+  ClearErrors
+  ${GetOptions} $CMDLINE "/KEEPDATA" $R0
+  ${IfNot} ${Errors}
+    StrCpy $SketchKeepData 1
+  ${EndIf}
+!macroend
+
+; Removes a data folder. An update build's folder (build\sketch-update-build) is a git worktree of
+; the clone Sketch was built from, so that clone's record of it is pruned once the folder is gone
+; (best effort: nothing happens without git). Sketch and its helpers are closed by now, but WebView2's
+; processes let go of its profile a moment later, so this tries for up to 5 seconds.
+!macro SKETCH_REMOVE_DATA DIR
+  StrCpy $R3 ""
+  ${If} ${FileExists} "${DIR}\build\sketch-update-build\.git"
+    nsExec::ExecToStack 'git -C "${DIR}\build\sketch-update-build" rev-parse --path-format=absolute --git-common-dir'
+    Pop $R0 ; the exit code, or "error" if git didn't start
+    Pop $R1
+    ${If} $R0 == 0
+      ${Do}
+        StrCpy $R2 $R1 1 -1
+        ${If} $R2 == "$\n"
+        ${OrIf} $R2 == "$\r"
+          StrCpy $R1 $R1 -1
+        ${Else}
+          ${Break}
+        ${EndIf}
+      ${Loop}
+      StrCpy $R3 $R1
+    ${EndIf}
+  ${EndIf}
+  StrCpy $R4 0
+  ${Do}
+    RMDir /r "${DIR}"
+    ${IfNot} ${FileExists} "${DIR}\*.*"
+    ${OrIf} $R4 >= 20
+      ${Break}
+    ${EndIf}
+    Sleep 250
+    IntOp $R4 $R4 + 1
+  ${Loop}
+  ${If} ${FileExists} "${DIR}\*.*"
+    DetailPrint "Some of Sketch's data is still in use and was left in ${DIR}"
+  ${EndIf}
+  ${If} $R3 != ""
+    nsExec::Exec 'git --git-dir="$R3" worktree prune'
+    Pop $R0
+  ${EndIf}
+!macroend
+
 ; Tells every running capture helper to quit (its hidden window's class is SketchCaptureHelper), so
 ; its file can be replaced or deleted. Each quits as soon as its window closes.
 !macro SKETCH_STOP_HELPERS
@@ -170,6 +254,8 @@
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
+  !insertmacro SKETCH_KEEP_DATA_CHOICE
+  StrCpy $DeleteAppDataCheckboxState 0 ; Tauri's own removal stays off: NSIS_HOOK_POSTUNINSTALL does it
   !insertmacro SKETCH_STOP_HELPERS
   Delete "$INSTDIR\sketch-capture.exe"
   ; An update runs the old uninstaller with /UPDATE: keep everything, the new install writes it again.
@@ -202,5 +288,18 @@
     Delete "$SMPROGRAMS\Capture with Sketch.lnk"
     DeleteRegValue HKCU "${SKETCH_RUN_KEY}" "Sketch Capture"
     System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+  ${EndIf}
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+  ${If} $SketchKeepData <> 1
+  ${AndIf} $UpdateMode <> 1
+    !ifdef SKETCH_TEST_DATA_DIR ; check:uninstall's scratch data folder
+      !insertmacro SKETCH_REMOVE_DATA "${SKETCH_TEST_DATA_DIR}"
+    !else
+      SetShellVarContext current
+      !insertmacro SKETCH_REMOVE_DATA "$LOCALAPPDATA\${BUNDLEID}"
+      RMDir /r "$APPDATA\${BUNDLEID}"
+    !endif
   ${EndIf}
 !macroend

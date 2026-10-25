@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.1.0. See the [changes](#changes) at the end.
+Version 1.2.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -87,7 +87,7 @@ Uninstalling removes all of this.
 
 ## Configuration
 
-There's no config file. Everything is set inside Sketch: Settings (Ctrl+,) holds the colour theme, keyboard shortcuts (including the capture key), where files opened from Explorer go, what happens after a capture, and the paste key. Settings, autosaves and update builds live in `%LOCALAPPDATA%\app.sketch.desktop`.
+There's no config file. Everything is set inside Sketch: Settings (Ctrl+,) holds the colour theme, keyboard shortcuts (including the capture key), where files opened from Explorer go, what happens after a capture, and the paste key. Settings, autosaves and update builds live in `%LOCALAPPDATA%\app.sketch.desktop`, which uninstalling removes unless you choose to keep it ([Uninstall](#uninstall)).
 
 | Setting | What it does | Default | Example |
 |---|---|---|---|
@@ -158,7 +158,7 @@ The Adjust menu changes the selection, or the whole current pixel layer when not
 
 The model works best on photos with one clear subject; on flat drawings and icons it may keep the wrong part. A 1080p picture takes about half a second.
 
-The first time, Sketch offers a one-time download of 193 MB: the U²-Net model (Apache 2.0) and Microsoft's ONNX Runtime (MIT), which runs it. They come from the `sketch-cutout-1` release on the repo's [releases page](https://github.com/masfew/toolbox/releases), Sketch checks each file's fingerprint (SHA-256) before using it, and they're kept in `%LOCALAPPDATA%\app.sketch.desktop\cutout`. Delete that folder to free the space; Sketch offers the download again next time.
+The first time, Sketch offers a one-time download of 193 MB: the U²-Net model (Apache 2.0) and Microsoft's ONNX Runtime (MIT), which runs it. They come from the `sketch-cutout-1` release on the repo's [releases page](https://github.com/masfew/toolbox/releases), Sketch checks each file's fingerprint (SHA-256) before using it, and they're kept in `%LOCALAPPDATA%\app.sketch.desktop\cutout`. Delete that folder to free the space; Sketch offers the download again next time. Uninstalling Sketch removes it too, unless you choose to keep your data.
 
 ### Whiteboards
 
@@ -235,7 +235,7 @@ Every action lives in one command list (`src/app/commandList.ts`) that feeds the
 
 The install folder, `%LOCALAPPDATA%\Sketch`, holds a small launcher as `sketch.exe`, `current.json` naming the version to open, and one `app-<commit>` folder per version (the current one and the one before it are kept). The Start menu, taskbar pins, Explorer's "Edit with Sketch" and the capture key's sign-in entry all go through the launcher. If the newest version can't open, the launcher opens the one before and Sketch says so. The capture helper, `sketch-capture.exe`, runs from the version folder whenever a capture key is set, with a sign-in entry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
-Settings, autosaves, waiting captures, update builds and the Remove Background add-on live in `%LOCALAPPDATA%\app.sketch.desktop`, apart from the install folder, so uninstalling never takes them.
+Settings, autosaves, waiting captures, update builds, the Remove Background add-on and WebView2's profile (the web view's own storage) live in `%LOCALAPPDATA%\app.sketch.desktop`, apart from the install folder, so an update never touches them. Uninstalling removes that folder unless you keep it: the uninstaller's confirm page has a **Keep my settings, autosaves and Remove Background add-on** box, unticked, and a silent uninstall keeps it only with `/KEEPDATA` (`install.py --remove --keep-data` passes it). An update build's folder is a git worktree of your clone, so the uninstaller also prunes the clone's record of it (`git worktree prune`). When Tauri's installer is run over an installed Sketch and removes it first ("Uninstall before installing"), it runs the uninstaller in place, and the uninstaller keeps the data folder then, since Sketch is being installed again. The uninstaller only ever removes the default data folder, never one set with `SKETCH_DATA_DIR` or `--data-dir`.
 
 `install.py` changes nothing else. It builds in this folder (`node_modules`, `dist` and `src-tauri\target`, all ignored by git), runs Sketch's own NSIS installer, and puts this tool at `~/.claude/tools/sketch` with a record of the install in `~/.claude/tools/sketch.install.json`, so `--remove` works from there even if this folder is gone.
 
@@ -285,6 +285,7 @@ npm run check:native     # drives the built app: paste, copy, shapes copy and pa
 npm run check:speed      # 4K paste under 200 ms, brush at 60 fps on 4K, and timings of mark-up, copy and autosave
 npm run check:fuzz       # random edits with undo and redo for 3 minutes (add 60 for the hour-long run)
 npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher
+npm run check:uninstall  # what uninstalling does with the data folder, on scratch folders: removed by default with its worktree pruned, kept with the box, /KEEPDATA, an update or a reinstall, files in use
 npm run perf             # times every everyday action against its budget and the last full audit; npm run perf -- brush save for just some
 ```
 
@@ -292,7 +293,7 @@ The full performance audit's process, budgets and results are in [docs/performan
 
 CI runs the first four on `windows-latest` when anything in this folder changes (`.github/workflows/sketch.yml` at the repo's root).
 
-The `check:` scripts after `check:startup` run locally only. They open the release app, drive its page through WebView2's debugging port (127.0.0.1 only) and fill the Open and Save dialogs with window messages, so they don't move the mouse. They replace whatever is on the clipboard. The capture checks cover the screens with the capture overlay for a moment and show a magenta test window; they drive the overlay with window messages, not the mouse. They never change your mouse speed (the app changes a stand-in file instead). Each gives the app its own data folder (`SKETCH_DATA_DIR`), so they never touch your autosaves or updates or reach a Sketch you have open. The helpers are in `scripts/native-driver.mjs`. The Remove Background checks download the add-on from `check:native`'s own local server, which serves it from the folder in `SKETCH_TEST_CUTOUT_FILES` (holding `onnxruntime.dll` and `u2net.onnx`) or from your installed Sketch's copy; with neither, they're skipped. `check:update` lays out a scratch install folder of its own and never touches the installed Sketch, its shortcuts or the registry. Its quiet restart step waits for 2 seconds with no keyboard or mouse input, so leave the PC alone while it runs.
+The `check:` scripts after `check:startup` run locally only. They open the release app, drive its page through WebView2's debugging port (127.0.0.1 only) and fill the Open and Save dialogs with window messages, so they don't move the mouse. They replace whatever is on the clipboard. The capture checks cover the screens with the capture overlay for a moment and show a magenta test window; they drive the overlay with window messages, not the mouse. They never change your mouse speed (the app changes a stand-in file instead). Each gives the app its own data folder (`SKETCH_DATA_DIR`), so they never touch your autosaves or updates or reach a Sketch you have open. The helpers are in `scripts/native-driver.mjs`. The Remove Background checks download the add-on from `check:native`'s own local server, which serves it from the folder in `SKETCH_TEST_CUTOUT_FILES` (holding `onnxruntime.dll` and `u2net.onnx`) or from your installed Sketch's copy; with neither, they're skipped. `check:update` lays out a scratch install folder of its own and never touches the installed Sketch, its shortcuts or the registry. `check:uninstall` builds a stand-in uninstaller from the uninstall steps in `src-tauri/windows/hooks.nsh` that only removes a scratch data folder, and takes a few seconds. Its quiet restart step waits for 2 seconds with no keyboard or mouse input, so leave the PC alone while it runs.
 
 ### Developer Updates
 
@@ -343,7 +344,17 @@ python install.py --remove
 
 If this folder is gone, run the same command from `~/.claude/tools/sketch` instead, or uninstall Sketch from Settings > Apps.
 
-This runs Sketch's own uninstaller silently, which removes the program, its Start menu entry, file types, Explorer menu items, jump list and the capture helper's sign-in entry, then removes `~/.claude/tools/sketch` and its install record. Your settings, autosaves and update builds stay in `%LOCALAPPDATA%\app.sketch.desktop`; delete that folder yourself if you don't need them. The build output in this folder (`node_modules`, `dist`, `src-tauri\target`) also stays; `git clean -fdx` in this folder removes it.
+This runs Sketch's own uninstaller silently, which removes the program, its Start menu entry, file types, Explorer menu items, jump list and the capture helper's sign-in entry, and everything Sketch keeps in `%LOCALAPPDATA%\app.sketch.desktop`: your settings, autosaves (including pictures you never saved), waiting captures, update builds and the Remove Background add-on. Then it removes `~/.claude/tools/sketch` and its install record.
+
+**To keep your data** (to install Sketch again later, or to keep unsaved pictures), add `--keep-data`:
+
+```powershell
+python install.py --remove --keep-data
+```
+
+In Settings > Apps, tick **Keep my settings, autosaves and Remove Background add-on** on the uninstaller's first page; leaving it unticked removes them. A Sketch first installed before 1.2.0 still has its old uninstaller, which always keeps the data folder (updates never replace the uninstaller): `install.py --remove` removes the folder itself then, and rerunning `python install.py` once gives Settings > Apps the new uninstaller.
+
+If a file in the data folder is still in use (Sketch closing), the rest goes, and `install.py --remove` says what was left. The build output in this folder (`node_modules`, `dist`, `src-tauri\target`) also stays; `git clean -fdx` in this folder removes it.
 
 ## Troubleshooting
 
@@ -364,5 +375,6 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.2.0: Uninstalling removes everything Sketch keeps on the PC by default: settings, autosaves, waiting captures, update builds and the Remove Background add-on. Tick **Keep my settings, autosaves and Remove Background add-on** in the uninstaller, or use `python install.py --remove --keep-data`, to keep them. Updates and reinstalls never touch them.
 - 1.1.0: Remove Background cuts out the person or object in front onto a new layer, with a model that runs on the PC. Its first use downloads a 193 MB add-on.
 - 1.0.0: First release in the toolbox. Updates follow the clone and folder Sketch was built from, wherever they are; a build worktree left by another clone is made again instead of failing. `install.py` builds and installs it, or installs a release's installer with `--setup`, and releases attach the installer.
