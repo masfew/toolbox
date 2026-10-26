@@ -126,6 +126,12 @@ pub fn close_all() {
     }
 }
 
+/// Whether any of this process's notifications is still on screen or waiting in the notification
+/// centre.
+pub fn showing() -> bool {
+    !NOTES.lock().unwrap().is_empty()
+}
+
 /// For checks: acts as if the newest notification was clicked. False when there's none.
 pub fn click_newest() -> bool {
     let Some(note) = NOTES.lock().unwrap().pop() else { return false };

@@ -16,11 +16,15 @@
 //! capture. Sketch changes it and restarts the helper, which reads it as it starts.
 //! The helper's hidden window, found by its class and a title made from the data folder, is how
 //! Sketch and the installer find it and tell it to quit.
+//!
+//! A Sketch of a newer version replaces a helper of an older one (`start`). A helper with a capture's
+//! notification out hands over by itself once the notification has gone (`retire_later`), since the
+//! click reaches only the helper that showed it.
 
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 
@@ -279,6 +283,13 @@ pub fn start(dir: &Path) -> Result<(), String> {
         if !other {
             return Ok(());
         }
+        // Stopping a helper takes its notifications away, so the first capture after an update
+        // (which starts this Sketch hidden) lost its notification at once until 1.5.2. A helper
+        // with one out says so and hands over to this version once it has gone.
+        #[cfg(windows)]
+        if imp::ask_to_retire(&tag(dir)) {
+            return Ok(());
+        }
         stop(dir);
     }
     let exe = helper_exe().filter(|p| p.exists()).ok_or("sketch-capture.exe is missing, so capture keys can't work. Reinstall Sketch.")?;
@@ -478,6 +489,17 @@ pub const WM_TEST_CLICK: u32 = 0x8000 + 4;
 pub const WM_TEST_DISMISS: u32 = 0x8000 + 5;
 /// Answers how many Left Shift hooks (F16) are installed.
 pub const WM_TEST_WATCHING: u32 = 0x8000 + 6;
+/// From a Sketch of another version (not test-only): make way for that version's helper. Answers 1
+/// when the helper will once its notifications have gone, 0 when Sketch should stop it now. Helpers
+/// from before 1.5.2 don't know it and answer 0.
+const WM_RETIRE: u32 = 0x8000 + 7;
+/// Posted by a retiring helper to itself once its last notification has gone.
+const WM_HAND_OVER: u32 = 0x8000 + 8;
+
+/// A Sketch of another version is waiting for this helper to make way.
+static RETIRING: AtomicBool = AtomicBool::new(false);
+/// This helper is handing over: once it has ended, the launcher starts the current version's.
+static HANDING_OVER: AtomicBool = AtomicBool::new(false);
 
 /// `sketch-capture.exe`'s whole life: hold the keys until told to quit.
 pub fn main() {
@@ -512,8 +534,9 @@ pub fn main() {
         imp::com_init();
         clean_old(&dir);
         // Notifications left in the notification centre by Sketch before F12, which do nothing
-        // when clicked. Not for checks, which mustn't touch the user's.
-        if crate::data_dir_override().is_none() {
+        // when clicked. Not for checks, which mustn't touch the user's, nor while a Sketch runs,
+        // whose own capture notifications still work.
+        if crate::data_dir_override().is_none() && !instance::running(&dir.to_string_lossy()) {
             note::clear_centre();
         }
         let _ = HELPER.set(Helper { dir: dir.clone(), sketch });
@@ -524,6 +547,9 @@ pub fn main() {
         // Keys another app took are no reason to stop updating.
         imp::serve(&tag, keys, updates, &error_path(&dir));
         note::close_all();
+        if HANDING_OVER.load(Ordering::SeqCst) {
+            start_successor();
+        }
     }
     #[cfg(not(windows))]
     let _ = (keys, sketch);
@@ -585,13 +611,16 @@ fn deliver(shot: Shot) {
         return;
     }
     let waiting = file.clone();
-    let shown = note::show(&h.dir, id, &shot, move |event| match event {
-        note::Event::Clicked => hand_to_sketch(&waiting, &["--from-note".into(), format!("--reveal={id}")]),
-        note::Event::Closed => {
-            let _ = fs::remove_file(&waiting);
-            // The hidden Sketch waiting for this notification closes with it.
-            let _ = send_to_sketch(&h.dir, &h.sketch, &[format!("--drop-hidden={id}")]);
+    let shown = note::show(&h.dir, id, &shot, move |event| {
+        match event {
+            note::Event::Clicked => hand_to_sketch(&waiting, &["--from-note".into(), format!("--reveal={id}")]),
+            note::Event::Closed => {
+                let _ = fs::remove_file(&waiting);
+                // The hidden Sketch waiting for this notification closes with it.
+                let _ = send_to_sketch(&h.dir, &h.sketch, &[format!("--drop-hidden={id}")]);
+            }
         }
+        hand_over_if_free();
     });
     if !shown {
         open_in_sketch(&file, false);
@@ -602,6 +631,55 @@ fn deliver(shot: Shot) {
     // is waiting for an older capture, which this one replaces.
     hand_to_sketch(&file, &["--from-note".into(), format!("--hidden={id}")]);
     note::close_older(id);
+}
+
+/// A Sketch of another version asks this helper to make way (`WM_RETIRE`). With no notification out,
+/// it answers no and Sketch stops it as before. With one out it answers yes, keeps the keys, and
+/// hands over once the last notification has gone (`hand_over_if_free`). Outside the install layout
+/// there's no launcher to start the next helper, so Sketch stops it as before.
+fn retire_later() -> bool {
+    if crate::layout::install_root().is_none() || !note::showing() {
+        return false;
+    }
+    RETIRING.store(true, Ordering::SeqCst);
+    // The last notification may have gone since `showing`.
+    hand_over_if_free();
+    true
+}
+
+/// A retiring helper with no notification left hands over (`WM_HAND_OVER`), once.
+fn hand_over_if_free() {
+    if !RETIRING.load(Ordering::SeqCst) || note::showing() || HANDING_OVER.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    #[cfg(windows)]
+    if let Some(h) = HELPER.get() {
+        imp::post_hand_over(&tag(&h.dir));
+    }
+}
+
+/// A retiring helper's last step: the launcher waits for this helper to end, then starts the current
+/// version's helper, so the two never hold the keys at once.
+fn start_successor() {
+    let Some(root) = crate::layout::install_root() else { return };
+    let mut cmd = std::process::Command::new(root.join(crate::layout::LAUNCHER_EXE));
+    cmd.arg("--wait-pid").arg(std::process::id().to_string()).arg("--capture-helper");
+    if let Some(over) = crate::data_dir_override() {
+        cmd.arg(format!("--data-dir={}", over.to_string_lossy()));
+    }
+    // The install folder, never a version folder, which a working folder would keep from being deleted.
+    cmd.current_dir(root);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Out of the helper's job, if it has one, so it outlives this helper.
+        cmd.creation_flags(0x0100_0000);
+        if cmd.spawn().is_ok() {
+            return;
+        }
+        cmd.creation_flags(0);
+    }
+    let _ = cmd.spawn();
 }
 
 /// Hands a command line to the running Sketch over its pipe, as a second launch would, without
@@ -661,10 +739,27 @@ mod imp {
     use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, HOT_KEY_MODIFIERS, MOD_NOREPEAT};
     use windows::Win32::UI::WindowsAndMessaging::*;
 
-    use super::{on_keys, CLASS, WM_TEST_CLICK, WM_TEST_DISMISS, WM_TEST_KEYS, WM_TEST_WATCHING};
+    use super::{on_keys, CLASS, WM_HAND_OVER, WM_RETIRE, WM_TEST_CLICK, WM_TEST_DISMISS, WM_TEST_KEYS, WM_TEST_WATCHING};
 
     pub fn find(tag: &str) -> Option<HWND> {
         unsafe { FindWindowW(&HSTRING::from(super::CLASS), &HSTRING::from(tag)).ok().filter(|h| !h.is_invalid()) }
+    }
+
+    /// Asks the running helper to make way for this version's (`WM_RETIRE`): true when it will hand
+    /// over by itself once its notifications have gone.
+    pub fn ask_to_retire(tag: &str) -> bool {
+        let Some(hwnd) = find(tag) else { return false };
+        let mut answer = 0usize;
+        let sent = unsafe { SendMessageTimeoutW(hwnd, WM_RETIRE, WPARAM(0), LPARAM(0), SMTO_ABORTIFHUNG, 2000, Some(&mut answer)) };
+        sent.0 != 0 && answer == 1
+    }
+
+    pub fn post_hand_over(tag: &str) {
+        if let Some(hwnd) = find(tag) {
+            unsafe {
+                let _ = PostMessageW(Some(hwnd), WM_HAND_OVER, WPARAM(0), LPARAM(0));
+            }
+        }
     }
 
     pub fn stop(tag: &str) {
@@ -718,7 +813,8 @@ mod imp {
                 std::thread::spawn(|| crate::note::dismiss_newest());
             }
             WM_TEST_WATCHING if test_hooks() => return LRESULT(crate::shift_tap::watching() as isize),
-            WM_CLOSE => {
+            WM_RETIRE => return LRESULT(super::retire_later() as isize),
+            WM_HAND_OVER | WM_CLOSE => {
                 let _ = DestroyWindow(hwnd);
             }
             WM_ENDSESSION if wparam.0 != 0 => {

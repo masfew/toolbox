@@ -13,8 +13,10 @@
 //     reads latest.json from a local server. An equal build, a bad signature, a tampered zip and a
 //     cut-off download are all refused and leave nothing behind; a newer release downloads with the
 //     spinner showing, is staged as a version folder (current.json names it) and the ready icon
-//     shows; with Sketch closed, the capture helper downloads the next one; and a clone install's
-//     leftover build worktree is cleared. release-files.mjs writes the first latest.json.
+//     shows; with Sketch closed, the capture helper downloads the next one; the first capture after
+//     that keeps its notification while the new version waits, and the old helper hands over once
+//     the notification goes; and a clone install's leftover build worktree is cleared.
+//     release-files.mjs writes the first latest.json.
 // Usage: node scripts/update-remote-check.mjs
 //
 // Needs this checkout's release build (npm run tauri build -- --no-bundle). It also builds a
@@ -29,7 +31,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { unzipSync, zipSync } from 'fflate';
 import { buildInfo } from './build-info.mjs';
-import { attach, ps, sleep } from './native-driver.mjs';
+import { attach, captureTarget, helper, notesInCentre, overlay, ps, sleep } from './native-driver.mjs';
 
 const sketchDir = resolve('.');
 const repo = execFileSync('git', ['-C', sketchDir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
@@ -131,6 +133,7 @@ const running = (install) =>
     .filter(Boolean)
     .map(Number);
 const helpers = (install) => ps(`Get-Process sketch-capture -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${install}\\*' } | ForEach-Object { $_.Id }; exit 0`).split(/\r?\n/).filter(Boolean);
+const helperPaths = (install) => ps(`Get-Process sketch-capture -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${install}\\*' } | ForEach-Object { $_.Path }; exit 0`).split(/\r?\n/).filter(Boolean);
 const stopAll = (install) => ps(`Get-Process sketch, sketch-capture -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${install}\\*' } | Stop-Process -Force; exit 0`);
 
 async function start(install, env) {
@@ -379,6 +382,39 @@ try {
     await waitUntil("the helper's download to be staged", () => readJson(join(rInstall, 'current.json'))?.folder === `app-${short(fakeB)}`, 30_000);
     // The first version folder stays while the helper runs from it; the next start of Sketch replaces the helper.
     expect(readJson(join(rInstall, 'current.json')).previous === `app-${short(fakeA)}`, `current.json: ${JSON.stringify(readJson(join(rInstall, 'current.json')))}`);
+  });
+
+  await check('With Sketch closed, the first capture after an update keeps its notification, and the old helper hands over to the new version once it goes', async () => {
+    // Long enough that only the dismissal below takes the notification away.
+    writeFileSync(join(rData, 'note-ms.txt'), '60000');
+    const newFolder = `\\${readJson(join(rInstall, 'current.json')).folder}\\`;
+    const [oldPath] = helperPaths(rInstall);
+    expect(oldPath && !oldPath.includes(newFolder), `The helper runs from ${oldPath}`);
+    const h = await helper.wait(work, rData);
+    const pid = helper.pid(work, h);
+    const target = await captureTarget(work, 200, 200, 400, 300);
+    try {
+      helper.keys(work, h);
+      const o = await overlay.find(work, pid);
+      overlay.drag(work, o, 210, 210, 409, 359);
+      await overlay.gone(work, o);
+    } finally {
+      target.child.kill();
+    }
+    // The capture starts the new version hidden, which until 1.5.2 stopped the old helper and took its notification away.
+    let hidden = 0;
+    await waitUntil('the hidden Sketch of the new version', () => (hidden = running(rInstall)[0] ?? 0), 20_000);
+    await sleep(4000);
+    expect(helper.find(work, rData) === h, 'The old helper was stopped with its notification out');
+    expect(notesInCentre(pid) === 1, `${notesInCentre(pid)} notifications in the notification centre`);
+    expect(running(rInstall).includes(hidden), 'The hidden Sketch closed');
+    helper.dismiss(work, h);
+    await waitUntil('the hidden Sketch to close', () => !running(rInstall).includes(hidden), 10_000);
+    await waitUntil("the new version's helper", () => {
+      const paths = helperPaths(rInstall);
+      return paths.length === 1 && paths[0].includes(newFolder);
+    }, 15_000);
+    expect(notesInCentre(pid) === 0, 'The notification is still in the notification centre');
   });
 } catch (e) {
   results.push(false);

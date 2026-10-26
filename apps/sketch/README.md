@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.5.1. See the [changes](#changes) at the end.
+Version 1.5.2. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -314,7 +314,7 @@ npm run check:startup    # median start-up must be under 1 second
 npm run check:native     # drives the built app: paste, copy, shapes copy and paste, file dialogs, fill, drag and drop, close prompt, Mica, colour theme, saved settings, the pointer over the picture, Clean up rough shapes, autosave and recovery, tabs, more than one window, Remove Background, mouse speed, screen capture, the capture helper and a new install's capture key, the Copy button
 npm run check:speed      # 4K paste under 200 ms, brush at 60 fps on 4K, and timings of mark-up, copy and autosave
 npm run check:fuzz       # random edits with undo and redo for 3 minutes (add 60 for the hour-long run)
-npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher; then (update-remote-check.mjs) fetching pushed commits, the capture helper's updates with no capture key and its background updates switch, and release downloads from a local server, signed with a key made for the check
+npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher; then (update-remote-check.mjs) fetching pushed commits, the capture helper's updates with no capture key and its background updates switch, release downloads from a local server, signed with a key made for the check, and the old helper handing over after the first capture of an update
 npm run check:uninstall  # what uninstalling does with the data folder, on scratch folders: removed by default with its worktree pruned, kept with the box, /KEEPDATA, an update or a reinstall, files in use
 npm run perf             # times every everyday action against its budget and the last full audit; npm run perf -- brush save for just some
 ```
@@ -408,6 +408,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.5.2: The first capture after Sketch updates itself while closed keeps its notification. Until now it vanished a moment after showing, because the updated Sketch replaced the capture helper that showed it; the old helper now waits for its notification to go before handing over.
 - 1.5.1: The capture notification stays as long as Windows' own notifications (5 seconds unless changed in Windows Settings, Accessibility, Visual effects) instead of going after 3 seconds.
 - 1.5.0: A closed Sketch now keeps itself up to date whether or not a capture key is set: the capture helper runs at sign-in for updates, and **Update in the background when Sketch is closed** in Settings (on by default, also after updating) turns that off. New installs start with **Alt+Shift+S** as the capture key, unless another app already uses it; installs updating from an older version keep their own capture key, or none.
 - 1.4.0: Every install keeps itself up to date with nothing to do. An install built from a clone fetches `origin/main` every 10 minutes and builds new commits with no `git pull`, so a push from any PC reaches it; the capture helper does this while Sketch is closed. An install from a release's installer downloads each new release, signed and checked, within about 5 minutes. `python install.py --dev` turns on the git hooks that update the PC you push from at once. A push that raises this README's version line now releases that version on its own.
