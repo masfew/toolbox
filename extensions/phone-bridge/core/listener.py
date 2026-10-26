@@ -187,7 +187,13 @@ def send(config, text, keyboard=None, reply_to=None, markup=None):
         body["reply_markup"] = markup
     if reply_to:
         body["reply_parameters"] = {"message_id": reply_to, "allow_sending_without_reply": True}
-    return call(config, "sendMessage", body)
+    reply = call(config, "sendMessage", body)
+    if not reply:
+        # No answer from Telegram (a timeout or other network error): send once more. If
+        # the first one got through and only its answer was lost, the reply shows twice,
+        # which beats a command that seems to hang.
+        reply = call(config, "sendMessage", body)
+    return reply
 
 
 def guarded(handler, *args):

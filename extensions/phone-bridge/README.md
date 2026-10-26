@@ -1,6 +1,6 @@
 # phone-bridge
 
-Version 1.2.3. See the [changes](#changes) at the end.
+Version 1.2.4. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -464,8 +464,8 @@ Some commands in the tool's folder show what the tool sees (PowerShell):
 | A message typed at the PC pushes, or a phone message doesn't | The presence watcher isn't running, or "notify me" is missing | `~/.claude/phone-bridge/presence.json` should have a `heartbeat` from the last few seconds (`last_real_input` is `null` until you touch the real keyboard or mouse after it starts). If it's stale, the next hook event starts it again, or rerun `install.py`. Add "notify me" to a phone message sent while you're also using the PC |
 | `failed: HTTP 401` in the log | The token is wrong or was revoked | Get a new one with `/revoke` in @BotFather, delete `telegram_token` from `~/.claude/phone-bridge.json` (otherwise the installer reuses the old one), and rerun `install.py` in your own terminal |
 | `failed: HTTP 403 Forbidden: bot was blocked by the user` or `failed: HTTP 400 Bad Request: chat not found` | The bot can't message you, because you blocked it or the chat ID is wrong | Unblock it, delete `telegram_chat_id` from the config, send the bot a message, and rerun `install.py` |
-| A slow send | About 1 in 4 sends take about 2.5 s, because the first connection attempt hung and was given up after 2 s | Nothing: they still arrive. A send counts as failed only if no address connects, or Telegram doesn't answer within 10 s; the log then shows just the error's type, such as `failed: TimeoutError` |
-| `/notify_me` (or any command) gets no reply | The listener isn't running, or another program is reading the bot | Check that `~/.claude/phone-bridge/listener.json` has a `heartbeat` from the last minute or so. If not, run `pythonw "$HOME\.claude\tools\phone-bridge\core\listener.py"` (or wait for the next hook event, which starts it). If it's running, look for `telegram` lines in `~/.claude/phone-bridge/phone-bridge.log`: `getUpdates failed: HTTP 409` means another program is reading the bot's messages (a second PC running this listener, or a tool polling the bot itself); stop that one |
+| A slow send | About 1 in 4 sends take about 2.5 s, because the first connection attempt hung and was given up after 2 s | Nothing: they still arrive. A send counts as failed only if no address connects, or Telegram doesn't answer within 10 s; the log then shows just the error's type, such as `failed: TimeoutError`. The bot's replies to your commands are sent once more after such a failure, so on a rare occasion a reply arrives twice |
+| `/notify_me` (or any command) gets no reply | The listener isn't running, another program is reading the bot, or Telegram didn't answer either send of the reply | Check that `~/.claude/phone-bridge/listener.json` has a `heartbeat` from the last minute or so. If not, run `pythonw "$HOME\.claude\tools\phone-bridge\core\listener.py"` (or wait for the next hook event, which starts it). If it's running, look for `telegram` lines in `~/.claude/phone-bridge/phone-bridge.log`: `getUpdates failed: HTTP 409` means another program is reading the bot's messages (a second PC running this listener, or a tool polling the bot itself); stop that one. Two `sendMessage failed: TimeoutError` lines in a row mean the command ran but both sends of its reply timed out; send the command again |
 | `/notify_me` leaves out a session that's working | Its turn started before this version of the hook was installed, or it isn't in the desktop app | Run `python notify/sessions.py --active` in the tool's folder. A session whose turn started before the hook was installed is found only if its desktop record changed in the last 6 hours; a session outside the desktop app only once it gets a new prompt |
 | `/archive` lists nothing, or a session you expect is missing | Something about the session is still going, or the app changed | Run `python notify/archive.py --list` for the reason per session. After a Claude desktop app update, the app's records or sidebar may have changed (see the note under [Requirements](#requirements)) |
 | /new_session: no reply and no session | The listener isn't running, or the launch failed | Check the listener is running (`~/.claude/phone-bridge/listener.json` has a recent `heartbeat`) and that `~/.claude/phone-bridge/phone-bridge.log` has a `telegram  -> start: exit 0` line. Then read `~/.claude/phone-bridge/launcher.log` |
@@ -487,6 +487,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.2.4: When Telegram doesn't answer the bot's reply to a command (a timeout or other network error), the bot sends it once more instead of leaving the command looking hung.
 - 1.2.3: A message that wakes a subagent which had already finished counts as background work until that subagent reports back, so the session no longer gets a ✅ push while it waits on it.
 - 1.2.2: The listener always starts outside the Claude desktop app's package, so its requests reach a local app even when a desktop session's hook started it.
 - 1.2.1: A new session that names no saved environment, with no `default_folder` set, now goes to the local app, which starts it in its own default folder, instead of the desktop app.

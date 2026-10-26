@@ -273,6 +273,47 @@ class Listener(unittest.TestCase):
         self.assertEqual(self.tc.saved_state("offset"), 9)
 
 
+class Replies(unittest.TestCase):
+    """The listener's replies when Telegram doesn't answer."""
+
+    def setUp(self):
+        self.tc = load_listener()
+        self.config = {"telegram_token": "x", "telegram_chat_id": 42}
+        self.calls = []
+        self.quiet = mock.patch.object(self.tc, "note", lambda *a: None)
+        self.quiet.start()
+
+    def tearDown(self):
+        self.quiet.stop()
+
+    def answers(self, *answers):
+        """Replaces Telegram with these answers in turn; an exception is raised."""
+        queued = iter(answers)
+
+        def fake(token, method, body):
+            self.calls.append(method)
+            answer = next(queued)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        return mock.patch.object(self.tc, "telegram_call", fake)
+
+    def test_a_timed_out_reply_is_sent_once_more(self):
+        with self.answers(TimeoutError(), (200, {"ok": True, "result": {"message_id": 9}})):
+            self.assertTrue(self.tc.send(self.config, "Done.")["ok"])
+        self.assertEqual(self.calls, ["sendMessage", "sendMessage"])
+
+    def test_only_one_retry(self):
+        with self.answers(TimeoutError(), TimeoutError()):
+            self.assertEqual(self.tc.send(self.config, "Done."), {})
+        self.assertEqual(len(self.calls), 2)
+
+    def test_an_error_from_telegram_is_not_retried(self):
+        with self.answers((400, {"ok": False, "description": "Bad Request"})):
+            self.assertFalse(self.tc.send(self.config, "Done.")["ok"])
+        self.assertEqual(len(self.calls), 1)
+
+
 class ListenerEnvironments(Listener):
     """The listener with the launcher's full entry: environment buttons and taps."""
 
