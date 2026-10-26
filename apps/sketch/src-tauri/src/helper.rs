@@ -428,6 +428,8 @@ pub fn main() {
             note::clear_centre();
         }
         let _ = HELPER.set(Helper { dir: dir.clone(), sketch });
+        // F16: with no Sketch window open, the helper keeps the install up to date.
+        crate::update::run_in_helper(dir.clone());
         if let Err(e) = imp::serve(&tag, mods, vk) {
             let _ = fs::write(error_path(&dir), e);
         }

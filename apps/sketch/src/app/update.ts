@@ -1,7 +1,8 @@
 /**
  * In-app updates (Silent Updates, F6; the Rust side is `src-tauri/src/update.rs`): checks for a newer
  * build at start, on focus, every few minutes, and whenever a build script says a build started or
- * finished (`scripts/ping-sketch.mjs`); a check is also what starts a background build. A finished
+ * finished (`scripts/ping-sketch.mjs`) or a fetch brought new commits (F16); a check is also what
+ * starts a background build, or for a release install a download of the new release. A finished
  * build waits as a new version folder that the next start of Sketch opens. While one builds, the
  * status bar shows a spinner by the version number; once it's ready, a small icon (F11) and the Help
  * menu's Restart to Update; Sketch also restarts into it by itself while nobody is using the PC.
@@ -24,14 +25,14 @@ export const update = {
   restarting: false,
 };
 
-/** Builds from a git checkout get updates; dev servers and the browser build don't. */
-const enabled = platform.isTauri && !import.meta.env.DEV && !!__SKETCH_BUILD__.commit && !!__SKETCH_BUILD__.repo;
+/** Builds from a git checkout and release builds get updates; dev servers and the browser build don't. */
+const enabled = platform.isTauri && !import.meta.env.DEV && !!__SKETCH_BUILD__.commit && (!!__SKETCH_BUILD__.repo || __SKETCH_BUILD__.channel === 'release');
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 async function check(): Promise<void> {
   try {
-    const status = await platform.updateStatus(__SKETCH_BUILD__.repo, __SKETCH_BUILD__.path, __SKETCH_BUILD__.commit);
+    const status = await platform.updateStatus();
     const was = `${update.ready?.commit}|${update.building}`;
     update.ready = status.ready;
     update.building = status.ready ? null : status.building;

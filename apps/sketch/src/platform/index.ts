@@ -397,8 +397,9 @@ export interface UpdateStatus {
   building: string | null;
 }
 
-export function updateStatus(repo: string, path: string, commit: string): Promise<UpdateStatus> {
-  return invoke<UpdateStatus>('update_status', { repo, path, commit });
+/** Rust reads the build stamp itself (`stamp.rs`), so the capture helper can check without a page. */
+export function updateStatus(): Promise<UpdateStatus> {
+  return invoke<UpdateStatus>('update_status');
 }
 
 /** Restart to Update: every window saves itself, then Sketch restarts into the new version. */

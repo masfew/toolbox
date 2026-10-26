@@ -5,4 +5,5 @@ src-tauri/gen/
 *.log
 .startup-probe*
 src-tauri/windows/version.nsh
+src-tauri/stamp.json
 perf-results/

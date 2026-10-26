@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.3.0. See the [changes](#changes) at the end.
+Version 1.4.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -12,14 +12,14 @@ A fast, simple paint app for Windows: as quick to open as Microsoft Paint, with 
 
 - Windows 11, 64-bit. Windows 10 should work (without the Mica background) but is untested. macOS and Linux aren't supported.
 - Python 3.9 or newer, for the installer.
-- To build Sketch from this folder (the usual install, and what lets it update itself):
+- To build Sketch from this folder (the usual install, which builds its own updates):
   - Git
   - Node 24 or newer
   - Rust from rustup, with its MSVC toolchain (the default on Windows)
   - the Visual Studio 2022 C++ build tools
   - the WebView2 runtime (built into Windows 11)
   - about 4 GB of free disk space for the build
-- None of the build tools are needed to install the ready-made installer from a release instead (Install, step 2), but that copy doesn't update itself.
+- None of the build tools are needed to install the ready-made installer from a release instead (Install, step 2). That copy updates itself by downloading each new release.
 - Claude Code is only needed to install it by asking Claude. Sketch itself doesn't use Claude.
 
 ## Quick Start
@@ -43,7 +43,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install sketch
 2. Checks the build tools: `git --version`, `node --version` (24 or newer), `rustc -vV` (its `host:` line ends in `msvc`), the C++ build tools and WebView2. `python install.py` checks all five before it builds anything and names any that are missing, so running it is also the check. If `rustc` says rustup has no default toolchain, Rust counts as missing its toolchain: the fix is `rustup default stable-msvc` (a download of about 300 MB).
 3. If any are missing, asks you once, listing each with its winget command from [Install](#install), step 1, whether to install them, or to use the ready-made installer from the latest sketch release instead, which needs none of the build tools. With your yes it installs them one at a time. If a tool still isn't found afterwards, Claude Code's own PATH is out of date: restart Claude Code and ask again. For the release installer, it downloads it with `gh release download --repo github.com/masfew/toolbox --pattern "*.exe" <latest sketch-v tag>` when the GitHub CLI is installed, after asking; otherwise you download it (You do, step 1).
 4. Tells you the install adds Sketch to the Start menu, makes `.sktch` files open in it, adds **Edit with Sketch** to pictures' right-click menu and lists it in Open with, and waits for your yes.
-5. Waits for you to close Sketch if it's open (You do, step 3), then runs `python install.py` from `apps/sketch`, or `python install.py --setup <path to the downloaded installer>`, and checks it ends with **Setup complete**. The first build takes 3 to 10 minutes.
+5. Waits for you to close Sketch if it's open (You do, step 3), then runs `python install.py` from `apps/sketch`, or `python install.py --setup <path to the downloaded installer>`, and checks it ends with **Setup complete**. The first build takes 3 to 10 minutes. When you've said you develop Sketch on this PC, it adds `--dev` ([Developer Updates](#developer-updates)), and reads out anything that step says is still missing.
 
 **You do:**
 
@@ -64,7 +64,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install sketch
    | Visual Studio 2022 C++ build tools | `winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"` |
    | WebView2 runtime | `winget install Microsoft.EdgeWebView2Runtime` |
 
-2. **Or skip building:** download `Sketch_<version>_x64-setup.exe` from the latest sketch release on the [releases page](https://github.com/masfew/toolbox/releases), and pass it to the installer with `--setup`. Windows SmartScreen may warn about it, since it isn't signed: in the blue window, choose **More info**, then **Run anyway**. A copy installed this way doesn't update itself; install a newer release the same way.
+2. **Or skip building:** download `Sketch_<version>_x64-setup.exe` from the latest sketch release on the [releases page](https://github.com/masfew/toolbox/releases), and pass it to the installer with `--setup`. Windows SmartScreen may warn about it, since it isn't signed: in the blue window, choose **More info**, then **Run anyway**. That warning shows once, for the downloaded installer: installs built from a clone and Sketch's own updates never show it. A copy installed this way updates itself by downloading each new release ([Updates](#updates)).
 3. **Close Sketch**, if an older copy is open. The installer stops while it's running.
 4. From this folder, run `python install.py` (or `python install.py --setup <path to the installer>`) in PowerShell. It:
    - checks the build tools and names the winget command for any that are missing
@@ -73,6 +73,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install sketch
    - runs Sketch's installer silently. It installs for your user only (no admin prompt) in `%LOCALAPPDATA%\Sketch`, with a Start menu entry. A local build carries no download mark, so SmartScreen doesn't stop it.
    - puts the tool at `~/.claude/tools/sketch` (a link to this folder in a git clone, a copy otherwise), so `--remove` also works from there
    - saves what it installed to `~/.claude/tools/sketch.install.json`
+   - with `--dev`, turns on the repo's git hooks, so each push from this PC updates its Sketch at once ([Developer Updates](#developer-updates)). Without it, a clone with no git hooks of its own gets one line naming `--dev`.
 5. Open Sketch from the Start menu.
 
 The install is safe to rerun: it builds this folder's current version and installs it over the one there, keeping your settings and autosaves.
@@ -249,11 +250,15 @@ Settings, autosaves, waiting captures, update builds, the Remove Background add-
 
 ### Updates
 
-A Sketch built from a git clone updates itself from that clone, silently, the way Discord and Slack do. The build stamps in which repo and which folder in it Sketch came from, so this works wherever the clone and Sketch's folder are. While Sketch is open, it checks the clone's `origin/main` at start, every 5 minutes, when its window gets focus and whenever a build starts or finishes (the build tells a running Sketch straight away), for a newer commit that changes Sketch's folder. `origin/main` moves when you `git pull` (or push your own commits), so pulling is all an update needs. When Sketch finds a newer commit, it builds it in the background, in a git worktree of its own under `%LOCALAPPDATA%\app.sketch.desktop\build` (never in your clone, so uncommitted work never ships), and the build keeps running if you close Sketch. The finished build goes into a new version folder beside the running one; nothing is installed and the running Sketch isn't touched. The next time Sketch opens, it's the new version, with no wait.
+A Sketch built from a git clone updates itself from that clone, silently, the way Discord and Slack do. The build stamps in which repo and which folder in it Sketch came from, so this works wherever the clone and Sketch's folder are. While Sketch is open, it checks the clone's `origin/main` at start, every 5 minutes, when its window gets focus and whenever a build starts or finishes (the build tells a running Sketch straight away), for a newer commit that changes Sketch's folder. It also fetches `origin/main` itself, at start and every 10 minutes, so a commit pushed from any machine reaches it within about 10 minutes with no `git pull`. The fetch only moves `origin/main`: your branch, checkout and uncommitted work stay as they are, and a fork's install follows the fork's `origin`. It never asks for a sign-in; a fetch that fails (offline, or a private fork with no saved sign-in) is noted once in the build log and tried again in 10 minutes. While no Sketch window is open, the capture helper (running whenever a capture key is set) does the same fetch and check, so a Sketch closed for days is already up to date the next time it opens. When Sketch finds a newer commit, it builds it in the background, in a git worktree of its own under `%LOCALAPPDATA%\app.sketch.desktop\build` (never in your clone, so uncommitted work never ships), and the build keeps running if you close Sketch. The finished build goes into a new version folder beside the running one; nothing is installed and the running Sketch isn't touched. The next time Sketch opens, it's the new version, with no wait.
 
 The version number (like v1.0.12) sits at the bottom right of the status bar and at the bottom of Settings; its last part counts the commits that changed Sketch's folder, so it goes up with every update. While a new version is building, a small spinning circle sits just in front of it. Once it's waiting, a small circle with an up arrow sits just in front of the version number, and the Help menu has **Restart to Update**, which keeps every open picture and window, restarts, and brings them back on the new version. A Sketch left open restarts into it by itself once nobody has touched the keyboard or mouse for 5 minutes (or the screen is locked), as long as no Sketch window is in front and nothing is half done (a dialog, typing, a capture waiting for its notification). Its windows come back with their pictures, in the same places, minimised if they were, without taking the focus. A failed build is tried again after the next commit.
 
-Updates need the same build tools as the install, on the PATH. The build log is `%LOCALAPPDATA%\app.sketch.desktop\build\build.log`. A Sketch installed from a release's installer has no clone to update from, so it never checks.
+Updates of a clone install need the same build tools as the install, on the PATH. The build log is `%LOCALAPPDATA%\app.sketch.desktop\build\build.log`.
+
+A Sketch installed from a release's installer has no clone or build tools, so it downloads its updates instead. At start, every 5 minutes and when its window gets focus (and from the capture helper while no window is open), it reads `latest.json` from the repo's `sketch-latest` release, a plain download rather than GitHub's rate-limited API. When that names a newer release, Sketch downloads its version folder (about 4 MB), checks that `latest.json` is signed by the release workflow's key and that the download matches the fingerprint (SHA-512) it gives, and stages it exactly as a build is staged, with the same spinner, update icon, **Restart to Update** and quiet restart. A new version reaches it within about 5 minutes of its release. A release no newer than the running one is never downloaded, and a download that's refused, cut off or fails is deleted and tried again at the next check; failures are noted once in the build log, and Sketch itself shows nothing.
+
+Installing the other kind over an install switches it: `python install.py` from a clone over a release install makes it a clone install, and a release's installer over a clone install makes it a release install. Each start clears what the other kind left in the build folder.
 
 ### Code Layout
 
@@ -292,7 +297,7 @@ npm run check:startup    # median start-up must be under 1 second
 npm run check:native     # drives the built app: paste, copy, shapes copy and paste, file dialogs, fill, drag and drop, close prompt, Mica, colour theme, saved settings, the pointer over the picture, Clean up rough shapes, autosave and recovery, tabs, more than one window, Remove Background, mouse speed, screen capture, the capture helper, the Copy button
 npm run check:speed      # 4K paste under 200 ms, brush at 60 fps on 4K, and timings of mark-up, copy and autosave
 npm run check:fuzz       # random edits with undo and redo for 3 minutes (add 60 for the hour-long run)
-npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher
+npm run check:update     # silent updates in a scratch install folder against a throwaway clone: the installer's layout, staging, the ready icon, the quiet restart, Restart to Update, the launcher; then (update-remote-check.mjs) fetching pushed commits, the capture helper's updates, and release downloads from a local server, signed with a key made for the check
 npm run check:uninstall  # what uninstalling does with the data folder, on scratch folders: removed by default with its worktree pruned, kept with the box, /KEEPDATA, an update or a reinstall, files in use
 npm run perf             # times every everyday action against its budget and the last full audit; npm run perf -- brush save for just some
 ```
@@ -305,7 +310,7 @@ The `check:` scripts after `check:startup` run locally only. They open the relea
 
 ### Developer Updates
 
-While you work on Sketch, a push can update your installed Sketch straight away, so the next time you open it you're already testing what you just pushed, with no wait for the in-app update. In a clone where the repo's git hooks are on (`git config core.hooksPath .github/hooks`, as the root README's "Before You Push" says), each push of `main` to `origin` hands the commit to `scripts/dev-update.mjs` once the pre-push check has passed. Otherwise turn them on once per clone, from this folder (PowerShell):
+While you work on Sketch, a push can update your installed Sketch straight away, so the next time you open it you're already testing what you just pushed, with no wait for the in-app update. In a clone where the repo's git hooks are on (`git config core.hooksPath .github/hooks`, as the root README's "Before You Push" says), each push of `main` to `origin` hands the commit to `scripts/dev-update.mjs` once the pre-push check has passed. Installing with `python install.py --dev` turns them on and names anything their checks still need (gitleaks and the identifier list). Otherwise turn them on once per clone, from this folder (PowerShell):
 
 ```powershell
 npm run dev:hooks
@@ -313,13 +318,15 @@ npm run dev:hooks
 
 From then on, each push of `main` to `origin` starts the update in the background: once the push has landed, it builds the newest commit that changes Sketch's folder into a new version folder of the installed Sketch, exactly as the in-app update does (the same build folder, lock and log, so the two never build at once). The push itself doesn't wait, the build keeps going after the terminal closes, and a warm build takes about a minute and a half. A Sketch that's open when it finishes shows its update icon and restarts into it as usual. `npm run dev:update` does the same by hand, without a push, and also retries a build that failed.
 
+Install every PC you develop Sketch on with `--dev`. Then a push from any of them updates that PC at once, and the others pick it up with their next fetch, within about 10 minutes, whether their Sketch is open or closed.
+
 Nothing of this is in the app or its installer; it only runs in a clone with the hooks turned on, and does nothing without an installed Sketch. Its messages go to `%LOCALAPPDATA%\app.sketch.desktop\build\dev-update.log`, beside `build.log`. If the clone already has hooks of its own (`core.hooksPath`), `dev:hooks` leaves them alone; call `.github/hooks/pre-push` from yours instead.
 
 ## Updating
 
-Read the [changes](#changes) first for anything that needs you to do something. Each version is also on the repo's [releases page](https://github.com/masfew/toolbox/releases), tagged `sketch-v<version>`, with its notes, a zip of this folder and the installer.
+Read the [changes](#changes) first for anything that needs you to do something. Each version is also on the repo's [releases page](https://github.com/masfew/toolbox/releases), tagged `sketch-v<version>`, with its notes, a zip of this folder, the installer and the update files. A version is released by itself when a push to `main` raises the version line at the top of this README (with its Changes entry); pushes that don't raise it roll into the next release.
 
-A Sketch built from a clone updates itself after `git pull` ([Updates](#updates)), so there's nothing to rerun. To update by hand instead, or after the build tools change, pull and rerun the install from the root of the cloned repo (PowerShell):
+Every install updates itself ([Updates](#updates)): one built from a clone fetches and builds new commits, with no `git pull`, and one from a release's installer downloads each new release, so there's nothing to rerun. To update a clone install by hand instead, or after the build tools change, pull and rerun the install from the root of the cloned repo (PowerShell):
 
 ```powershell
 git pull
@@ -338,7 +345,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too, and Sketch stops updating itself until you're back on `main` (it only updates from commits on `origin/main`). To return to the latest version, run `git checkout main` and `git pull`, then rerun the install.
 
-With a release's installer, download the newer one and run `python install.py --setup <path to it>` again.
+A release install can also be moved to a release by hand: download its installer and run `python install.py --setup <path to it>`.
 
 If Sketch's folder moves or is renamed (for example when the repo is reorganised), rerun `python install.py` from the new folder. The new build records the new folder, and its first update makes the build worktree again for it.
 
@@ -373,7 +380,8 @@ If a file in the data folder is still in use (Sketch closing), the rest goes, an
 | `rustc` says rustup has no default toolchain, or the install says Rust is missing its MSVC toolchain | rustup is installed but no toolchain is chosen | Run `rustup default stable-msvc`, then rerun |
 | `cargo` or `rustc` not found during the build | Rust was installed after the terminal opened | Open a new terminal. The installer adds `%USERPROFILE%\.cargo\bin` to the build's PATH by itself |
 | `link.exe` not found, or `LNK1181` | The Visual Studio C++ build tools are missing or incomplete | Run the build tools' winget command from [Install](#install), step 1 |
-| The update icon never shows after `git pull` | The pull brought no commit that changes Sketch's folder, or the build failed | See `%LOCALAPPDATA%\app.sketch.desktop\build\build.log`. A failed build is tried again after the next commit, or run `npm run dev:update` from this folder |
+| The update icon never shows after a push | Sketch fetches every 10 minutes; the push brought no commit that changes Sketch's folder, the fetch failed, or the build failed | See `%LOCALAPPDATA%\app.sketch.desktop\build\build.log`. "Couldn't fetch origin/main" means git couldn't reach your clone's `origin` without a sign-in prompt: check `git fetch` works in the clone. A failed build is tried again after the next commit, or run `npm run dev:update` from this folder |
+| A Sketch installed from a release doesn't update | It couldn't read or download the latest release (offline, or a release made without the signing key) | See the build log above: "Couldn't read the latest release" or "Couldn't download". It tries again at every check, about every 5 minutes |
 | Sketch doesn't start from the Start menu after an install run from the Claude desktop app | The install landed in the app's private copy of AppData | Rerun `python install.py`: it reruns itself outside the app's package. Never run the NSIS installer straight from a Claude session |
 | Print Screen can't be set as the capture key | Windows 11 uses Print Screen for its own screen capture | Turn off "Use the Print screen key to open screen capture" in Settings > Accessibility > Keyboard; Sketch's Settings has a button that opens that page |
 
@@ -383,6 +391,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.4.0: Every install keeps itself up to date with nothing to do. An install built from a clone fetches `origin/main` every 10 minutes and builds new commits with no `git pull`, so a push from any PC reaches it; the capture helper does this while Sketch is closed. An install from a release's installer downloads each new release, signed and checked, within about 5 minutes. `python install.py --dev` turns on the git hooks that update the PC you push from at once. A push that raises this README's version line now releases that version on its own.
 - 1.3.0: Settings has a **Pointer over the picture** choice: the normal arrow (still the default), a small dot, a thin crosshair or the brush-size circle, with its own size and colour and an optional different pointer for the eraser. Draw a rough line, arrow, box or circle with the brush or pencil and hold still for half a second to turn it into a clean, editable shape; **Clean up rough shapes** in Settings (on by default) or **Turn Shape Clean-Up On/Off** in the command palette turns it off.
 - 1.2.0: Uninstalling removes everything Sketch keeps on the PC by default: settings, autosaves, waiting captures, update builds and the Remove Background add-on. Tick **Keep my settings, autosaves and Remove Background add-on** in the uninstaller, or use `python install.py --remove --keep-data`, to keep them. Updates and reinstalls never touch them.
 - 1.1.0: Remove Background cuts out the person or object in front onto a new layer, with a model that runs on the PC. Its first use downloads a 193 MB add-on.

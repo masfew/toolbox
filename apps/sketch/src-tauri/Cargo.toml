@@ -1,6 +1,6 @@
 [package]
 name = "sketch"
-version = "1.3.0"
+version = "1.4.0"
 description = "A fast, simple paint app"
 edition = "2021"
 # Three programs: Sketch itself, sketch-capture (src/bin), the capture helper, and sketch-launcher
@@ -23,6 +23,8 @@ arboard = "3"
 urlencoding = "2"
 ureq = "2"
 sha2 = "0.10"
+# Checks the signature on a release's latest.json (F16.5).
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 png = "0.18"
 # Remove Background (F13) loads ONNX Runtime from its add-on at run time, so nothing of it is built in.
 ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-31"] }

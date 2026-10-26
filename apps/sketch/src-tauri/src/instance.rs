@@ -65,6 +65,26 @@ pub fn send(key: &str, message: &Message) -> bool {
     false
 }
 
+/// Whether a Sketch is running for this data folder, without sending it anything: its pipe exists.
+pub fn running(key: &str) -> bool {
+    #[cfg(windows)]
+    unsafe {
+        use windows::core::HSTRING;
+        use windows::Win32::Foundation::{GetLastError, ERROR_SEM_TIMEOUT};
+        use windows::Win32::System::Pipes::WaitNamedPipeW;
+        if WaitNamedPipeW(&HSTRING::from(pipe_name(key)), 1).as_bool() {
+            return true;
+        }
+        // It exists, but every instance is busy for the moment.
+        GetLastError() == ERROR_SEM_TIMEOUT
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = key;
+        false
+    }
+}
+
 pub fn claim(key: &str, message: &Message) -> Claim {
     let name = pipe_name(key);
     let body = serde_json::to_vec(message).unwrap_or_default();

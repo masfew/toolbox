@@ -11,6 +11,9 @@ mod recovery;
 mod shell;
 mod shift_tap;
 mod update;
+mod stamp;
+mod fetch;
+mod download;
 
 use std::collections::HashMap;
 use std::fs;

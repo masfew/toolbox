@@ -10,4 +10,12 @@ declare const __SKETCH_BUILD__: {
   repo: string;
   /** Sketch's folder inside that repo, like `apps/sketch` (empty when Sketch is the repo's root). */
   path: string;
+  /** The number of commits that changed Sketch's folder (the version's last part). */
+  build: number;
+  /** `release` for a build made by the release workflow, which updates from releases (F16). */
+  channel: 'release' | 'source';
+  /** The repo's releases page (release builds). */
+  releases: string;
+  /** The public key that signs each release's latest.json (release builds). */
+  key: string;
 };

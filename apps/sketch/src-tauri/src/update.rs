@@ -10,19 +10,26 @@
 //! build is running; the build script touches it every few seconds), `build/last-error.json` (the
 //! commit whose build failed, so it isn't retried until the next push), `build/build.log`, and
 //! `restart.json` (the windows' places, from a restart to the new Sketch that starts after it).
+//!
+//! Updates on every machine (F16): an install built from a clone also fetches `origin/main` itself
+//! (`fetch.rs`), so commits pushed from other machines reach it, and an install from a release's
+//! installer, with no clone, downloads each new release (`download.rs`) and stages it the same way.
+//! Which one an install uses is decided once per run from the build stamp (`source`). While no
+//! Sketch window is open, the capture helper does the same checks (`run_in_helper`).
 
 use std::collections::HashMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
-use std::time::{Duration, SystemTime};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use crate::layout::{self, LAUNCHER_EXE};
 use crate::shell::quiet;
-use crate::{data_dir, data_dir_override};
+use crate::{data_dir, data_dir_override, stamp};
 
 const WORKTREE: &str = "sketch-update-build";
 /// A build whose lock hasn't been touched for this long has died.
@@ -32,21 +39,51 @@ const LOCK_STALE: Duration = Duration::from_secs(90);
 const QUIET_IDLE_SECONDS: u64 = 300;
 /// How long a restart waits for every window to save itself.
 const SAVE_LIMIT: Duration = Duration::from_secs(8);
+/// The first fetch waits until start-up is over, like the page's first check.
+const APP_FIRST_FETCH: Duration = Duration::from_secs(5);
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Ready {
-    commit: String,
-    subject: String,
+    pub(crate) commit: String,
+    pub(crate) subject: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateStatus {
     /// A newer version staged and waiting for Sketch to restart.
-    ready: Option<Ready>,
-    /// The commit being built, if a build of a newer commit is running.
-    building: Option<String>,
+    pub(crate) ready: Option<Ready>,
+    /// The commit being built or downloaded, if a newer one is on its way.
+    pub(crate) building: Option<String>,
+}
+
+/// Runs when a download a check started has finished, so the windows check again at once.
+pub type Notify = Arc<dyn Fn() + Send + Sync>;
+
+/// Where this install's updates come from, decided once per run from the build stamp: its clone
+/// (the stamp's repo exists and has an origin), the repo's releases (a release build), or nowhere.
+/// Installing the other kind over an install changes it, since the new build's stamp decides.
+pub enum Source {
+    Clone(PathBuf),
+    Release,
+    None,
+}
+
+pub fn source() -> &'static Source {
+    static SOURCE: OnceLock<Source> = OnceLock::new();
+    SOURCE.get_or_init(|| {
+        let s = stamp::get();
+        let repo = repo_for(&s.repo);
+        // `git -C ""` would be the working folder, so an empty repo is never asked.
+        if !repo.as_os_str().is_empty() && git(&repo, &["remote", "get-url", "origin"]).is_some() {
+            Source::Clone(repo)
+        } else if s.channel == "release" && s.releases.starts_with("https://") && s.key.len() == 64 {
+            Source::Release
+        } else {
+            Source::None
+        }
+    })
 }
 
 /// One window's answer to `update-prepare`.
@@ -71,8 +108,8 @@ struct Restarting {
     replies: HashMap<String, Reply>,
 }
 
-fn build_dir(app: &AppHandle) -> PathBuf {
-    data_dir(app).join("build")
+pub(crate) fn build_dir(data: &Path) -> PathBuf {
+    data.join("build")
 }
 
 /// The repo to watch. Checks point this at a throwaway clone.
@@ -80,7 +117,7 @@ fn repo_for(stamped: &str) -> PathBuf {
     PathBuf::from(std::env::var("SKETCH_UPDATE_REPO").unwrap_or_else(|_| stamped.to_string()))
 }
 
-fn watched_ref() -> String {
+pub(crate) fn watched_ref() -> String {
     std::env::var("SKETCH_UPDATE_REF").unwrap_or_else(|_| "refs/remotes/origin/main".into())
 }
 
@@ -89,7 +126,7 @@ fn pathspec(path: &str) -> &str {
     if path.is_empty() { "." } else { path }
 }
 
-fn git(repo: &Path, args: &[&str]) -> Option<String> {
+pub(crate) fn git(repo: &Path, args: &[&str]) -> Option<String> {
     let out = quiet("git").arg("-C").arg(repo).args(args).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
@@ -114,7 +151,7 @@ fn is_newer(repo: &Path, running: &str, candidate: &str) -> bool {
 }
 
 /// The version current.json names, when its folder is complete: both programs and its stamp.
-fn staged(root: &Path) -> Option<(layout::Current, PathBuf)> {
+pub(crate) fn staged(root: &Path) -> Option<(layout::Current, PathBuf)> {
     let current = layout::current(root)?;
     let folder = root.join(&current.folder);
     let complete = current.folder.starts_with("app-")
@@ -131,8 +168,8 @@ fn lock_alive(lock: &Path) -> bool {
         .is_ok_and(|t| SystemTime::now().duration_since(t).unwrap_or_default() < LOCK_STALE)
 }
 
-fn building(app: &AppHandle) -> Option<String> {
-    let lock = build_dir(app).join("build.lock");
+pub(crate) fn building(data: &Path) -> Option<String> {
+    let lock = build_dir(data).join("build.lock");
     if !lock_alive(&lock) {
         return None;
     }
@@ -141,9 +178,86 @@ fn building(app: &AppHandle) -> Option<String> {
     v["commit"].as_str().map(String::from)
 }
 
-fn failed_commit(app: &AppHandle) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_slice(&fs::read(build_dir(app).join("last-error.json")).ok()?).ok()?;
+/// Takes `build.lock` for a build or download of `commit`, unless a live one holds it. It's created
+/// in one step, so Sketch and the capture helper never both start one.
+pub(crate) fn claim_lock(dir: &Path, commit: &str) -> bool {
+    let lock = dir.join("build.lock");
+    for _ in 0..2 {
+        match fs::OpenOptions::new().write(true).create_new(true).open(&lock) {
+            Ok(mut file) => {
+                let _ = file.write_all(serde_json::json!({ "commit": commit }).to_string().as_bytes());
+                return true;
+            }
+            Err(_) if !lock_alive(&lock) => {
+                let _ = fs::remove_file(&lock);
+            }
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
+/// Keeps a lock alive while this process works under it (a build script does its own).
+pub(crate) fn touch(path: &Path) {
+    if let Ok(file) = fs::OpenOptions::new().write(true).open(path) {
+        let _ = file.set_modified(SystemTime::now());
+    }
+}
+
+fn failed_commit(data: &Path) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(&fs::read(build_dir(data).join("last-error.json")).ok()?).ok()?;
     v["commit"].as_str().map(String::from)
+}
+
+/// Now as `2026-10-25T21:17:56Z`, like the build script's log lines.
+fn iso_now() -> String {
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let (days, rest) = ((secs / 86_400) as i64, secs % 86_400);
+    // Days since 1970 to a date (Howard Hinnant's civil_from_days).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z", rest / 3600, rest / 60 % 60, rest % 60)
+}
+
+/// Adds a line to the build folder's `build.log`.
+pub(crate) fn log(data: &Path, line: &str) {
+    let dir = build_dir(data);
+    let _ = fs::create_dir_all(&dir);
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(dir.join("build.log")) {
+        let _ = writeln!(file, "[{}] {line}", iso_now());
+    }
+}
+
+/// Logs a failure (`Err`) once per run of failures, and once more when it works again (`Ok`), so an
+/// offline PC doesn't fill the log. `<name>-failing` in the build folder remembers the run, across
+/// Sketch and the capture helper. The app shows nothing either way.
+pub(crate) fn note_streak(data: &Path, name: &str, result: Result<(), String>, failed: &str, works: &str) {
+    let marker = build_dir(data).join(format!("{name}-failing"));
+    match result {
+        Err(error) if !marker.exists() => {
+            let _ = fs::create_dir_all(build_dir(data));
+            let _ = fs::write(&marker, &error);
+            log(data, &format!("{failed}: {error}"));
+        }
+        Ok(()) if marker.exists() => {
+            let _ = fs::remove_file(&marker);
+            log(data, works);
+        }
+        _ => {}
+    }
+}
+
+/// The first line of a program's error output, short enough for one log line.
+pub(crate) fn first_line(text: &str) -> String {
+    let line = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("no message");
+    line.chars().take(200).collect()
 }
 
 /// True when the folder is a worktree of `repo`. One made for another clone (Sketch was reinstalled
@@ -156,9 +270,21 @@ fn worktree_of(src: &Path, repo: &Path) -> bool {
 
 /// Checks out `commit` in the build worktree and starts the build script there in the background,
 /// from Sketch's folder in it (`path`). The script stages the build in `root`, the install folder.
-fn start_build(app: &AppHandle, repo: &Path, path: &str, commit: &str, root: &Path) -> Result<(), String> {
-    let dir = build_dir(app);
+fn start_build(data: &Path, repo: &Path, path: &str, commit: &str, root: &Path) -> Result<(), String> {
+    let dir = build_dir(data);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    // Taken first, so a second check right away (or the capture helper's) doesn't start another build.
+    if !claim_lock(&dir, commit) {
+        return Ok(());
+    }
+    let started = spawn_build(data, &dir, repo, path, commit, root);
+    if started.is_err() {
+        let _ = fs::remove_file(dir.join("build.lock"));
+    }
+    started
+}
+
+fn spawn_build(data: &Path, dir: &Path, repo: &Path, path: &str, commit: &str, root: &Path) -> Result<(), String> {
     let src = dir.join(WORKTREE);
     let run = |cmd: &mut std::process::Command| -> Result<(), String> {
         let out = cmd.output().map_err(|e| e.to_string())?;
@@ -182,14 +308,12 @@ fn start_build(app: &AppHandle, repo: &Path, path: &str, commit: &str, root: &Pa
     cmd.current_dir(src.join(path))
         .arg("scripts/update-build.mjs")
         .arg(commit)
-        .arg(data_dir(app).join("updates"))
-        .arg(&dir)
+        .arg(data.join("updates"))
+        .arg(dir)
         .arg(root)
         .stdin(std::process::Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log);
-    // Written before the script starts, so a second check right away doesn't start another build.
-    fs::write(dir.join("build.lock"), serde_json::json!({ "commit": commit }).to_string()).map_err(|e| e.to_string())?;
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -205,54 +329,134 @@ fn start_build(app: &AppHandle, repo: &Path, path: &str, commit: &str, root: &Pa
         }
         cmd.creation_flags(DETACHED);
     }
-    cmd.spawn().map(|_| ()).map_err(|e| {
-        let _ = fs::remove_file(dir.join("build.lock"));
-        e.to_string()
-    })
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
-/// Whether a version is staged and waiting, and whether a newer one is building. Starts a
-/// background build when a newer commit is waiting. Only a Sketch running from the install layout
-/// updates itself; a dev or test build outside it never builds.
-#[tauri::command]
-pub async fn update_status(app: AppHandle, state: State<'_, Updater>, repo: String, path: String, commit: String) -> Result<UpdateStatus, String> {
-    let Some(root) = layout::install_root() else {
-        return Ok(UpdateStatus { ready: None, building: None });
-    };
-    let handle = app.clone();
-    let status = tauri::async_runtime::spawn_blocking(move || {
-        let app = handle;
-        let repo = repo_for(&repo);
-        let latest_pushed = git(&repo, &["rev-list", "-1", &watched_ref(), "--", pathspec(&path)]).filter(|c| !c.is_empty());
-        let staged = staged(root);
-        let mut running_build = building(&app);
-        if let Some(pushed) = &latest_pushed {
-            let have = staged.as_ref().is_some_and(|(c, _)| &c.commit == pushed);
-            if !have && running_build.is_none() && failed_commit(&app).as_ref() != Some(pushed) && is_newer(&repo, &commit, pushed) {
-                match start_build(&app, &repo, &path, pushed, root) {
-                    Ok(()) => running_build = Some(pushed.clone()),
-                    // Not tried again until the next push, like a failed build.
-                    Err(error) => {
-                        let note = serde_json::json!({ "commit": pushed, "error": error });
-                        let _ = fs::write(build_dir(&app).join("last-error.json"), note.to_string());
-                    }
+/// One check: whether a version is staged and waiting, and whether a newer one is on its way.
+/// Starts a background build (an install from a clone) or download (from a release) when a newer
+/// version is waiting; `done` runs when a download it starts has finished. Sketch runs it for its
+/// windows (`update_status`), and the capture helper while no window is open.
+pub fn check(data: &Path, root: &Path, done: Notify) -> UpdateStatus {
+    match source() {
+        Source::Clone(repo) => check_clone(data, root, repo),
+        Source::Release => crate::download::check(data, root, done),
+        Source::None => UpdateStatus::default(),
+    }
+}
+
+fn check_clone(data: &Path, root: &Path, repo: &Path) -> UpdateStatus {
+    let me = stamp::get();
+    let (commit, path) = (me.commit.as_str(), me.path.as_str());
+    let latest_pushed = git(repo, &["rev-list", "-1", &watched_ref(), "--", pathspec(path)]).filter(|c| !c.is_empty());
+    let staged = staged(root);
+    let mut running_build = building(data);
+    if let Some(pushed) = &latest_pushed {
+        let have = staged.as_ref().is_some_and(|(c, _)| &c.commit == pushed);
+        if !have && running_build.is_none() && failed_commit(data).as_ref() != Some(pushed) && is_newer(repo, commit, pushed) {
+            match start_build(data, repo, path, pushed, root) {
+                Ok(()) => running_build = building(data).or(Some(pushed.clone())),
+                // Not tried again until the next push, like a failed build.
+                Err(error) => {
+                    let note = serde_json::json!({ "commit": pushed, "error": error });
+                    let _ = fs::write(build_dir(data).join("last-error.json"), note.to_string());
                 }
             }
         }
-        let ready = staged.filter(|(c, _)| is_newer(&repo, &commit, &c.commit)).map(|(c, folder)| {
-            let stamp: serde_json::Value = fs::read(folder.join("version.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-            let subject = stamp["subject"].as_str().map(String::from).or_else(|| git(&repo, &["log", "-1", "--format=%s", &c.commit])).unwrap_or_default();
-            Ready { commit: c.commit, subject }
-        });
-        // A lock left by a build of this commit or an older one isn't an update on its way.
-        let building = running_build.filter(|b| is_newer(&repo, &commit, b));
-        UpdateStatus { ready, building }
+    }
+    let ready = staged.filter(|(c, _)| is_newer(repo, commit, &c.commit)).map(|(c, folder)| {
+        let stamp: serde_json::Value = fs::read(folder.join("version.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        let subject = stamp["subject"].as_str().map(String::from).or_else(|| git(repo, &["log", "-1", "--format=%s", &c.commit])).unwrap_or_default();
+        Ready { commit: c.commit, subject }
+    });
+    // A lock left by a build of this commit or an older one isn't an update on its way.
+    let building = running_build.filter(|b| is_newer(repo, commit, b));
+    UpdateStatus { ready, building }
+}
+
+/// Tells every window to check for updates now (as a build script's message does).
+fn nudge(app: &AppHandle) -> Notify {
+    let handle = app.clone();
+    Arc::new(move || {
+        let _ = handle.emit("update-check", ());
     })
-    .await
-    .map_err(|e| e.to_string())?;
+}
+
+/// Whether a version is staged and waiting, and whether a newer one is building or downloading.
+/// Only a Sketch running from the install layout updates itself; a dev or test build outside it
+/// never builds.
+#[tauri::command]
+pub async fn update_status(app: AppHandle, state: State<'_, Updater>) -> Result<UpdateStatus, String> {
+    let Some(root) = layout::install_root() else {
+        return Ok(UpdateStatus::default());
+    };
+    let data = data_dir(&app);
+    let done = nudge(&app);
+    let status = tauri::async_runtime::spawn_blocking(move || check(&data, root, done)).await.map_err(|e| e.to_string())?;
     *state.ready.lock().unwrap() = status.ready.as_ref().map(|r| r.commit.clone());
     Ok(status)
 }
+
+/// What the other kind of install left in the build folder: a release install has no use for a
+/// build worktree (its clone may be gone), and a clone install none for a half-done download.
+fn tidy(data: &Path) {
+    let dir = build_dir(data);
+    match source() {
+        Source::Clone(_) => {
+            let _ = fs::remove_dir_all(dir.join("download"));
+        }
+        Source::Release => {
+            let _ = fs::remove_dir_all(dir.join(WORKTREE));
+            let _ = fs::remove_file(dir.join("last-error.json"));
+        }
+        Source::None => {}
+    }
+}
+
+/// The capture helper's part (F16): while no Sketch window is open, it fetches (a clone install)
+/// and checks for updates itself, so a Sketch closed for days is already up to date when it's next
+/// opened. With Sketch open, Sketch does this. The helper and Sketch share `build.lock`, so they
+/// never build or download at once.
+pub fn run_in_helper(data: PathBuf) {
+    let Some(root) = layout::install_root() else { return };
+    let key = data.to_string_lossy().into_owned();
+    let sketch_open = move || crate::instance::running(&key);
+    // A download the helper finishes is news for a Sketch opened meanwhile.
+    let ping: Notify = {
+        let key = data.to_string_lossy().into_owned();
+        Arc::new(move || {
+            let message = crate::instance::Message { args: vec!["sketch".into(), "--update-check".into()], cwd: String::new() };
+            let _ = crate::instance::send(&key, &message);
+        })
+    };
+    tidy(&data);
+    match source() {
+        Source::Clone(repo) => {
+            let (d, open) = (data.clone(), sketch_open.clone());
+            crate::fetch::spawn(data, repo.clone(), HELPER_FIRST.min(crate::fetch::every()), sketch_open, move |_| {
+                if !open() {
+                    let _ = check(&d, root, ping.clone());
+                }
+            });
+        }
+        Source::Release => {
+            std::thread::spawn(move || {
+                std::thread::sleep(HELPER_FIRST.min(crate::fetch::every()));
+                loop {
+                    if !sketch_open() {
+                        let _ = check(&data, root, ping.clone());
+                    }
+                    std::thread::sleep(RELEASE_CHECK_EVERY.min(crate::fetch::every()));
+                }
+            });
+        }
+        Source::None => {}
+    }
+}
+
+/// The helper starts with Windows, so its first check waits for sign-in to settle.
+const HELPER_FIRST: Duration = Duration::from_secs(60);
+/// How often the helper checks for a new release (the page checks as often, and on focus).
+const RELEASE_CHECK_EVERY: Duration = Duration::from_secs(300);
 
 // ---------- Restarting into the new version ----------
 
@@ -558,6 +762,16 @@ pub fn init(app: &AppHandle) {
     app.manage(restored);
     if layout::install_root().is_none() {
         return;
+    }
+    let data = data_dir(app);
+    tidy(&data);
+    if let Source::Clone(repo) = source() {
+        let moved = nudge(app);
+        crate::fetch::spawn(data, repo.clone(), APP_FIRST_FETCH, || false, move |changed| {
+            if changed {
+                moved();
+            }
+        });
     }
     let handle = app.clone();
     std::thread::spawn(move || {

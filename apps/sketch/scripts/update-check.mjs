@@ -172,7 +172,9 @@ const windowsOf = (pid) =>
 
 // ---------- The clone: HEAD, then the working tree's Sketch changes, then a pushed commit ----------
 
-const base = git(repo, 'rev-parse', 'HEAD');
+// The commit the app under test was built from (its stamp), which is HEAD unless someone has
+// committed since the build; then the app would rightly count HEAD as an update waiting.
+const base = readJson(join(sketchDir, 'src-tauri', 'stamp.json'))?.commit || git(repo, 'rev-parse', 'HEAD');
 execFileSync('git', ['clone', '-q', '--no-checkout', repo, clone], { stdio: 'ignore' });
 git(clone, 'checkout', '-q', '--detach', base);
 const changed = git(repo, 'ls-files', '-m', '-o', '--exclude-standard', '--', rel).split('\n').filter(Boolean);
@@ -184,6 +186,12 @@ const working = changed.length ? commitIn(clone, 'Sketch as it is in the working
 writeFileSync(join(clone, rel, 'README.md'), readFileSync(join(clone, rel, 'README.md'), 'utf8') + '\n<!-- update check -->\n');
 const pushed = commitIn(clone, 'Update check: a pushed change');
 git(clone, 'update-ref', 'refs/remotes/origin/main', pushed);
+// The clone's origin is a local bare repo holding the pushed commit, so Sketch's own fetch (F16)
+// keeps origin/main where the check put it instead of reaching this checkout's main.
+const origin = join(work, 'origin.git');
+execFileSync('git', ['init', '-q', '--bare', origin], { stdio: 'ignore' });
+execFileSync('git', ['-C', origin, 'fetch', '-q', clone, `${pushed}:refs/heads/main`], { stdio: 'ignore' });
+git(clone, 'remote', 'set-url', 'origin', origin);
 // An edit nobody committed, which must not end up in the update.
 const marker = `uncommitted-edit-${Date.now()}`;
 writeFileSync(join(clone, rel, 'src', 'uncommitted.ts'), `export const marker = '${marker}';\n`);

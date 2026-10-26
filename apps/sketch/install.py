@@ -10,6 +10,8 @@ rerun builds and installs this folder's current version.
                                      and remove Sketch's data folder (settings, autosaves, add-ons)
     python install.py --remove --keep-data
                                      the same, but keep the data folder
+    python install.py --dev          build and install, then turn on this clone's git hooks, so each
+                                     push of main updates the installed Sketch (README, Developer Updates)
 
 Close Sketch first: the install stops if it's running.
 
@@ -31,7 +33,10 @@ What it does:
    works from there even if this folder is gone. In a git clone it's a link
    (a directory junction); anywhere else a copy. --copy or --link overrides.
 6. Saves what it installed to ~/.claude/tools/sketch.install.json.
-7. Ends with "Setup complete".
+7. Ends with "Setup complete". With --dev, then turns on the clone's git hooks
+   (`node scripts/dev-update.mjs --hooks`) and warns about what the hooks'
+   checks need and the PC lacks (gitleaks, the identifier list). Without
+   --dev, a clone whose hooks are off gets one line naming --dev.
 
 A Sketch built from a git clone updates itself whenever that clone's
 origin/main gets a newer commit that changes Sketch's folder (git pull, or a
@@ -966,6 +971,89 @@ def remove_data_dir():
         output(["git", "--git-dir", common, "worktree", "prune"])
 
 
+# --- Developer updates -----------------------------------------------------
+
+HOOKS_FOLDER = ".github/hooks"
+# Where the repo's pre-push check (.github/scripts/pre_push_check.py) reads the list of identifiers from.
+IDENTIFIER_LIST = CLAUDE_DIR / "public-repo-identifiers.txt"
+
+
+def git_hooks_path():
+    """This clone's core.hooksPath as git stores it, or "" if it has none."""
+    return output(["git", "-C", str(TOOL_DIR), "config", "--get", "core.hooksPath"]).replace("\\", "/").rstrip("/")
+
+
+def gitleaks_path():
+    """gitleaks.exe, found the way the repo's pre-push check finds it: on PATH, then in the folders winget
+    installs it to (a terminal opened before the install doesn't have it on PATH yet)."""
+    found = shutil.which("gitleaks")
+    if found:
+        return found
+    for pattern in (r"Microsoft\WinGet\Links\gitleaks.exe", r"Microsoft\WinGet\Packages\Gitleaks.Gitleaks_*\gitleaks.exe"):
+        matches = glob.glob(os.path.join(os.environ.get("LOCALAPPDATA", ""), pattern))
+        if matches:
+            return matches[0]
+    return None
+
+
+def identifier_list_ready():
+    """True if the identifier list exists and holds at least one identifier, as the repo's pre-push check needs."""
+    try:
+        lines = IDENTIFIER_LIST.read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, ValueError):
+        return False
+    return any(line.strip() and not line.strip().startswith("#") for line in lines)
+
+
+def turn_on_git_hooks():
+    """Runs `node scripts/dev-update.mjs --hooks`, which points this clone at the repo's git hooks unless it
+    already has hooks of its own. Prints what happened, and returns True if the hooks are on."""
+    node = shutil.which("node", path=build_env()["PATH"])
+    if not node:
+        print("  The git hooks were left off: Node.js wasn't found. Install it with `winget install OpenJS.NodeJS.LTS`, "
+              "open a new terminal, then rerun with --dev.")
+        return False
+    try:
+        r = subprocess.run([node, str(TOOL_DIR / "scripts" / "dev-update.mjs"), "--hooks"], cwd=TOOL_DIR,
+                           env=build_env(), capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"  The git hooks were left off: couldn't run scripts/dev-update.mjs ({e}).")
+        return False
+    if r.returncode == 0:
+        print("  " + (r.stdout.strip() or "Git hooks are on."))
+        return True
+    print("  Developer updates weren't turned on. " + (r.stderr.strip() or r.stdout.strip() or "scripts/dev-update.mjs failed."))
+    return False
+
+
+def developer_updates(dev):
+    """With --dev, turns on this clone's git hooks and says what their checks still need. Without it, a clone
+    whose hooks are off gets one line naming --dev. Missing things are warnings: the install has succeeded."""
+    if not in_git_clone():
+        if dev:
+            print("\nDeveloper updates (--dev): they need a git clone of the toolbox, and this folder isn't in one, "
+                  "so the git hooks were left off.")
+        return
+    if not dev:
+        if output(["git", "--version"]) and not git_hooks_path():
+            print("\nDeveloping Sketch on this PC? Rerun with --dev to update it the moment you push.")
+        return
+    print("\nDeveloper updates (--dev):")
+    if not turn_on_git_hooks():
+        return
+    missing = []
+    if not gitleaks_path():
+        missing.append("gitleaks isn't installed. Install it with `winget install Gitleaks.Gitleaks`, then open a new terminal.")
+    if not identifier_list_ready():
+        missing.append(f"the identifier list {IDENTIFIER_LIST} is missing or empty. Create it as the root README's "
+                       "\"Before You Push\" section says (step 2).")
+    if missing:
+        print("  The hooks' checks need these, and a commit or push is stopped until you have them:")
+        for text in missing:
+            print(f"    - {text}")
+
+
 # --- Install and remove ----------------------------------------------------
 
 def install(mode, instructions=None):
@@ -1058,6 +1146,9 @@ def main():
     p.add_argument("--setup", help="install this Sketch_x.y.z_x64-setup.exe (from a release) instead of building one")
     p.add_argument("--keep-data", action="store_true",
                    help="with --remove: keep Sketch's settings, autosaves and add-ons in its data folder")
+    p.add_argument("--dev", action="store_true",
+                   help="after the install, turn on this git clone's hooks, so each push of main updates the "
+                        "installed Sketch, and check that gitleaks and the identifier list they need are there")
     if INSTRUCTIONS:
         choice = p.add_mutually_exclusive_group()
         choice.add_argument("--instructions", action="store_const", const=True, dest="instructions",
@@ -1067,6 +1158,8 @@ def main():
     args = p.parse_args()
     if args.keep_data and args.action != "remove":
         p.error("--keep-data only goes with --remove")
+    if args.dev and args.action == "remove":
+        p.error("--dev doesn't go with --remove")
     SETUP_PATH = str(Path(args.setup).resolve()) if args.setup else None
     if os.environ.get(OUTSIDE_PACKAGE):  # the rerun outside the app's package: its output goes back through a file
         sys.stdout = sys.stderr = open(os.environ[OUTSIDE_PACKAGE], "w", encoding="utf-8", buffering=1)
@@ -1083,7 +1176,8 @@ def main():
     if (STARTUP or NEEDS_REAL_APPDATA) and in_app_package():
         rerun_outside_app_package([f"--{args.action}"] * bool(args.action)
                                   + ["--setup", SETUP_PATH] * bool(SETUP_PATH)
-                                  + ["--keep-data"] * args.keep_data)
+                                  + ["--keep-data"] * args.keep_data
+                                  + ["--dev"] * args.dev)  # the rerun finishes the install, so it turns the hooks on
     if args.action == "remove":
         run_uninstaller(args.keep_data)
         if not args.keep_data:
@@ -1093,6 +1187,7 @@ def main():
         check_dependencies()
         run_setup(Path(SETUP_PATH))
         install(args.action or ("link" if in_git_clone() else "copy"), instructions)
+        developer_updates(args.dev)
 
 
 if __name__ == "__main__":
