@@ -1,0 +1,201 @@
+# Turns a tool's release tag into a GitHub release. Tags are named
+# <tool>-v<MAJOR.MINOR.PATCH>, for example example-tool-v1.2.0 (see "Versions
+# and Releases" in the root README). .github/scripts/release_notes.py finds
+# the one tool folder with that name, at any depth in the repo, checks the tag
+# against its README (its version line and Changes entry), takes the release
+# notes from that Changes entry and zips the folder with the tool's name as its
+# top folder; run it locally to see what a release will hold before pushing
+# its tag.
+# Two things start a release. Pushing a tag by hand works for every tool. A
+# push to main also releases a tool listed in BUMP_FOLDERS below (one entry
+# per tool, for now only Sketch) when its README's version line went up in that
+# push: the bump job (.github/scripts/release_bump.py) finds it, has
+# release_notes.py check it, and creates the tag on the pushed commit. Tags
+# made with the workflow's own token start no new run, so the release and build
+# jobs run in this same run, on the tag the bump job made; with no bump they
+# are skipped. A release that failed is rerun with "Re-run failed jobs", which
+# keeps its tag; "Re-run all jobs" finds the tag already there and releases
+# nothing, so delete the tag first.
+# A tool whose folder holds a build.ps1 (an app that ships an exe or an
+# installer, such as Sketch) also gets the build job: it runs
+# `build.ps1 -OutDir <folder>` on Windows with Node and Rust set
+# up and the tool's full history (Sketch counts its commits for its build
+# number), and attaches every file it puts there to the release.
+# Sketch's build also gets the update signing key (the SKETCH_UPDATE_KEY
+# secret) in a step of its own, so no other tool's build.ps1 can see it, and
+# its latest.json is also uploaded to the release tagged sketch-latest, which
+# the installed app reads to find the newest version. sketch-latest is a
+# prerelease that is never the repo's Latest, and its tag has no -v in it, so
+# creating it starts no release.
+# Only these jobs can write to the repo, actions are pinned to commits, and the
+# release is made with the gh CLI that GitHub's runners come with.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*-v*'
+
+permissions: {}
+
+env:
+  # Tool folders that release when a push to main raises the version line of
+  # their README, separated by spaces. A tool's tag is its folder's name, then
+  # -v and the version. One tool bumping per push is supported: a push that
+  # raises two fails the bump job, so tag the extra ones by hand.
+  BUMP_FOLDERS: apps/sketch
+
+jobs:
+  bump:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      # The whole history, to see the commit before the push and the tags.
+      - name: Check out the pushed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Tag a version bump
+        id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          tags=$(python3 .github/scripts/release_bump.py --before "$BEFORE" --sha "$GITHUB_SHA" $BUMP_FOLDERS)
+          if [ -z "$tags" ]; then echo "No tool's version went up in this push."; exit 0; fi
+          if [ "$(echo "$tags" | wc -l)" -gt 1 ]; then
+            echo "::error::This push raised the version of more than one tool ($(echo $tags)). Tag each by hand."
+            exit 1
+          fi
+          tag=$tags
+          if git tag --list "$tag" | grep -q .; then echo "$tag already exists, so no new release."; exit 0; fi
+          GITHUB_OUTPUT=/dev/null python3 .github/scripts/release_notes.py "$tag" --ref "$GITHUB_SHA" > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" --silent
+          echo "Tagged $GITHUB_SHA as $tag."
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  # On a hand-pushed tag the bump job is skipped; on a push to main this job
+  # only runs when the bump job made a tag. The tag is TAG in this job and the
+  # build job.
+  release:
+    needs: bump
+    if: ${{ !cancelled() && needs.bump.result != 'failure' && (github.ref_type == 'tag' || needs.bump.outputs.tag != '') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.bump.outputs.tag }}
+    outputs:
+      tag: ${{ env.TAG }}
+      tool: ${{ steps.build.outputs.tool }}
+      folder: ${{ steps.build.outputs.folder }}
+      build: ${{ steps.build.outputs.build }}
+    steps:
+      # The default checkout is the commit the tag points to: a hand-pushed
+      # tag's commit, or the pushed commit that the bump job tagged.
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag, and write the notes and zip
+        id: build
+        run: python3 .github/scripts/release_notes.py "$TAG" --notes "$RUNNER_TEMP/notes.md" --zip "$RUNNER_TEMP/$TAG.zip"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ steps.build.outputs.tool }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: gh release create "$TAG" "$RUNNER_TEMP/$TAG.zip" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TOOL $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+
+  # !cancelled() and the release job's result, not the bare output check: on a
+  # hand-pushed tag the bump job is skipped, and a condition without a status
+  # function also needs every earlier job to have succeeded, so the build was
+  # skipped and the release went out without its exe.
+  build:
+    needs: release
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.release.outputs.build == 'true' }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build
+        if: needs.release.outputs.tool != 'sketch'
+        shell: pwsh
+        env:
+          FOLDER: ${{ needs.release.outputs.folder }}
+        run: |
+          & "./$env:FOLDER/build.ps1" -OutDir "$env:RUNNER_TEMP/dist"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # The same build with the update signing key, which only Sketch's build
+      # gets. Its build.ps1 signs latest.json with it; without the key (a
+      # fork, say) it logs why and writes no latest.json. GITHUB_REPOSITORY,
+      # which the update files name, is set by Actions in every step.
+      - name: Build Sketch
+        if: needs.release.outputs.tool == 'sketch'
+        shell: pwsh
+        env:
+          FOLDER: ${{ needs.release.outputs.folder }}
+          SKETCH_UPDATE_KEY: ${{ secrets.SKETCH_UPDATE_KEY }}
+        run: |
+          & "./$env:FOLDER/build.ps1" -OutDir "$env:RUNNER_TEMP/dist"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Attach the built files to the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem "$env:RUNNER_TEMP/dist" -File | ForEach-Object FullName
+          if (-not $files) { Write-Error "build.ps1 put nothing in its -OutDir folder."; exit 1 }
+          gh release upload "$env:TAG" $files --repo "$env:GITHUB_REPOSITORY"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # The installed app reads latest.json from the release tagged
+      # sketch-latest (a fixed URL), so each Sketch release replaces it there.
+      # That release is a prerelease and never the Latest, so it isn't taken
+      # for a version. Its tag has no -v, so creating it releases nothing.
+      - name: Update the sketch-latest release
+        if: needs.release.outputs.tool == 'sketch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $json = Join-Path "$env:RUNNER_TEMP/dist" 'latest.json'
+          if (-not (Test-Path $json)) { Write-Host "The build wrote no latest.json, so sketch-latest stays as it is."; exit 0 }
+          gh release view sketch-latest --repo "$env:GITHUB_REPOSITORY" --json tagName *> $null
+          if ($LASTEXITCODE) {
+            $sha = (git rev-parse HEAD)
+            gh release create sketch-latest --repo "$env:GITHUB_REPOSITORY" --target $sha --prerelease --latest=false `
+              --title "Sketch: latest update info" `
+              --notes "Not a version. Installed copies of Sketch read latest.json from this release to find the newest version; each Sketch release replaces it. Download Sketch from its version releases instead."
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          gh release upload sketch-latest $json --repo "$env:GITHUB_REPOSITORY" --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

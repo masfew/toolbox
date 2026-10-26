@@ -1,0 +1,3 @@
+# Git hooks run under sh, which needs LF line endings, even in a Windows
+# checkout that turns other files' line endings into CRLF.
+.github/hooks/* text eol=lf

@@ -1,0 +1,41 @@
+#!/bin/sh
+# Runs .github/scripts/pre_push_check.py before every push, and stops the push if it
+# finds a secret, one of your identifiers, or a commit email that isn't a
+# GitHub noreply address. Turn it on once per clone, from the root of the repo:
+#   git config core.hooksPath .github/hooks
+# Git passes the remote's name and URL as arguments, and the branches and tags
+# being pushed on standard input. The script reads both.
+#
+# Once the check passes, a push of main to origin also hands the commit to each
+# tool's scripts/dev-update.mjs (an app such as Sketch), which returns at once and,
+# once the push has landed, builds the tool into its installed copy in the
+# background. Nothing in that part can stop or slow the push.
+
+root=$(git rev-parse --show-toplevel) || exit 1
+refs=$(cat)
+python=
+for py in python3 python; do
+  # Skip a "python3" that is only Windows' shortcut to the Microsoft Store.
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c "" </dev/null >/dev/null 2>&1; then
+    python=$py
+    break
+  fi
+done
+if [ -z "$python" ]; then
+  echo "pre-push: Python 3 wasn't found, so the pre-push check couldn't run. Nothing was pushed." >&2
+  exit 1
+fi
+printf '%s\n' "$refs" | "$python" "$root/.github/scripts/pre_push_check.py" "$@" || exit 1
+
+zero=0000000000000000000000000000000000000000
+main_sha=$(printf '%s\n' "$refs" | while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = refs/heads/main ] && [ "$local_sha" != "$zero" ]; then
+    echo "$local_sha"
+  fi
+done)
+if [ "$1" = origin ] && [ -n "$main_sha" ] && command -v node >/dev/null 2>&1; then
+  for script in "$root"/*/*/scripts/dev-update.mjs; do
+    [ -f "$script" ] && node "$script" --after "$main_sha" || true
+  done
+fi
+exit 0

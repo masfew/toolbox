@@ -1,0 +1,19 @@
+#!/bin/sh
+# Runs .github/scripts/pre_push_check.py on the working tree before every commit, and
+# stops the commit if it finds a secret, one of your identifiers, or a commit
+# email that isn't a GitHub noreply address. It catches a problem before it's
+# in a commit, so nothing has to be rewritten; the pre-push hook still checks
+# what each push sends. Turn both on once per clone, from the root of the repo:
+#   git config core.hooksPath .github/hooks
+
+root=$(git rev-parse --show-toplevel) || exit 1
+for py in python3 python; do
+  # Skip a "python3" that is only Windows' shortcut to the Microsoft Store.
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c "" </dev/null >/dev/null 2>&1; then
+    "$py" "$root/.github/scripts/pre_push_check.py" </dev/null && exit 0
+    echo "pre-commit: the check above found a problem, so nothing was committed." >&2
+    exit 1
+  fi
+done
+echo "pre-commit: Python 3 wasn't found, so the pre-commit check couldn't run. Nothing was committed." >&2
+exit 1

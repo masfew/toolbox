@@ -1,0 +1,30 @@
+# Personal config and secrets. Tools ship config.example.json instead.
+config.json
+*.local.json
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Caches and build output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Backups made by install scripts
+*.bak
+*.bak-*
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

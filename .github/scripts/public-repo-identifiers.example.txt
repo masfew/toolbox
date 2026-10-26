@@ -1,0 +1,25 @@
+# Copy this file to ~/.claude/public-repo-identifiers.txt and replace these
+# made-up examples with your own. The pre-push check
+# (.github/scripts/pre_push_check.py) stops a push whose commits contain any of them.
+# Keep the real file out of the repo: the list is itself personal.
+#
+# One fixed string per line, matched without regard to case. Lines starting
+# with # are comments. Links to this repo on GitHub may hold your GitHub
+# username; the check allows that.
+
+# Your username on this computer, which shows up in absolute paths
+your-pc-username
+
+# Your real name and your email addresses or email provider
+Your Real Name
+your-email-provider
+
+# Your GitHub username and numeric id
+your-github-username
+12345678
+
+# Private repos, projects, games and services you use
+your-private-repo
+your-game-name
+
+# To catch every email address, add a line holding only the at sign.
