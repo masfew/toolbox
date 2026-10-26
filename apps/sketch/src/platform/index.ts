@@ -313,6 +313,8 @@ export interface CaptureOptions {
   hide: boolean;
   /** A tap of Left Shift within a second of the notification opens the capture (F16). On by default. */
   shiftOpen: boolean;
+  /** The capture helper keeps Sketch up to date while it's closed, with or without capture keys (1.5.0). On by default. */
+  updates: boolean;
   /** Why the capture keys aren't working right now, if they aren't. */
   error: string | null;
 }
@@ -321,9 +323,11 @@ export async function captureOptions(): Promise<CaptureOptions | null> {
   return isTauri ? invoke<CaptureOptions>('capture_options') : null;
 }
 
-/** Changes the capture settings given; the others stay as they are. */
-export async function setCaptureOptions(change: { after?: CaptureAfter; hide?: boolean; shiftOpen?: boolean }): Promise<void> {
-  if (isTauri) await invoke('capture_options_set', { after: change.after ?? null, hide: change.hide ?? null, shiftOpen: change.shiftOpen ?? null });
+export type CaptureChange = { after?: CaptureAfter; hide?: boolean; shiftOpen?: boolean; updates?: boolean };
+
+/** Changes the capture helper's settings given; the others stay as they are. */
+export async function setCaptureOptions(change: CaptureChange): Promise<void> {
+  if (isTauri) await invoke('capture_options_set', { after: change.after ?? null, hide: change.hide ?? null, shiftOpen: change.shiftOpen ?? null, updates: change.updates ?? null });
 }
 
 /** Windows Settings' keyboard page, where Windows' own use of Print Screen is turned off. */

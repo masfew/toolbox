@@ -191,13 +191,10 @@ FunctionEnd
 
 !macro NSIS_HOOK_POSTINSTALL
   !insertmacro SKETCH_LAYOUT
-  ; When capture has keys, the sign-in entry starts the newest helper through the launcher, and this
-  ; version's helper starts straight away.
-  ReadRegStr $0 HKCU "${SKETCH_RUN_KEY}" "Sketch Capture"
-  ${If} $0 != ""
-    WriteRegStr HKCU "${SKETCH_RUN_KEY}" "Sketch Capture" '"$INSTDIR\${MAINBINARYNAME}.exe" --capture-helper'
-    Exec '"$R7\sketch-capture.exe"'
-  ${EndIf}
+  ; This version's helper starts straight away. It runs while capture has keys or background updates
+  ; are on (1.5.0), and makes its sign-in entry (through the launcher, so it starts the newest helper);
+  ; with neither, it takes the entry out and quits. A new install gets the default capture keys here.
+  Exec '"$R7\sketch-capture.exe"'
   !insertmacro SKETCH_FIX_SHORTCUT "$SMPROGRAMS\${PRODUCTNAME}.lnk"
   !insertmacro SKETCH_FIX_SHORTCUT "$DESKTOP\${PRODUCTNAME}.lnk"
   !insertmacro SKETCH_FIX_SHORTCUT "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\${PRODUCTNAME}.lnk"

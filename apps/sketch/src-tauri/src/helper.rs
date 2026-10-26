@@ -8,7 +8,8 @@
 //! seconds, `note.rs`) closes it.
 //!
 //! The helper has no window anyone sees and does nothing until the keys are pressed. It runs
-//! whenever capture keys are set, with Sketch open or closed: it starts when you sign in to Windows
+//! whenever capture keys are set or background updates are on (1.5.0: it also keeps the install up
+//! to date while Sketch is closed), with Sketch open or closed: it starts when you sign in to Windows
 //! (a `Run` entry) and Sketch leaves it running when it quits.
 //!
 //! Sketch and the helper share `capture.json` in the data folder: the keys and what happens after a
@@ -61,16 +62,60 @@ pub struct Settings {
     /// A tap of Left Shift within a second of the notification opens the capture (F16). On by
     /// default, also for files from before it.
     pub shift_open: bool,
+    /// The helper keeps the install up to date while Sketch is closed, with or without keys (1.5.0).
+    /// On by default, also for files from before it. Not called `background`, which older files
+    /// still hold for the switch that's gone.
+    pub updates: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { keys: None, after: After::Notify, hide: false, shift_open: true }
+        Settings { keys: None, after: After::Notify, hide: false, shift_open: true, updates: true }
     }
 }
 
 fn settings_path(dir: &Path) -> PathBuf {
     dir.join("capture.json")
+}
+
+/// The capture keys a new install starts with (1.5.0).
+const DEFAULT_KEYS: &str = "Alt+Shift+S";
+
+/// The capture keys a new data folder gets. Checks (a data folder of their own) never take the real
+/// ones, which the person's own helper may hold: they get `SKETCH_TEST_DEFAULT_KEYS` (test hooks) or
+/// none.
+fn default_keys() -> Option<String> {
+    if crate::data_dir_override().is_none() {
+        return Some(DEFAULT_KEYS.into());
+    }
+    let hooks = std::env::var("SKETCH_TEST_HOOKS").is_ok_and(|v| v == "1");
+    std::env::var("SKETCH_TEST_DEFAULT_KEYS").ok().filter(|k| hooks && !k.is_empty())
+}
+
+/// A data folder no Sketch has used yet: missing or empty. Sketch asks as it starts, before anything
+/// writes there.
+pub fn is_new(dir: &Path) -> bool {
+    fs::read_dir(dir).map_or(true, |mut list| list.next().is_none())
+}
+
+/// A new install's capture settings: the default keys, or none (and no message) when another app
+/// holds them. Sketch and the helper can start together on a new install, so this writes
+/// `capture.json` whole in one step and only when it isn't there yet: the first one decides.
+pub fn claim_defaults(dir: &Path) {
+    let keys = default_keys().filter(|k| parse_keys(k).is_some_and(|(mods, vk)| !capture::hotkey_taken(mods, vk)));
+    let Ok(body) = serde_json::to_vec_pretty(&Settings { keys, ..Settings::default() }) else { return };
+    let _ = fs::create_dir_all(dir);
+    let path = settings_path(dir);
+    let part = dir.join(format!("capture.json.{}.part", std::process::id()));
+    if fs::write(&part, &body).is_ok() {
+        // A hard link never replaces a file that's there.
+        if fs::hard_link(&part, &path).is_err_and(|e| e.kind() != std::io::ErrorKind::AlreadyExists) {
+            if let Ok(mut f) = fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+                let _ = f.write_all(&body);
+            }
+        }
+    }
+    let _ = fs::remove_file(&part);
 }
 
 /// Why the helper couldn't hold the keys, written by the helper and shown in Settings.
@@ -288,13 +333,29 @@ fn set_run_entry(on: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Makes the helper match the settings: running with the keys (or not), and the sign-in entry.
-fn apply(dir: &Path, settings: &Settings) -> Result<(), String> {
-    if settings.keys.is_none() {
+/// Whether the helper keeps the install up to date while Sketch is closed: the switch is on, and
+/// this is an installed Sketch that has somewhere to update from. A build run from `target` has
+/// nothing the helper could update.
+fn updates_on(settings: &Settings) -> bool {
+    settings.updates && crate::layout::install_root().is_some() && !matches!(crate::update::source(), crate::update::Source::None)
+}
+
+/// Whether the helper has anything to do: hold the keys, or keep the install up to date.
+fn wanted(settings: &Settings) -> bool {
+    settings.keys.as_deref().and_then(parse_keys).is_some() || updates_on(settings)
+}
+
+/// Makes the helper match the settings: running (or not), and the sign-in entry. `restart`: the
+/// running helper's settings changed, and it reads them only as it starts.
+fn apply(dir: &Path, settings: &Settings, restart: bool) -> Result<(), String> {
+    if !wanted(settings) {
         stop(dir);
         return set_run_entry(false);
     }
     set_run_entry(true)?;
+    if restart {
+        stop(dir);
+    }
     start(dir)
 }
 
@@ -305,7 +366,8 @@ pub fn set_keys(dir: &Path, keys: Option<String>, paste_keys: Option<(u32, u32)>
     let Some(keys) = keys else {
         settings.keys = None;
         save(dir, &settings)?;
-        return apply(dir, &settings);
+        // A helper kept for updates lets go of the keys.
+        return apply(dir, &settings, true);
     };
     let wanted = parse_keys(&keys).ok_or_else(|| format!("{keys} can't be a Windows shortcut"))?;
     if paste_keys == Some(wanted) {
@@ -317,17 +379,18 @@ pub fn set_keys(dir: &Path, keys: Option<String>, paste_keys: Option<(u32, u32)>
     // The helper holds the keys it has now, so they'd look taken.
     stop(dir);
     if capture::hotkey_taken(wanted.0, wanted.1) {
-        let _ = apply(dir, &settings);
+        let _ = apply(dir, &settings, false);
         return Err(format!("Another app already uses {}. Pick other keys.", keys.replace("PrintScreen", "Print Screen")));
     }
     settings.keys = Some(keys);
     save(dir, &settings)?;
-    apply(dir, &settings)
+    apply(dir, &settings, false)
 }
 
-/// What happens after a capture, whether Sketch hides first and whether Left Shift opens it; the
-/// keys stay as they are, and so does anything not given.
-pub fn set_options(dir: &Path, after: Option<After>, hide: Option<bool>, shift_open: Option<bool>) -> Result<(), String> {
+/// What happens after a capture, whether Sketch hides first, whether Left Shift opens it and
+/// whether the helper updates Sketch while it's closed; the keys stay as they are, and so does
+/// anything not given.
+pub fn set_options(dir: &Path, after: Option<After>, hide: Option<bool>, shift_open: Option<bool>, updates: Option<bool>) -> Result<(), String> {
     let mut settings = load(dir);
     if let Some(after) = after {
         settings.after = after;
@@ -338,29 +401,40 @@ pub fn set_options(dir: &Path, after: Option<After>, hide: Option<bool>, shift_o
     if let Some(shift_open) = shift_open {
         settings.shift_open = shift_open;
     }
-    save(dir, &settings)
+    let switched = updates.is_some_and(|u| u != settings.updates);
+    if let Some(updates) = updates {
+        settings.updates = updates;
+    }
+    save(dir, &settings)?;
+    if switched {
+        // The helper starts or stops, or restarts to start or stop its update checks.
+        apply(dir, &settings, true)?;
+    }
+    Ok(())
 }
 
 /// What Settings shows: the after-capture choice, whether Sketch hides while capturing, whether
-/// Left Shift opens a capture, and why the keys aren't working, if they aren't.
+/// Left Shift opens a capture, whether the helper updates Sketch while it's closed, and why the
+/// keys aren't working, if they aren't.
 #[derive(Serialize)]
 pub struct Options {
     after: After,
     hide: bool,
     #[serde(rename = "shiftOpen")]
     shift_open: bool,
+    updates: bool,
     error: Option<String>,
 }
 
 pub fn options(dir: &Path) -> Options {
     let s = load(dir);
     let error = s.keys.as_ref().and_then(|_| fs::read_to_string(error_path(dir)).ok());
-    Options { after: s.after, hide: s.hide, shift_open: s.shift_open, error }
+    Options { after: s.after, hide: s.hide, shift_open: s.shift_open, updates: s.updates, error }
 }
 
 /// As Sketch starts: the capture shortcut Sketch used to keep in the Start menu (until Oct 2026)
 /// moves to the helper, so the same keys keep working with Sketch closed, and the helper starts if
-/// capture has keys. Runs on a thread of its own, so it never slows the start.
+/// it has anything to do. Runs on a thread of its own, so it never slows the start.
 pub fn init(dir: PathBuf, old_keys: impl FnOnce() -> Option<String> + Send + 'static) {
     std::thread::spawn(move || {
         clean_old(&dir);
@@ -373,9 +447,11 @@ pub fn init(dir: PathBuf, old_keys: impl FnOnce() -> Option<String> + Send + 'st
             }
         }
         let settings = load(&dir);
-        if settings.keys.is_some() {
-            // Also puts back the sign-in entry that the old "Keep capture ready" switch took out.
-            let _ = apply(&dir, &settings);
+        // Also puts back the sign-in entry that the old "Keep capture ready" switch took out. A build
+        // run from `target` with nothing to do leaves an installed Sketch's helper for the same data
+        // folder alone.
+        if wanted(&settings) || crate::layout::install_root().is_some() {
+            let _ = apply(&dir, &settings, false);
         }
     });
 }
@@ -412,14 +488,27 @@ pub fn main() {
     }
     capture::dpi_aware();
     let dir = crate::default_data_dir();
+    // The installer starts the helper after a new install, maybe before Sketch's first start.
+    if is_new(&dir) {
+        claim_defaults(&dir);
+    }
     let settings = load(&dir);
-    let Some((mods, vk)) = settings.keys.as_deref().and_then(parse_keys) else { return };
+    let keys = settings.keys.as_deref().and_then(parse_keys);
+    let updates = updates_on(&settings);
+    if keys.is_none() && !updates {
+        // Nothing to do. The installer starts the helper after every install, and a sign-in entry
+        // may be left from before, so that goes too.
+        let _ = set_run_entry(false);
+        return;
+    }
     let Some(sketch) = sketch_exe() else { return };
     #[cfg(windows)]
     {
         let tag = tag(&dir);
         // One helper per data folder: a second start (the sign-in entry and Sketch at once) quits.
         let Some(_mutex) = imp::claim(&tag) else { return };
+        // After an install, before Sketch has started, only the helper is there to make it.
+        let _ = set_run_entry(true);
         imp::com_init();
         clean_old(&dir);
         // Notifications left in the notification centre by Sketch before F12, which do nothing
@@ -429,14 +518,15 @@ pub fn main() {
         }
         let _ = HELPER.set(Helper { dir: dir.clone(), sketch });
         // F16: with no Sketch window open, the helper keeps the install up to date.
-        crate::update::run_in_helper(dir.clone());
-        if let Err(e) = imp::serve(&tag, mods, vk) {
-            let _ = fs::write(error_path(&dir), e);
+        if updates {
+            crate::update::run_in_helper(dir.clone());
         }
+        // Keys another app took are no reason to stop updating.
+        imp::serve(&tag, keys, updates, &error_path(&dir));
         note::close_all();
     }
     #[cfg(not(windows))]
-    let _ = (mods, vk, sketch);
+    let _ = (keys, sketch);
 }
 
 /// The keys were pressed.
@@ -641,8 +731,15 @@ mod imp {
         LRESULT(0)
     }
 
-    /// Makes the hidden window, holds the keys and runs until told to quit.
-    pub fn serve(tag: &str, mods: u32, vk: u32) -> Result<(), String> {
+    /// Makes the hidden window, holds the keys (if any) and runs until told to quit. Keys it can't
+    /// hold are written to `error_file` for Settings, and end it unless `keep`.
+    pub fn serve(tag: &str, keys: Option<(u32, u32)>, keep: bool, error_file: &std::path::Path) {
+        if let Err(e) = try_serve(tag, keys, keep, error_file) {
+            let _ = std::fs::write(error_file, e);
+        }
+    }
+
+    fn try_serve(tag: &str, keys: Option<(u32, u32)>, keep: bool, error_file: &std::path::Path) -> Result<(), String> {
         unsafe {
             let instance = GetModuleHandleW(None).map_err(|e| e.to_string())?;
             let class = HSTRING::from(CLASS);
@@ -658,9 +755,17 @@ mod imp {
             // (Sketch, the installer) can find it.
             let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, &class, &HSTRING::from(tag), WS_POPUP, 0, 0, 0, 0, None, None, Some(instance.into()), None)
                 .map_err(|e| e.to_string())?;
-            if RegisterHotKey(Some(hwnd), 1, HOT_KEY_MODIFIERS(mods) | MOD_NOREPEAT, vk).is_err() {
-                let _ = DestroyWindow(hwnd);
-                return Err("Another app took the capture keys, so they don't work right now. Pick other keys in Settings.".into());
+            if let Some((mods, vk)) = keys {
+                if RegisterHotKey(Some(hwnd), 1, HOT_KEY_MODIFIERS(mods) | MOD_NOREPEAT, vk).is_ok() {
+                    let _ = std::fs::remove_file(error_file);
+                } else {
+                    let taken = "Another app took the capture keys, so they don't work right now. Pick other keys in Settings.";
+                    if !keep {
+                        let _ = DestroyWindow(hwnd);
+                        return Err(taken.into());
+                    }
+                    let _ = std::fs::write(error_file, taken);
+                }
             }
             let mut msg = MSG::default();
             while GetMessageW(&mut msg, None, 0, 0).as_bool() {
@@ -771,13 +876,32 @@ mod tests {
     #[test]
     fn missing_settings_mean_no_keys() {
         let s: Settings = serde_json::from_str("{}").unwrap();
-        assert_eq!(s, Settings { keys: None, after: After::Notify, hide: false, shift_open: true });
+        assert_eq!(s, Settings { keys: None, after: After::Notify, hide: false, shift_open: true, updates: true });
     }
 
     #[test]
-    fn an_old_file_with_the_background_switch_still_reads() {
+    fn an_old_file_with_the_background_switch_still_reads_and_updates() {
         let s: Settings = serde_json::from_str(r#"{"keys":"Alt+Shift+S","background":false,"after":"open"}"#).unwrap();
-        assert_eq!(s, Settings { keys: Some("Alt+Shift+S".into()), after: After::Open, hide: false, shift_open: true });
+        assert_eq!(s, Settings { keys: Some("Alt+Shift+S".into()), after: After::Open, hide: false, shift_open: true, updates: true });
+        let off: Settings = serde_json::from_str(r#"{"keys":null,"updates":false}"#).unwrap();
+        assert!(!off.updates);
+    }
+
+    #[test]
+    fn only_a_missing_or_empty_data_folder_is_new() {
+        let dir = std::env::temp_dir().join(format!("sketch-helper-new-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        assert!(is_new(&dir));
+        fs::create_dir_all(&dir).unwrap();
+        assert!(is_new(&dir));
+        fs::create_dir_all(dir.join("EBWebView")).unwrap();
+        assert!(!is_new(&dir));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_default_keys_are_a_capture_key() {
+        assert_eq!(parse_keys(DEFAULT_KEYS), Some((1 | 4, b'S' as u32)));
     }
 
     #[test]

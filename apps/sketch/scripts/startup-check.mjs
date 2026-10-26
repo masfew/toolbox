@@ -1,7 +1,7 @@
 // Times how long the built app takes from launch to its first drawn frame.
 // Usage: node scripts/startup-check.mjs [path-to-exe]
 // Fails when the median of 5 runs is over SKETCH_STARTUP_BUDGET_MS (default 1000).
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,6 +48,12 @@ for (let i = 0; i < runs; i++) {
   times.push(await once(i));
   await new Promise((r) => setTimeout(r, 500));
 }
+// Run from an install (check:update does), each start can leave a capture helper for updates (1.5.0);
+// Sketch passes the helper its data folder, which is how to find it.
+try {
+  execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-CimInstance Win32_Process -Filter "Name='sketch-capture.exe'" | Where-Object { $_.CommandLine -like '*${dataDir.replace(/'/g, "''")}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`], { windowsHide: true });
+} catch {}
+rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
 const sorted = [...times].sort((a, b) => a - b);
 const median = sorted[Math.floor(runs / 2)];
 console.log(`Start-up times: ${times.map((t) => `${t.toFixed(0)} ms`).join(', ')}`);

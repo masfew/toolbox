@@ -621,17 +621,18 @@ fn capture_take(id: u32, shots: tauri::State<Shots>) -> Response {
     Response::new(out)
 }
 
-/// What happens after a capture, whether Sketch hides first, and why the capture keys aren't working.
+/// What happens after a capture, whether Sketch hides first, whether the capture helper updates
+/// Sketch while it's closed, and why the capture keys aren't working.
 #[tauri::command]
 fn capture_options(app: AppHandle) -> helper::Options {
     helper::options(&data_dir(&app))
 }
 
-/// Changes the capture settings given; the rest stay as they are.
+/// Changes the capture helper's settings given; the rest stay as they are.
 #[tauri::command]
-async fn capture_options_set(app: AppHandle, after: Option<helper::After>, hide: Option<bool>, shift_open: Option<bool>) -> Result<(), String> {
+async fn capture_options_set(app: AppHandle, after: Option<helper::After>, hide: Option<bool>, shift_open: Option<bool>, updates: Option<bool>) -> Result<(), String> {
     let dir = data_dir(&app);
-    tauri::async_runtime::spawn_blocking(move || helper::set_options(&dir, after, hide, shift_open)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || helper::set_options(&dir, after, hide, shift_open, updates)).await.map_err(|e| e.to_string())?
 }
 
 /// Windows Settings' keyboard page, where Windows' own use of Print Screen is turned off.
@@ -689,6 +690,11 @@ pub fn run() {
         instance::Claim::First(server) => server,
     };
     shell::set_app_id();
+    // 1.5.0: a new data folder gets the default capture keys, before Tauri and WebView2 write
+    // anything there and before the page asks for the keys. It's a millisecond, on the first start only.
+    if helper::is_new(&key) {
+        helper::claim_defaults(&key);
+    }
     let mut first_launch = launch_from_args(&args, &cwd);
     // The capture shortcut with Sketch closed: freeze the screen now, before Tauri and the webview
     // start, so the picture is the moment the keys were pressed.

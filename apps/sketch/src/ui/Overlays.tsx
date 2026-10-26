@@ -308,7 +308,7 @@ function PasteShortcutRow(props: { label: string; recording: boolean; onRecord: 
 /** What happens once a capture is picked. */
 function CaptureAfterRow(props: { options: platform.CaptureOptions; onChange: (o: platform.CaptureOptions) => void; onError: (e: string | null) => void }) {
   const { options } = props;
-  const set = (change: { after?: platform.CaptureAfter; hide?: boolean; shiftOpen?: boolean }) => {
+  const set = (change: platform.CaptureChange) => {
     props.onChange({ ...options, ...change });
     platform.setCaptureOptions(change).catch((err) => props.onError(`Couldn't change capture: ${String(err)}`));
   };
@@ -332,6 +332,26 @@ function CaptureAfterRow(props: { options: platform.CaptureOptions; onChange: (o
         <input type="checkbox" data-setting="captureHide" checked={options.hide} onChange={(e) => set({ hide: (e.target as HTMLInputElement).checked })} />
       </label>
     </>
+  );
+}
+
+/** The capture helper keeps Sketch up to date while it's closed (1.5.0). An open Sketch updates itself either way. */
+function BackgroundUpdatesRow(props: { options: platform.CaptureOptions; onChange: (o: platform.CaptureOptions) => void; onError: (e: string | null) => void }) {
+  const { options } = props;
+  return (
+    <label class="general-row">
+      <span>Update in the background when Sketch is closed</span>
+      <input
+        type="checkbox"
+        data-setting="backgroundUpdates"
+        checked={options.updates}
+        onChange={(e) => {
+          const updates = (e.target as HTMLInputElement).checked;
+          props.onChange({ ...options, updates });
+          platform.setCaptureOptions({ updates }).catch((err) => props.onError(`Couldn't change background updates: ${String(err)}`));
+        }}
+      />
+    </label>
   );
 }
 
@@ -452,7 +472,7 @@ function PointerSettings() {
   );
 }
 
-/** Settings for fitting into Windows: light or dark, where files from Explorer open, the pointer, the paste key and what a capture does. */
+/** Settings for fitting into Windows: light or dark, where files from Explorer open, the pointer, the paste key, what a capture does and background updates. */
 function GeneralSettings() {
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -491,6 +511,7 @@ function GeneralSettings() {
             {shown ?? "The paste key and Capture Screen's shortcut (under File below) work anywhere in Windows, even when Sketch is closed. Capture Screen's can be Print Screen."}
             <PrintScreenButton text={shown} />
           </p>
+          {capture && <BackgroundUpdatesRow options={capture} onChange={setCapture} onError={setError} />}
         </>
       )}
     </div>

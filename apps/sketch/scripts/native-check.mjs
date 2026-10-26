@@ -2302,7 +2302,9 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
         expect(helper.find(work, bg.dir) === helperWindow, 'The first helper went away');
       });
 
-      await check('Removing Capture Screen\'s shortcut in Settings stops the helper and takes out the sign-in entry', async () => {
+      // A build run from outside an install has nothing to update, so with no keys the helper has
+      // nothing to do (check:update covers an install, where it stays for updates).
+      await check('Removing Capture Screen\'s shortcut in Settings stops the helper and takes out the sign-in entry when nothing else needs it', async () => {
         await app.press(',', ctrl);
         await sleep(200);
         await app.evaluate(`[...${captureRow}.querySelectorAll('.link')].find((b) => b.textContent === 'Remove').click()`);
@@ -2338,6 +2340,82 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
           try {
             process.kill(helper.pid(work, h));
           } catch {}
+        }
+      });
+
+      // 1.5.0: a new data folder gets the default capture key. Checks never take the real one
+      // (Alt+Shift+S, which the person's own helper may hold): SKETCH_TEST_DEFAULT_KEYS stands in.
+      const DEFAULT_KEYS = 'Alt+Shift+F8';
+      const defaultsEnv = (dir) => ({ SKETCH_DATA_DIR: dir, SKETCH_TEST_DEFAULT_KEYS: DEFAULT_KEYS });
+      const captureKeyNow = () => app.evaluate(`window.__TAURI_INTERNALS__.invoke('shortcut', { kind: 'capture' })`);
+      const stopHelperOf = (dir) => {
+        const h = helper.find(work, dir);
+        if (h) {
+          try {
+            process.kill(helper.pid(work, h));
+          } catch {}
+        }
+      };
+      const updatesBox = `document.querySelector('[data-setting="backgroundUpdates"]')`;
+
+      await check('A new data folder gets the default capture key, held by the helper with a sign-in entry, and background updates on', async () => {
+        const dir = join(work, 'data-new-install'); // Not made: a new install has no data folder yet.
+        try {
+          app = await launch(exe, work, [], 'new-install', defaultsEnv(dir));
+          expect((await captureKeyNow()) === DEFAULT_KEYS, `The capture key is ${await captureKeyNow()}`);
+          const h = await helper.wait(work, dir);
+          expect(existsSync(join(dir, 'run-entry.txt')), 'No sign-in entry (its stand-in file) was made');
+          await app.press(',', ctrl);
+          await sleep(200);
+          const shown = await app.evaluate(`${captureRow}.querySelector('.key-btn').textContent`);
+          expect(shown === DEFAULT_KEYS, `Settings shows ${shown}`);
+          expect((await app.evaluate(`${updatesBox}?.checked ?? null`)) === true, 'Update in the background is missing or off');
+          // Off with a key: saved, and the helper restarts for the key alone.
+          await app.evaluate(`${updatesBox}.click()`);
+          await waitUntil('the switch to be saved', async () => JSON.parse(readFileSync(join(dir, 'capture.json'), 'utf8')).updates === false);
+          await waitUntil('the helper to restart', async () => helper.find(work, dir) !== 0 && helper.find(work, dir) !== h);
+          expect(existsSync(join(dir, 'run-entry.txt')), 'The sign-in entry went with the key still set');
+          await app.evaluate(`${updatesBox}.click()`);
+          await waitUntil('the switch to be saved', async () => JSON.parse(readFileSync(join(dir, 'capture.json'), 'utf8')).updates === true);
+          await app.press('Escape');
+          await app.quit();
+          app = null;
+        } finally {
+          stopHelperOf(dir);
+        }
+      });
+
+      await check('A data folder Sketch has used with no capture key keeps none, and starts no helper', async () => {
+        const used = dataFor('no-key');
+        try {
+          app = await launch(exe, work, [], 'no-key', defaultsEnv(used.dir));
+          expect((await captureKeyNow()) === null, `The capture key is ${await captureKeyNow()}`);
+          await sleep(1500);
+          expect(!helper.find(work, used.dir), 'A capture helper started');
+          expect(!existsSync(join(used.dir, 'run-entry.txt')), 'A sign-in entry (its stand-in file) was made');
+          await app.quit();
+          app = null;
+        } finally {
+          stopHelperOf(used.dir);
+        }
+      });
+
+      await check('When another app holds the default key, a new data folder starts with no key and no message', async () => {
+        const dir = join(work, 'data-new-taken');
+        const holder = await holdHotkey(1 | 4, 0x77); // Alt+Shift+F8
+        try {
+          app = await launch(exe, work, [], 'new-taken', defaultsEnv(dir));
+          expect((await captureKeyNow()) === null, `The capture key is ${await captureKeyNow()}`);
+          const options = await app.evaluate(`window.__TAURI_INTERNALS__.invoke('capture_options')`);
+          expect(!options.error && options.updates === true, `Capture options: ${JSON.stringify(options)}`);
+          await sleep(1000);
+          const toast = await app.evaluate(`document.querySelector('.toast')?.textContent ?? null`);
+          expect(!toast, `A message showed: ${toast}`);
+          await app.quit();
+          app = null;
+        } finally {
+          holder.kill();
+          stopHelperOf(dir);
         }
       });
     } finally {

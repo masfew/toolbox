@@ -5,7 +5,9 @@
 //     A push reaches the install within one (shortened) fetch and its build starts within seconds;
 //     a commit outside Sketch's folder moves origin/main but starts no build; the person's branch and
 //     uncommitted files are untouched; a broken origin is logged once per run of failures and the
-//     app shows nothing; with Sketch closed, the capture helper fetches and starts the build itself;
+//     app shows nothing; with no capture key (1.5.0), Sketch still starts the capture helper with
+//     its sign-in entry, removing a key leaves it running, and turning background updates off stops
+//     it and takes the entry out; with Sketch closed, the helper fetches and starts the build itself;
 //     and a release install's leftover download is cleared.
 //  2. Release installs (F16.5): a release-channel build (signed with a key made for the check)
 //     reads latest.json from a local server. An equal build, a bad signature, a tampered zip and a
@@ -113,13 +115,13 @@ function makeInstall(name, exes, commit) {
   return install;
 }
 
-/** A data folder with quick fetches, the quiet restart held back, and capture keys so the helper runs. */
-function makeData(name) {
+/** A data folder with quick fetches, the quiet restart held back, and `keys` as the capture keys (none: the helper runs for updates alone). */
+function makeData(name, keys = null) {
   const data = join(work, name);
   mkdirSync(join(data, 'build'), { recursive: true });
   writeFileSync(join(data, 'fetch-seconds.txt'), '2');
   writeFileSync(join(data, 'idle-seconds.txt'), '86400');
-  writeFileSync(join(data, 'capture.json'), JSON.stringify({ keys: 'Ctrl+Alt+Shift+F11', after: 'notify', hide: false }));
+  writeFileSync(join(data, 'capture.json'), JSON.stringify({ keys, after: 'notify', hide: false }));
   return data;
 }
 
@@ -217,7 +219,37 @@ try {
     await waitUntil('the "works again" line', () => logLines(data, 'Fetching origin/main works again') === 1, 15_000);
   });
 
-  await check('With Sketch closed, the capture helper fetches and starts the build itself', async () => {
+  const runEntry = join(data, 'run-entry.txt');
+  const invoke = (command, args) => app.evaluate(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(command)}, ${JSON.stringify(args)}).then(() => 'done', (e) => String(e))`);
+
+  await check('With no capture key, Sketch starts the capture helper for updates, with its sign-in entry', async () => {
+    await waitUntil('the capture helper', () => helpers(install).length === 1, 10_000);
+    expect(existsSync(runEntry), 'No sign-in entry (its stand-in file) was made');
+  });
+
+  await check('Removing the capture key leaves the helper running for updates', async () => {
+    const before = helpers(install)[0];
+    let answer = await invoke('set_shortcut', { kind: 'capture', keys: 'Ctrl+Alt+Shift+F11' });
+    expect(answer === 'done', `Setting the key: ${answer}`);
+    answer = await invoke('set_shortcut', { kind: 'capture', keys: null });
+    expect(answer === 'done', `Removing the key: ${answer}`);
+    await waitUntil('the capture helper', () => helpers(install).length === 1, 10_000);
+    expect(helpers(install)[0] !== before, "The helper wasn't restarted to let go of the key");
+    expect(existsSync(runEntry), 'The sign-in entry (its stand-in file) went');
+  });
+
+  await check('Background updates off with no capture key stop the helper and take out its sign-in entry; on starts it again', async () => {
+    let answer = await invoke('capture_options_set', { updates: false });
+    expect(answer === 'done', `Turning them off: ${answer}`);
+    await waitUntil('the helper to stop', () => helpers(install).length === 0, 10_000);
+    expect(!existsSync(runEntry), 'The sign-in entry (its stand-in file) is still there');
+    answer = await invoke('capture_options_set', { updates: true });
+    expect(answer === 'done', `Turning them on: ${answer}`);
+    await waitUntil('the capture helper', () => helpers(install).length === 1, 10_000);
+    expect(existsSync(runEntry), 'No sign-in entry (its stand-in file) was made');
+  });
+
+  await check('With Sketch closed and no capture key, the capture helper fetches and starts the build itself', async () => {
     await waitUntil('the capture helper', () => helpers(install).length === 1, 10_000);
     await app.quit(1000);
     app = null;
@@ -279,7 +311,7 @@ try {
 
   const rInstall = makeInstall('install-release', releaseExes, me.commit);
   installs.push(rInstall);
-  const rData = makeData('data-release');
+  const rData = makeData('data-release', 'Ctrl+Alt+Shift+F11');
   // A clone install's build worktree, from before this install came from a release.
   mkdirSync(join(rData, 'build', 'sketch-update-build', 'apps'), { recursive: true });
   const rEnv = { ...baseEnv, SKETCH_DATA_DIR: rData, SKETCH_RELEASES_URL: `${base}/releases` };
