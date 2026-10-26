@@ -1,6 +1,6 @@
 # global-rules
 
-Version 1.2.0. See the [changes](#changes) at the end.
+Version 1.3.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -11,7 +11,7 @@ There are three rule files. Install any of them:
 | File | What it changes |
 |---|---|
 | `rules/decide-dont-ask.md` | Claude makes implementation choices itself and names them in the reply, and asks only when you'd notice the result, it reaches outside the project (including a run that would use a large share of your plan's usage limits), it could be unsafe, or it isn't confident. A question you ask gets an answer rather than an offer to do something. When it does ask, the context comes first and the question last |
-| `rules/subagent-model-and-effort.md` | Every subagent Claude starts gets a model and effort picked from a table by the kind of work: a small model for finding and reading, a mid-size one for summaries and routine edits, the largest only when the result has to match a full session |
+| `rules/subagent-model-and-effort.md` | Every subagent Claude starts gets a model and effort picked from a table by the kind of work: a small model for finding and reading, a mid-size one for summaries and routine edits, the largest only when the result has to match a full session. Claude decides whether a task needs subagents at all, and asks before more than 10 for one task, more than 5 on the largest model, or a test run that starts Claude sessions |
 | `rules/next-step-buttons.md` | Each button in the Claude desktop app's next-step box does exactly what its label says and nothing more, with one action per button: "Commit" commits, and opening a pull request waits for its own button once the commit is done. In the terminal, the same goes for the options of a question |
 
 Before and after, for a session asked to add a "clear finished" button to a to-do app:
@@ -95,8 +95,8 @@ There's nothing to run once it's installed. You'll see the difference in what se
 - **A session building a feature** picks the file layout, the library already in the project and the error handling itself, and says in a line what it chose and why. It still asks before changing what you or your users would see, such as a button's label or a game's prices.
 - **"What's left on this?"** gets the list, not a question asking whether to start on it.
 - **A question it does need to ask** comes after the explanation: what it found and what each option changes, then the question.
-- **A search across a large codebase** goes to a subagent on the small model at low effort, and Claude says how many subagents and which model before starting more than 10.
-- **A big test run or fan-out**, such as an eval that starts dozens of sessions, waits for your go-ahead first, since it can use a large share of a smaller plan's limits. A few subagents and checks that start no sessions go ahead without asking.
+- **A search across a large codebase** goes to a subagent on the small model at low effort. Whether to use subagents, and how many up to 10, is Claude's call, even when you say "use subagents if it helps".
+- **A big fan-out or test run**, meaning more than 10 subagents for one task, more than 5 on the largest model, or any test or eval that starts Claude sessions, waits for your go-ahead first, since it can use a large share of a smaller plan's limits. Checks that start no sessions go ahead without asking.
 - **A "Commit" button** commits and nothing else. If a pull request or a deploy follows, it gets its own button in the next box, once the commit is done.
 
 ## How It Works
@@ -173,6 +173,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.3.0: The subagent rule now starts with when subagents help, says whether to use any is the session's call ("use subagents if it helps" doesn't require them), and drops "fewer subagents save more than cheaper ones", which made sessions avoid them for everyday work. The limit is now a hard line: up to 10 subagents for one task, at most 5 on the largest model, are the session's call, and more than that, or any test or eval that starts Claude sessions, needs your go-ahead. Case 2 of "Decide, don't ask" says the same, in place of "dozens of sessions or subagents". Nothing to do: `git pull` picks it up.
 - 1.2.0: A third rule file, `rules/next-step-buttons.md`: each next-step button does exactly what its label says, with one action per button, and the same goes for a question's options in the terminal. A first install takes it with the other two. An existing install keeps the files it chose until you rerun with `--only`, so to add it: `python install.py --only decide-dont-ask subagent-model-and-effort next-step-buttons` (or with only the files you want).
 - 1.1.0: Sessions now ask before a run that would use a large share of the plan's usage limits, such as a test suite, eval or subagent fan-out that starts dozens of sessions. Case 2 of "Decide, don't ask" used to say "spending beyond the session's normal Claude usage", which reads as money, so a big test run on a smaller plan could pass as normal usage. The subagent rule's more-than-10 line now says the same. Nothing to do: `git pull` picks it up.
 - 1.0.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
