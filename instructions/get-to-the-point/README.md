@@ -1,6 +1,6 @@
 # Get to the Point
 
-Version 1.0.1. See the [changes](#changes) at the end.
+Version 1.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -172,5 +172,6 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.1.0: New rule 29. When Claude agrees with an idea you put forward, it says so in a line instead of explaining back why the idea works, and spends its words only on what you didn't raise.
 - 1.0.1: A `--remove` run from the installed copy, in a terminal open in that folder, could leave `~/.claude/tools/get-to-the-point` behind empty on Windows, and the next install then stopped with "exists but isn't this tool". Installs and `--remove` now delete that empty folder.
 - 1.0.0: First public version. Installs through `~/.claude/tools/get-to-the-point` with an install record, adds `--copy` and `--link`, and `--remove` puts back the output style you had before.
