@@ -1103,10 +1103,11 @@ class LocalAppLaunch(unittest.TestCase):
         self.command("Start a new session\n" + "\U0001F600" * 3000)
         self.assertEqual((len(self.app.seen), self.replies), (1, []))
 
-    def test_no_folder_to_give_means_the_desktop_app(self):
+    def test_no_environment_and_no_default_folder_leaves_the_folder_to_the_app(self):
         self.write_config(local_app=app_config(self.folder))
         self.command("Start a new session\nFix it")
-        self.assertEqual((self.app.seen, self.launches), ([], [("Fix it", None)]))
+        self.assertEqual(self.app.seen, [{"action": "start", "notify": True, "options": {"prompt": "Fix it", "mode": "Auto"}}])
+        self.assertEqual(self.launches, [])
 
     def test_an_environment_without_a_folder_means_the_desktop_app(self):
         self.command("Start a new session in Cloud\nFix it")

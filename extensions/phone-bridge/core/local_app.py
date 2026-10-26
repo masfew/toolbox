@@ -29,7 +29,7 @@ DEFAULTS = {
     "name": "Local app",  # how messages name the app
     "timeout_seconds": 5,  # for list, notify and archive replies
     "start_timeout_seconds": 30,  # a start replies once the session has started, which takes longer
-    "default_folder": "",  # the folder for a new session that names no environment ("" = use the Claude desktop app)
+    "default_folder": "",  # the folder for a new session that names no environment ("" = the app's own default)
 }
 MAX_BODY = 1024 * 1024  # bytes; the app refuses larger requests
 POLL = 0.05  # seconds between looks for the reply

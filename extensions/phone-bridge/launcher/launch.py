@@ -588,8 +588,10 @@ def refuse_long_prompt(message, link):
 def start_in_app(message, prompt, conf, app, environment):
     """Starts the session through the local app's request folder. True when the
     command was dealt with (started, or the app refused and the reply says why);
-    False to go on with the Claude desktop app: no folder to give it, or nothing
-    answered."""
+    False to go on with the Claude desktop app: a saved environment with no folder
+    to give it, or nothing answered. With no environment and no default_folder,
+    no folder is sent and the app starts the session where its own new sessions
+    start."""
     options = {"prompt": prompt, "mode": conf["permission_mode"]}
     if environment:
         preset = next((p for p in presets() or [] if p["name"] == environment), None) or {}
@@ -599,13 +601,11 @@ def start_in_app(message, prompt, conf, app, environment):
                 options[key] = preset[key]
         if isinstance(preset.get("worktree"), bool):
             options["environment"] = "worktree" if preset["worktree"] else "local"
-        why = f"the saved environment {environment} has no folder"
-    else:
+        if not options["cwd"]:
+            log(f"{app['name']} not used: the saved environment {environment} has no folder")
+            return False
+    elif app["default_folder"]:
         options["cwd"] = app["default_folder"]
-        why = "no environment named and no default_folder set"
-    if not options["cwd"]:
-        log(f"{app['name']} not used: {why}")
-        return False
     try:
         session = local_app.start(app, options, notify=not test_mode)
     except local_app.AppError as e:
