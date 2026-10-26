@@ -1,6 +1,6 @@
 # phone-bridge
 
-Version 1.2.1. See the [changes](#changes) at the end.
+Version 1.2.2. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -487,6 +487,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.2.2: The listener always starts outside the Claude desktop app's package, so its requests reach a local app even when a desktop session's hook started it.
 - 1.2.1: A new session that names no saved environment, with no `default_folder` set, now goes to the local app, which starts it in its own default folder, instead of the desktop app.
 - 1.2.0: A local app that takes requests through a request folder can start the launcher's sessions and appear in `/archive` and `/notify_me`, set with `local_app` in the config. Without it, or when it doesn't answer, everything works on the Claude desktop app as before.
 - 1.1.0: Another app that runs Claude Code sessions can title their pushes and give their link (or none) with a `<session-id>.host.json` file beside the flag.

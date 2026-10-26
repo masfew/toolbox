@@ -627,7 +627,7 @@ class HookMarker(unittest.TestCase):
             mock.patch.object(self.hook, "presence_state", lambda: {"heartbeat": time.time()}),
             mock.patch.object(self.hook, "listener_running", lambda: True),
             mock.patch.object(self.hook, "mark_active", lambda *a: None),
-            mock.patch.object(self.hook, "start_in_background", lambda *a: self.started.append(a)),
+            mock.patch.object(self.hook, "start_in_background", lambda *a, **k: self.started.append(a)),
             mock.patch.dict(os.environ, {self.hook.HOST_SESSION_VAR: ""}),
         ]
         for p in self.patches:
@@ -703,6 +703,34 @@ class Core(unittest.TestCase):
                          [bridge.python_exe(), str(bridge.TOOL_DIR / "launcher" / "launch.py"), "--environments"])
         self.assertEqual(bridge.resolve_run(["C:/x/handler.py"]), ["C:/x/handler.py"])
         self.assertEqual(bridge.resolve_run(["node", "handler.js"]), ["node", "handler.js"])
+
+    def background_start(self, outside_package, in_package, outside_works=True):
+        popened, outside = [], []
+        with mock.patch.object(bridge, "in_app_package", lambda: in_package), \
+                mock.patch.object(bridge, "start_outside_package", lambda argv: outside.append(argv) or outside_works), \
+                mock.patch.object(bridge.subprocess, "Popen", lambda argv, **k: popened.append(argv)):
+            bridge.start_in_background("listener.py", outside_package=outside_package)
+        return popened, outside
+
+    def test_the_listener_starts_outside_the_app_package_from_inside_it(self):
+        popened, outside = self.background_start(True, in_package=True)
+        self.assertEqual((popened, [a[1:] for a in outside]), ([], [["listener.py"]]))
+
+    def test_outside_the_package_it_starts_as_usual(self):
+        popened, outside = self.background_start(True, in_package=False)
+        self.assertEqual((len(popened), outside), (1, []))
+
+    def test_if_wmi_fails_it_still_starts_inside(self):
+        popened, outside = self.background_start(True, in_package=True, outside_works=False)
+        self.assertEqual((len(popened), len(outside)), (1, 1))
+
+    def test_other_scripts_never_leave_the_package(self):
+        popened, outside = self.background_start(False, in_package=True)
+        self.assertEqual((len(popened), outside), (1, []))
+
+    def test_the_hook_starts_the_listener_outside_the_package(self):
+        self.assertIn("start_in_background(LISTENER_SCRIPT, outside_package=True)",
+                      (ROOT / "notify" / "notify_hook.py").read_text(encoding="utf-8"))
 
     def test_snooze_round_trip(self):
         with tempfile.TemporaryDirectory() as tmp, \

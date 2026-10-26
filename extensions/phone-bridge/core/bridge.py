@@ -182,11 +182,52 @@ def resolve_run(argv):
     return argv
 
 
-def start_in_background(script, *args):
+def in_app_package():
+    """True if Windows redirects this process's AppData writes into a packaged
+    app's private folder, as it does for everything the Claude desktop app starts
+    (its hooks included). Such a process reports no package identity, so this
+    writes a probe file and looks for where it landed."""
+    local = os.environ.get("LOCALAPPDATA")
+    if os.name != "nt" or not local:
+        return False
+    probe = Path(local) / f"phone-bridge-probe-{os.getpid()}-{time.time_ns()}"
+    try:
+        probe.write_text("", encoding="utf-8")
+    except OSError:
+        return False
+    try:
+        return any(Path(local, "Packages").glob(f"*/LocalCache/Local/{probe.name}"))
+    finally:
+        try:
+            probe.unlink()
+        except OSError:
+            pass
+
+
+def start_outside_package(argv):
+    """Starts argv through WMI, which Windows runs outside any app's package, with
+    the user's default environment and ~/.claude as its folder. True if it started."""
+    quote = lambda text: "'" + text.replace("'", "''") + "'"
+    script = (f"$p = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList "
+              f"{quote(subprocess.list2cmdline(argv))}, {quote(str(CLAUDE_DIR))}; exit $p.ReturnValue")
+    try:
+        done = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                              stdin=subprocess.DEVNULL, capture_output=True, timeout=30, creationflags=0x08000000)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
+
+
+def start_in_background(script, *args, outside_package=False):
     """Starts a script in the background, detached from the short-lived caller.
     It runs from ~/.claude, not the tool's folder: a running program's working
-    folder can't be moved or renamed on Windows, so a git pull would fail."""
+    folder can't be moved or renamed on Windows, so a git pull would fail.
+    outside_package: when the caller runs inside the Claude desktop app's package,
+    start it outside, so its AppData writes reach the real folders other programs
+    read (the listener's launcher writes a local app's requests there)."""
     exe = python_exe(windowless=True)
+    if outside_package and in_app_package() and start_outside_package([exe, str(script), *args]):
+        return
     flags = 0x00000008 | 0x00000200 | 0x08000000  # detached, new group, no window
     for extra in (0x01000000, 0):  # break away from the app's job object if allowed
         try:

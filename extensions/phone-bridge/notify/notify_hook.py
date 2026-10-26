@@ -634,7 +634,7 @@ def main():
     if sys.platform == "win32" and presence_state() is None:
         start_in_background(PRESENCE_SCRIPT)  # every event checks, so it's up long before you leave
     if sys.platform == "win32" and not listener_running():
-        start_in_background(LISTENER_SCRIPT)
+        start_in_background(LISTENER_SCRIPT, outside_package=True)  # its launcher writes a local app's requests under AppData
 
     # A claude that a session ran itself (a test run, a script) isn't the user's,
     # so it never pushes. It usually inherits that session's record ID while
