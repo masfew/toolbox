@@ -44,6 +44,8 @@ TURN_STALE = 2 * 3600  # seconds
 LOCAL_COMMAND = re.compile(r"^\s*<(command-name|command-message|local-command-stdout|local-command-caveat)>")
 # A finished background task reports back with the ID of the call that started it.
 FINISHED_TASK = re.compile(r"<tool-use-id>(toolu_\w+)</tool-use-id>")
+# SendMessage's result when the message woke a subagent that had already finished.
+RESUMED_AGENT = '"resumedAgentId"'
 # Background work this old that never reported back was likely killed by
 # quitting the app, so it no longer counts as running.
 MAX_TASK_AGE = timedelta(hours=24)
@@ -204,6 +206,7 @@ def background_work_pending(transcript_path, since=None, servers=False):
     launch_results = {}  # launch call ID -> its result, which names the task ID
     stop_calls = {}  # TaskStop call ID -> the task ID it stops
     stopped = set()  # task IDs Claude stopped itself
+    sends = {}  # SendMessage call ID -> (start time, label)
     try:
         with open(transcript_path, encoding="utf-8") as f:
             for line in f:
@@ -222,10 +225,19 @@ def background_work_pending(transcript_path, since=None, servers=False):
                     elif kind == "tool_use" and block.get("name") in ("TaskStop", "KillShell"):
                         args = block.get("input") or {}
                         stop_calls[block.get("id")] = args.get("task_id") or args.get("shell_id")
+                    elif kind == "tool_use" and block.get("name") == "SendMessage":
+                        summary = ((block.get("input") or {}).get("summary") or "").strip()
+                        sends[block.get("id")] = (started_at(entry), summary)
                     elif kind == "tool_result" and block.get("is_error"):
                         started.pop(call, None)  # never launched
                         stop_calls.pop(call, None)  # stop failed
+                        sends.pop(call, None)
                     elif kind == "tool_result" and call in started:
+                        launch_results[call] = result_text(block)
+                    elif kind == "tool_result" and call in sends and RESUMED_AGENT in result_text(block):
+                        # A message to a subagent that already reported back runs it
+                        # again; its completion message names this SendMessage call.
+                        started[call], labels[call] = sends.pop(call)
                         launch_results[call] = result_text(block)
                     elif kind == "tool_result" and stop_calls.get(call):
                         stopped.add(stop_calls.pop(call))

@@ -821,6 +821,62 @@ class WaitingPushes(unittest.TestCase):
         self.assertEqual(self.sent, ["hourglass_flowing_sand"])
 
 
+class BackgroundWork(unittest.TestCase):
+    """What counts as background work that hasn't reported back."""
+
+    def setUp(self):
+        from notify import sessions
+        self.sessions = sessions
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "t.jsonl"
+        self.lines = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def add(self, kind, *blocks):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+        self.lines.append({"type": kind, "timestamp": stamp, "message": {"content": list(blocks)}})
+
+    def pending(self):
+        self.path.write_text("\n".join(json.dumps(line) for line in self.lines) + "\n", encoding="utf-8")
+        return self.sessions.background_work_pending(str(self.path))
+
+    def launch_agent_that_finishes(self):
+        self.add("assistant", {"type": "tool_use", "id": "toolu_agent", "name": "Agent",
+                               "input": {"description": "Build check", "run_in_background": True}})
+        self.add("user", {"type": "tool_result", "tool_use_id": "toolu_agent", "content": "Async agent launched"})
+        self.add("user", {"type": "text", "text": "<task-notification>\n<task-id>a1</task-id>\n"
+                                                  "<tool-use-id>toolu_agent</tool-use-id>\n</task-notification>"})
+
+    def send(self, result):
+        self.add("assistant", {"type": "tool_use", "id": "toolu_send", "name": "SendMessage",
+                               "input": {"to": "a1", "summary": "Go ahead with stage 2", "message": "Go ahead."}})
+        self.add("user", {"type": "tool_result", "tool_use_id": "toolu_send",
+                          "content": [{"type": "text", "text": json.dumps(result)}]})
+
+    def test_a_message_that_wakes_a_finished_subagent_counts_until_it_reports_back(self):
+        self.launch_agent_that_finishes()
+        self.assertEqual(self.pending(), [])
+        self.send({"success": True, "message": "Resuming agent a1", "resumedAgentId": "a1"})
+        self.assertEqual(self.pending(), ["Go ahead with stage 2"])
+        self.add("user", {"type": "text", "text": "<task-notification>\n<task-id>a1</task-id>\n"
+                                                  "<tool-use-id>toolu_send</tool-use-id>\n</task-notification>"})
+        self.assertEqual(self.pending(), [])
+
+    def test_a_message_to_a_running_subagent_adds_nothing(self):
+        self.launch_agent_that_finishes()
+        self.send({"success": True, "message": "Message queued for a1"})
+        self.assertEqual(self.pending(), [])
+
+    def test_a_woken_subagent_that_claude_stops_counts_as_finished(self):
+        self.launch_agent_that_finishes()
+        self.send({"success": True, "message": "Resuming agent a1", "resumedAgentId": "a1"})
+        self.add("assistant", {"type": "tool_use", "id": "toolu_stop", "name": "TaskStop", "input": {"task_id": "a1"}})
+        self.add("user", {"type": "tool_result", "tool_use_id": "toolu_stop", "content": "Stopped"})
+        self.assertEqual(self.pending(), [])
+
+
 class HostFile(unittest.TestCase):
     """Another app hosting a session titles its pushes and gives (or drops) the link."""
 
