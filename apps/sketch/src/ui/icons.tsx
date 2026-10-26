@@ -17,7 +17,6 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
-  CircleAlert,
   CircleArrowUp,
   Copy,
   Crop,
@@ -126,7 +125,6 @@ const ICONS: Record<string, IconComponent> = {
   mouse: MousePointer2,
   capture: Camera,
   copy: Copy,
-  alert: CircleAlert,
   'update-ready': CircleArrowUp,
   'update-building': LoaderCircle,
 };

@@ -71,7 +71,7 @@ function MouseSpeedPopover(props: { anchor: DOMRect; onClose: () => void }) {
   );
 }
 
-/** The button in the tool rail that opens the mouse speed slider. It's coloured, with a notice icon, while the speed isn't normal. */
+/** The button in the tool rail that opens the mouse speed slider. It's coloured while the speed isn't normal. */
 export function MouseSpeedButton() {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   // Pressing the button while open closes the popover on pointer-down; its click then mustn't reopen it.
@@ -94,7 +94,6 @@ export function MouseSpeedButton() {
         }}
       >
         <Icon name="mouse" size={20} />
-        {changed && <Icon name="alert" size={11} class="mouse-badge" />}
       </button>
       {anchor && (
         <MouseSpeedPopover

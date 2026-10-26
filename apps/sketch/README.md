@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.5.2. See the [changes](#changes) at the end.
+Version 1.5.3. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -194,7 +194,7 @@ Save a whiteboard as `.sktch` to keep it endless and editable. Saving it as PNG,
 
 ### Mouse Speed
 
-The mouse button at the bottom of the tool rail, above the command palette's search button, opens a slider that sets a slower mouse speed (to as little as a quarter of its speed, never faster than normal) for steadier drawing and handwriting. The slower speed applies only while you hold **Left Ctrl** with a Sketch window in focus, whether you're lining the pointer up or drawing; the rest of the time, drawing included, the mouse keeps its own speed. Sketch puts your own speed back the moment you let go of Left Ctrl, another window takes focus, or Sketch minimises or closes. Right Ctrl does nothing. Holding Ctrl while you drag a shape or line also skips snapping, as it always has. While the speed isn't normal the button turns blue with a small notice icon. Reset to Normal in the slider, double-clicking the slider, or Reset Mouse Speed in the command palette sets it back. The setting is remembered between sessions.
+The mouse button at the bottom of the tool rail, above the command palette's search button, opens a slider that sets a slower mouse speed (to as little as a quarter of its speed, never faster than normal) for steadier drawing and handwriting. The slower speed applies only while you hold **Left Ctrl** with a Sketch window in focus, whether you're lining the pointer up or drawing; the rest of the time, drawing included, the mouse keeps its own speed. Sketch puts your own speed back the moment you let go of Left Ctrl, another window takes focus, or Sketch minimises or closes. Right Ctrl does nothing. Holding Ctrl while you drag a shape or line also skips snapping, as it always has. While the speed isn't normal the button stays blue, like a selected tool. Reset to Normal in the slider, double-clicking the slider, or Reset Mouse Speed in the command palette sets it back. The setting is remembered between sessions.
 
 Windows has one mouse speed for the whole PC, so Sketch never saves its change to your Windows settings: if Sketch ever crashed with the slower speed in force, signing out or restarting would bring your own speed back, and so does the next start of Sketch.
 
@@ -408,6 +408,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.5.3: The mouse speed button no longer shows a yellow notice icon when the speed isn't normal, since the slower speed only applies while you hold Left Ctrl. The button still stays blue.
 - 1.5.2: The first capture after Sketch updates itself while closed keeps its notification. Until now it vanished a moment after showing, because the updated Sketch replaced the capture helper that showed it; the old helper now waits for its notification to go before handing over.
 - 1.5.1: The capture notification stays as long as Windows' own notifications (5 seconds unless changed in Windows Settings, Accessibility, Visual effects) instead of going after 3 seconds.
 - 1.5.0: A closed Sketch now keeps itself up to date whether or not a capture key is set: the capture helper runs at sign-in for updates, and **Update in the background when Sketch is closed** in Settings (on by default, also after updating) turns that off. New installs start with **Alt+Shift+S** as the capture key, unless another app already uses it; installs updating from an older version keep their own capture key, or none.
