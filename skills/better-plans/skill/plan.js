@@ -796,13 +796,14 @@
       target.addEventListener(type, fn, opts);
       offs.push(function () { target.removeEventListener(type, fn, opts); });
     }
-    var toTop = null, observer = null, glideFrame = 0;
+    var toTop = null, toFuture = null, observer = null, glideFrame = 0;
     function teardownRun() {
       alive = false;
       offs.forEach(function (f) { f(); });
       if (glideFrame) cancelAnimationFrame(glideFrame);
       if (observer) observer.disconnect();
       if (toTop && toTop.parentNode) toTop.parentNode.removeChild(toTop);
+      if (toFuture && toFuture.parentNode) toFuture.parentNode.removeChild(toFuture);
     }
     var table = document.getElementById('overview-table');
     if (!table) return teardownRun;
@@ -1869,6 +1870,30 @@
         }
       });
     }
+
+    // Future Ideas: a button on the right of the row under the summary (the Save Snapshot line sits on its left, placed by
+    // snapshotBar()) that glides down to the Future Ideas heading, for long plans where the board sits far below. DOM only,
+    // like the corner button, so snapshots never hold it.
+    var future = document.getElementById('future'), summary = document.querySelector('.plan-header .summary');
+    if (future && summary) {
+      toFuture = document.createElement('div');
+      toFuture.className = 'header-actions';
+      var jump = document.createElement('button');
+      jump.type = 'button';
+      jump.className = 'idea-btn to-future';
+      jump.textContent = 'Future Ideas';
+      jump.title = 'Go to the Future Ideas section';
+      toFuture.appendChild(jump);
+      summary.parentNode.insertBefore(toFuture, summary.nextSibling);
+      jump.addEventListener('click', function (e) {
+        var margin = parseFloat(getComputedStyle(future).scrollMarginTop) || 16;
+        glideTo(future.getBoundingClientRect().top + window.scrollY - margin);
+        if (!e.detail) {
+          var h = future.querySelector('h2');
+          if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+        }
+      });
+    }
     return teardownRun;
   }
 
@@ -1922,8 +1947,9 @@
       bar.appendChild(barNote);
       bar.appendChild(barBtn);
     }
-    var header = main.querySelector('.plan-header');
-    if (header && bar.parentNode !== header) header.appendChild(bar);
+    var header = main.querySelector('.plan-header'), row = header && header.querySelector('.header-actions');
+    if (row) { if (bar.parentNode !== row) row.insertBefore(bar, row.firstChild); }
+    else if (header && bar.parentNode !== header) header.appendChild(bar);
     var at = hub.model.M.snapshotAt, when = '';
     if (typeof at === 'string' && at) {
       var d = new Date(at);

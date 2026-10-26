@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.5.0. See the [changes](#changes) at the end.
+Version 1.6.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -92,7 +92,7 @@ Ask for a plan as usual. Claude builds the page, publishes it as an Artifact tit
 - *"Read the plan and build step 3.2."* A session reads only the outline and the parts it needs, not the whole page.
 - *"Build the selected phases in the <plan>."* After you tick phases in the overview (see Building Selected Phases below).
 
-On the page, a round button in the bottom-right corner takes you to the next step that isn't finished. Finished phases fold up in the overview, and once the whole build plan is finished, or 10 or more planned features are done, those fold together into one row. Drag a planned feature by the dots left of its header to change its order.
+On the page, a round button in the bottom-right corner takes you to the next step that isn't finished, and a **Future Ideas** button under the summary jumps down to the Future Ideas board. Finished phases fold up in the overview, and once the whole build plan is finished, or 10 or more planned features are done, those fold together into one row. Drag a planned feature by the dots left of its header to change its order.
 
 **Snapshots.** A plan's content lives in the page's database, and the page builds itself from it every time it opens. The page's HTML is a snapshot for people who can't load the database (signed out, or a tool that doesn't run the page's script). When you open a plan that has changed and whose snapshot is over a day old (or more than 30 updates behind), the page saves a fresh snapshot by itself. The **Save Snapshot** line under the summary saves one whenever you want.
 
@@ -176,6 +176,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.6.0: A Future Ideas button under the plan's summary, on the right of the Save Snapshot line, jumps straight down to the Future Ideas board, so long plans need no scrolling to reach it. Published plans get it the next time their look is refreshed.
 - 1.5.0: Batches group whole phases into as few sessions as the plan allows. A batch now ends only where the work waits on something outside the plan or the session would run too long; approvals, hands-on checks and decisions are pauses inside a batch, and the Batches table says why each batch ends. Plans already split into batches keep their batches until you ask to regroup them.
 - 1.4.0: Plans get build boxes. Tick the planned features (and, in a plan without batches, the core phases) you want built next, and tell a new session to build the selected phases. It claims them all in one write, so no other session can take them, shows them as Claimed with a Release button, and builds them in dependency order as an orchestrator, one worker subagent per phase. Naming two or more phases for one session works the same way. Published plans get the boxes the next time their look is refreshed.
 - 1.3.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.

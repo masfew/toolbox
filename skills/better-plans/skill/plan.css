@@ -233,6 +233,10 @@ details[open] > .card-head::after { transform: translateY(-0.125rem) rotate(45de
 .to-top:hover::before { border-color: var(--fg); }
 .to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .to-top { transition: opacity 0.2s ease, visibility 0.2s; } }
+/* The row under the summary, added by the script: the Save Snapshot line on the left, the Future Ideas button on the right */
+.header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem 0.875rem; margin-top: -1rem; }
+.header-actions .snapshot-bar { margin-top: 0; margin-right: auto; }
+.to-future { padding: 0.375rem 0.625rem; }
 
 /* Running text inside steps and extra sections */
 .prose { max-width: 65ch; }
