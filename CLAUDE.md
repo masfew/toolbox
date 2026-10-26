@@ -28,3 +28,7 @@ Each tool's README has an Updating and an Uninstall section: follow those the sa
 ## Changing a Tool
 
 A new tool starts from `.github/template/`, as the comment at the top of its `README.md` says. Each tool's `install.py` keeps the functions it shares with `.github/template/install.py` in step with it, as the top of that file explains, and `.github/scripts/pre_push_check.py` checks this before every commit and push.
+
+## Old Release Tags
+
+The repo's history was rebuilt on 26 Oct 2026: each tool kept its own commits, and the shared files (this file, the root README, `.github/`) start at the commit "Add the repo's shared files". Every tag made before that points at a commit with no `.github/workflows/release.yml`, so pushing or re-pushing one of those tags starts no release. To recreate a release for an old tag, run `python .github/scripts/release_notes.py <tag> --ref <tag> --notes <file> --zip <file>` from a short path (a long one fails with "Filename too long") and make it with `gh release create`. Tags made from now on release through the workflow as usual.
