@@ -562,8 +562,9 @@ struct Prepared {
     waits: Mutex<HashMap<String, mpsc::Receiver<bool>>>,
 }
 
-/// A hidden window closes by itself after this, in case the helper's word that its notification
-/// went never arrives (it went while this Sketch was still starting, say).
+/// A hidden window closes by itself after this, or 10 s after its notification's time if that's
+/// longer (Windows lets it be up to 5 minutes), in case the helper's word that its notification went
+/// never arrives (it went while this Sketch was still starting, say).
 const HIDDEN_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Makes window `label` the hidden window for notification `note`. Gives back the hidden window it
@@ -573,9 +574,10 @@ fn prepare_hidden(app: &AppHandle, label: &str, note: u32) -> Option<HiddenWindo
     let state = app.state::<Prepared>();
     state.waits.lock().unwrap().insert(label.into(), rx);
     let old = state.current.lock().unwrap().replace(HiddenWindow { label: label.into(), note, tx });
+    let limit = HIDDEN_LIMIT.max(note::life(&data_dir(app)) + std::time::Duration::from_secs(10));
     let (app, label) = (app.clone(), label.to_string());
     std::thread::spawn(move || {
-        std::thread::sleep(HIDDEN_LIMIT);
+        std::thread::sleep(limit);
         end_hidden(&app, |h| h.label == label, false);
     });
     old

@@ -779,7 +779,7 @@ async function captureOpen(id = 'capture-open', tap = false) {
       let pid = 0;
       await waitUntil('the hidden Sketch', async () => (pid = sketchPid()) !== 0, 10000);
       if (!tap) {
-        // Ready well within the notification's 3 seconds.
+        // Ready well before the notification goes.
         await sleep(2000);
         timed = helper.timeShown(work, h, pid);
       }

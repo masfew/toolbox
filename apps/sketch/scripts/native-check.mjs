@@ -1117,8 +1117,8 @@ try {
   const dataFor = (name) => {
     const dir = join(work, `data-${name}`);
     mkdirSync(dir, { recursive: true });
-    // Capture notifications go after 3 seconds (F12); checks hold them for a minute, so a slow step
-    // before a click doesn't lose one. The checks of the 3 seconds take this file out.
+    // Capture notifications go after Windows' notification time (F12); checks hold them for a minute,
+    // so a slow step before a click doesn't lose one. The check of that time takes this file out.
     writeFileSync(join(dir, 'note-ms.txt'), '60000');
     return { dir, env: { SKETCH_DATA_DIR: dir } };
   };
@@ -2090,16 +2090,18 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
 
       // ---------- Instant open from the notification (F12), Sketch closed ----------
 
-      await check('A capture not clicked loses its notification after 3 seconds, with nothing left in the notification centre, and its hidden Sketch closes', async () => {
+      await check("A capture not clicked loses its notification after Windows' notification time, with nothing left in the notification centre, and its hidden Sketch closes", async () => {
+        // Settings, Accessibility, Visual effects, "Dismiss notifications after this amount of time".
+        const life = Number(ps(`(Get-ItemProperty 'HKCU:\\Control Panel\\Accessibility').MessageDuration`)) || 5;
         noteLife(0);
         try {
           await helperCapture(250, 150);
           const t0 = Date.now();
           const pid = await hiddenSketch();
-          await waitUntil('the hidden Sketch to close', async () => !alive(pid), 8000);
+          await waitUntil('the hidden Sketch to close', async () => !alive(pid), life * 1000 + 5000);
           const s = (Date.now() - t0) / 1000;
-          console.log(`      Closed ${s.toFixed(1)} s after the capture`);
-          expect(s > 2.5, `The hidden Sketch closed after only ${s.toFixed(1)} s`);
+          console.log(`      Closed ${s.toFixed(1)} s after the capture (Windows' notification time: ${life} s)`);
+          expect(s > life - 0.5, `The hidden Sketch closed after only ${s.toFixed(1)} s`);
           expect(notesInCentre(helperPid) === 0, 'The notification is still in the notification centre');
           expect(sketchPids().length === 0, 'A Sketch process is left');
           const left = readdirSync(join(bg.dir, 'captures')).filter((f) => f.endsWith('.rgba'));

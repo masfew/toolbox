@@ -6,9 +6,9 @@
 //! Sketch runs. Its notifications are taken off the screen and out of the notification centre when
 //! it quits (`close_all`), so none are left that do nothing when clicked.
 //!
-//! Each notification goes after 3 seconds (F12): a capture not clicked by then is one taken only to
-//! paste elsewhere. It's taken off the screen and out of the notification centre, so none pile up
-//! there, and its capture is dropped.
+//! Each notification goes after the user's own Windows notification time (F12; 5 seconds unless
+//! changed): a capture not clicked by then is one taken only to paste elsewhere. It's taken off the
+//! screen and out of the notification centre, so none pile up there, and its capture is dropped.
 
 use std::fs;
 use std::io::BufWriter;
@@ -21,25 +21,40 @@ use crate::capture::Shot;
 /// What happened to a notification. Each one gets exactly one.
 pub enum Event {
     Clicked,
-    /// Gone after its 3 seconds, dismissed, replaced by a newer capture's, or taken away when Sketch
+    /// Gone after its time, dismissed, replaced by a newer capture's, or taken away when Sketch
     /// quit.
     Closed,
 }
 
-/// How long a notification stays before Sketch takes it away. Windows only offers 5 seconds (or the
-/// user's longer setting) or about 25, so Sketch times it itself.
-const LIFE: Duration = Duration::from_secs(3);
+/// Windows' own notification time when it can't be read.
+const LIFE: Duration = Duration::from_secs(5);
 
-/// Checks (test hooks only) can hold notifications longer with `note-ms.txt` in the data folder, so
-/// a slow step between a capture and its click doesn't lose the notification.
-fn life(dir: &Path) -> Duration {
+/// How long a notification stays before Sketch takes it away: the user's "Dismiss notifications
+/// after this amount of time" (Settings, Accessibility, Visual effects), as Windows' own pop-ups
+/// get. Until 1.5.1 it was a fixed 3 seconds, which went before people looked for it. Sketch still
+/// times it itself, since a notification that skips its pop-up reports timing out at once (see
+/// `Dismissed` below). Checks (test hooks only) can hold notifications longer with `note-ms.txt` in
+/// the data folder, so a slow step between a capture and its click doesn't lose the notification.
+pub fn life(dir: &Path) -> Duration {
     let from_file = || -> Option<u64> {
         if !std::env::var("SKETCH_TEST_HOOKS").is_ok_and(|v| v == "1") {
             return None;
         }
         fs::read_to_string(dir.join("note-ms.txt")).ok()?.trim().parse().ok()
     };
-    from_file().map(Duration::from_millis).unwrap_or(LIFE)
+    from_file().map(Duration::from_millis).or_else(windows_life).unwrap_or(LIFE)
+}
+
+fn windows_life() -> Option<Duration> {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETMESSAGEDURATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS};
+        let mut secs: u32 = 0;
+        SystemParametersInfoW(SPI_GETMESSAGEDURATION, 0, Some(&mut secs as *mut u32 as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)).ok()?;
+        (secs > 0).then(|| Duration::from_secs(secs.into()))
+    }
+    #[cfg(not(windows))]
+    None
 }
 
 type Handler = Arc<dyn Fn(Event) + Send + Sync>;
@@ -262,8 +277,8 @@ mod imp {
             Ok(())
         }))?;
         // Dismissed or hidden: the capture goes with it, and nothing is left in the notification
-        // centre. Timing out is left to Sketch's 3 seconds: Windows' own timeout is longer, and a
-        // notification that skips its pop-up (Do Not Disturb, checks) times out at once.
+        // centre. Timing out is left to Sketch's timer (`life`): a notification that skips its
+        // pop-up (Do Not Disturb, checks) times out at once.
         toast.Dismissed(&TypedEventHandler::new(move |_, args: windows::core::Ref<ToastDismissedEventArgs>| {
             if args.ok()?.Reason()? != ToastDismissalReason::TimedOut {
                 remove(id);

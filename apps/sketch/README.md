@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.5.0. See the [changes](#changes) at the end.
+Version 1.5.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -213,7 +213,7 @@ The capture goes on the clipboard, and a Windows notification says so, with a sm
 
 A capture's edges are open, as in the Snipping Tool: arrows, writing, circles and brush strokes can run past it onto the grey space around it without being cut off. Copying it (Ctrl+Shift+C or the Copy button), or saving it as PNG, JPEG, WebP or BMP, gives the capture with everything drawn round it, see-through past the capture's edges (white in JPEG and BMP); with nothing drawn outside, that's the capture exactly. The status bar shows the capture's own size, and pointer positions count from its top-left corner. A capture has no size handles; Crop starts from the capture itself, and Resize and Canvas Size first make everything drawn round it part of the picture. This is only for captures: other pictures keep their edges, as in Paint.
 
-The notification goes after 3 seconds and isn't kept in the notification centre: a capture not opened by then is one you only wanted on the clipboard, which it stays on. A newer capture replaces the older one's notification. With Sketch closed, a hidden Sketch starts with the capture as the notification shows, so the click shows it within a few hundredths of a second instead of starting Sketch (about a third of a second); it closes with the notification if you don't click. If Windows won't show the notification (notifications turned off for Sketch), the capture opens in Sketch at once instead. **After a capture** in Settings can open every capture in Sketch straight away instead.
+The notification stays as long as Windows' own notifications (**Dismiss notifications after this amount of time** in Windows Settings, Accessibility, Visual effects; 5 seconds unless you changed it) and isn't kept in the notification centre: a capture not opened by then is one you only wanted on the clipboard, which it stays on. A newer capture replaces the older one's notification. With Sketch closed, a hidden Sketch starts with the capture as the notification shows, so the click shows it within a few hundredths of a second instead of starting Sketch (about a third of a second); it closes with the notification if you don't click. If Windows won't show the notification (notifications turned off for Sketch), the capture opens in Sketch at once instead. **After a capture** in Settings can open every capture in Sketch straight away instead.
 
 The **Copy** button beside the camera copies the whole picture with everything drawn on it, merged into one PNG with its transparency, as Ctrl+Shift+C does, and says Copied for a moment. On a whiteboard it copies what's on the board, as an export would, and on a capture the capture with everything drawn round it. The picture stays editable.
 
@@ -408,6 +408,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.5.1: The capture notification stays as long as Windows' own notifications (5 seconds unless changed in Windows Settings, Accessibility, Visual effects) instead of going after 3 seconds.
 - 1.5.0: A closed Sketch now keeps itself up to date whether or not a capture key is set: the capture helper runs at sign-in for updates, and **Update in the background when Sketch is closed** in Settings (on by default, also after updating) turns that off. New installs start with **Alt+Shift+S** as the capture key, unless another app already uses it; installs updating from an older version keep their own capture key, or none.
 - 1.4.0: Every install keeps itself up to date with nothing to do. An install built from a clone fetches `origin/main` every 10 minutes and builds new commits with no `git pull`, so a push from any PC reaches it; the capture helper does this while Sketch is closed. An install from a release's installer downloads each new release, signed and checked, within about 5 minutes. `python install.py --dev` turns on the git hooks that update the PC you push from at once. A push that raises this README's version line now releases that version on its own.
 - 1.3.0: Settings has a **Pointer over the picture** choice: the normal arrow (still the default), a small dot, a thin crosshair or the brush-size circle, with its own size and colour and an optional different pointer for the eraser. Draw a rough line, arrow, box or circle with the brush or pencil and hold still for half a second to turn it into a clean, editable shape; **Clean up rough shapes** in Settings (on by default) or **Turn Shape Clean-Up On/Off** in the command palette turns it off.

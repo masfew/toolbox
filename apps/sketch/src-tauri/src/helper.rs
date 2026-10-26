@@ -4,8 +4,8 @@
 //! starting Sketch. Clicking the notification opens the capture in Sketch.
 //!
 //! So that the click opens it at once (F12), a hidden Sketch starts with the capture as the
-//! notification shows. The click shows it; the notification going without a click (after 3
-//! seconds, `note.rs`) closes it.
+//! notification shows. The click shows it; the notification going without a click (after the
+//! user's Windows notification time, `note.rs`) closes it.
 //!
 //! The helper has no window anyone sees and does nothing until the keys are pressed. It runs
 //! whenever capture keys are set or background updates are on (1.5.0: it also keeps the install up
