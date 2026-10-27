@@ -146,12 +146,18 @@ def read_reply(path):
 
 # ---- The actions ----
 
-def start(conf, options, notify=True):
+def start(conf, options, notify=True, choose=False):
     """Starts a session. Returns the new session ({"id", "title", ...}), NO_APP,
     or raises AppError. `options` is the request's "options" object (cwd, prompt,
-    and optionally environment, model, effort, mode, title)."""
-    return request(conf, {"action": "start", "options": options, "notify": bool(notify)},
-                   timeout=conf["start_timeout_seconds"])
+    and optionally environment, model, effort, mode, title). With choose, the
+    caller can show choices, so the app may answer {"choose": {"question",
+    "choices": [{"label", "options"}]}} instead of starting; the caller then
+    sends start again with the picked choice's options. An app that doesn't ask
+    ignores it."""
+    body = {"action": "start", "options": options, "notify": bool(notify)}
+    if choose:
+        body["choose"] = True
+    return request(conf, body, timeout=conf["start_timeout_seconds"])
 
 
 def sessions(conf):

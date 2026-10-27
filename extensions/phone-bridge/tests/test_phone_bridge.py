@@ -1171,14 +1171,16 @@ class LocalAppLaunch(unittest.TestCase):
         self.folder.mkdir()
         self.config = root / "phone-bridge.json"
         self.write_config(local_app=app_config(self.folder, default_folder="/projects/default"))
-        self.replies, self.launches, self.pushes = [], [], []
+        self.replies, self.launches, self.pushes, self.buttons, self.bot_calls = [], [], [], [], []
         self.reply_to_start = lambda body: {"ok": True, "value": {"id": "s1", "conversationId": "c1", "title": "Fix it"}}
         self.app = FakeApp(self.folder, lambda body: self.reply_to_start(body))
         self.patches = [
             mock.patch.object(bridge, "CONFIG_FILE", self.config),
             mock.patch.object(launch, "LOG_FILE", root / "launcher.log"),
             mock.patch.object(launch, "MARKER_DIR", root / "markers"),
-            mock.patch.object(launch, "reply", lambda message, text: self.replies.append(text)),
+            mock.patch.object(launch, "reply", self.fake_reply),
+            mock.patch.object(launch, "bot", lambda method, body, what: self.bot_calls.append((method, body))),
+            mock.patch.object(launch, "PENDING_FILE", root / "launcher-pending.json"),
             mock.patch.object(launch, "launch", lambda m, p, c, k, e=None: self.launches.append((p, e))),
             mock.patch.object(launch, "presets", lambda: self.PRESETS),
             mock.patch.object(launch, "environments", lambda: [p["name"] for p in self.PRESETS]),
@@ -1201,9 +1203,70 @@ class LocalAppLaunch(unittest.TestCase):
         now = time.time()
         launch.handle({"chat_id": 42, "message_id": 7, "date": now, "received_at": now, "text": text})
 
+    def fake_reply(self, message, text, buttons=None, stacked=False):
+        self.replies.append(text)
+        self.buttons.append((buttons or [], stacked))
+
+    def tap(self, data):
+        now = time.time()
+        launch.handle({"chat_id": 42, "received_at": now,
+                       "callback": {"id": "q", "data": data, "message_id": 8, "text": "question"}})
+
+    def asking(self, body):
+        """An app that asks for the machine, then the account, then starts."""
+        o = body["options"]
+        if body.get("choose") and "machine" not in o:
+            return {"ok": True, "value": {"choose": {"question": "Start it on which machine?", "choices": [
+                {"label": "Desktop (this PC)", "options": {**o, "machine": "here"}},
+                {"label": "Laptop", "options": {**o, "machine": "m-lap"}}]}}}
+        if body.get("choose") and "account" not in o:
+            return {"ok": True, "value": {"choose": {"question": "Which account on Laptop?", "choices": [
+                {"label": "Laptop me · Max", "options": {**o, "account": "own"}},
+                {"label": "Personal · Pro", "options": {**o, "account": "a-1"}}]}}}
+        return {"ok": True, "value": {"id": "m:m-lap:s2", "title": "Fix it"}}
+
+    def test_the_apps_questions_are_asked_with_a_button_each_and_a_tap_answers_them(self):
+        self.reply_to_start = self.asking
+        self.command("Start a new session\nFix it")
+        self.assertEqual(self.replies, ["Start it on which machine?"])
+        (buttons, stacked), = self.buttons
+        self.assertEqual(([label for label, _ in buttons], stacked), (["Desktop (this PC)", "Laptop"], True))
+        self.assertEqual(self.pushes, [])
+        self.tap(buttons[1][1])
+        self.assertEqual(self.bot_calls[0], ("answerCallbackQuery", {"callback_query_id": "q", "text": "Laptop"}))
+        self.assertEqual(self.bot_calls[1][1]["text"], "Start it on which machine?\n→ Laptop")
+        self.assertEqual(self.replies[-1], "Which account on Laptop?")
+        self.tap(self.buttons[-1][0][1][1])
+        self.assertEqual(self.app.seen[-1]["options"], {"cwd": "/projects/default", "prompt": "Fix it", "mode": "Auto",
+                                                        "machine": "m-lap", "account": "a-1"})
+        self.assertEqual(self.pushes, [("m:m-lap:s2", "Fix it · started", "Fix it", "rocket", "")])
+        self.assertEqual(self.launches, [])
+
+    def test_a_second_tap_on_an_answered_question_starts_nothing(self):
+        self.reply_to_start = self.asking
+        self.command("Start a new session\nFix it")
+        here = self.buttons[0][0][0][1]
+        self.tap(here)
+        asked = len(self.app.seen)
+        self.tap(here)
+        self.assertEqual(len(self.app.seen), asked)
+        self.assertEqual(self.bot_calls[-1][1]["text"], "question\nExpired: not started.")
+
+    def test_a_tap_after_ten_minutes_starts_nothing(self):
+        self.reply_to_start = self.asking
+        self.command("Start a new session\nFix it")
+        with mock.patch.object(launch.time, "time", return_value=time.time() + launch.PENDING_SECONDS + 1):
+            self.tap(self.buttons[0][0][1][1])
+        self.assertEqual(len(self.app.seen), 1)
+
+    def test_a_question_with_no_usable_choice_counts_as_started(self):
+        self.reply_to_start = lambda body: {"ok": True, "value": {"choose": {"question": "Which?", "choices": [{"label": "x"}]}}}
+        self.command("Start a new session\nFix it")
+        self.assertEqual((self.replies, self.launches), ([], []))
+
     def test_starts_in_the_default_folder_without_the_desktop_app(self):
         self.command("Start a new session\nFix it")
-        self.assertEqual(self.app.seen, [{"action": "start", "notify": True, "options": {
+        self.assertEqual(self.app.seen, [{"action": "start", "notify": True, "choose": True, "options": {
             "cwd": "/projects/default", "prompt": "Fix it", "mode": "Auto"}}])
         self.assertEqual((self.launches, self.replies), ([], []))
         self.assertEqual(self.pushes, [("c1", "Fix it · started", "Fix it", "rocket", "")])
@@ -1231,7 +1294,7 @@ class LocalAppLaunch(unittest.TestCase):
     def test_no_environment_and_no_default_folder_leaves_the_folder_to_the_app(self):
         self.write_config(local_app=app_config(self.folder))
         self.command("Start a new session\nFix it")
-        self.assertEqual(self.app.seen, [{"action": "start", "notify": True, "options": {"prompt": "Fix it", "mode": "Auto"}}])
+        self.assertEqual(self.app.seen, [{"action": "start", "notify": True, "choose": True, "options": {"prompt": "Fix it", "mode": "Auto"}}])
         self.assertEqual(self.launches, [])
 
     def test_an_environment_without_a_folder_means_the_desktop_app(self):

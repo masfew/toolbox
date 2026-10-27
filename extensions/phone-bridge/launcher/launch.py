@@ -70,9 +70,12 @@ LOG_KEEP = 300  # lines
 # The notification hook reads MARKER_DIR: a new session whose first prompt matches
 # a marker gets pushes switched on and a "started" push (or, for a test, pushes
 # switched off).
-# Commands waiting on a "Did you mean ...?" tap: {token: {"text", "name", "message_id", "expires"}}
+# Commands waiting on a "Did you mean ...?" tap: {token: {"text", "name", "message_id", "expires"}},
+# or on a tap on one of the local app's choices: {token: {"question", "choices", "message_id", "expires"}}.
 PENDING_FILE = STATE_DIR / "launcher-pending.json"
 PENDING_SECONDS = 600
+MAX_CHOICES = 8  # buttons under one of the local app's questions
+CHOICE_LABEL = 60  # characters of a choice's button
 STEPS_SCRIPT = Path(__file__).with_name("launch_steps.ps1")
 # The desktop app's saved environments. It's a Store app, so its real files are
 # under LocalCache; other programs may not see them at the APPDATA path.
@@ -154,13 +157,14 @@ def bot(method, body, what):
     log(f"{what} -> {result}")
 
 
-def reply(message, text, buttons=None):
+def reply(message, text, buttons=None, stacked=False):
     """Replies to the command's message, with a row of inline buttons
-    [(label, callback_data), ...] if given."""
+    [(label, callback_data), ...] if given, or one button per row if stacked."""
     body = {"chat_id": None, "text": text,
             "reply_parameters": {"message_id": message.get("message_id"), "allow_sending_without_reply": True}}
     if buttons:
-        body["reply_markup"] = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in buttons]]}
+        keys = [{"text": t, "callback_data": d} for t, d in buttons]
+        body["reply_markup"] = {"inline_keyboard": [[k] for k in keys] if stacked else [keys]}
     bot("sendMessage", body, f"reply \"{text}\"")
 
 
@@ -274,11 +278,73 @@ def ask_did_you_mean(message, typed, suggestion):
           [("Yes", f"env:{token}:y"), ("No", f"env:{token}:n")])
 
 
+def app_question(value):
+    """The local app's question in a start's reply ({"choose": {"question",
+    "choices": [{"label", "options"}]}}) as (question, [(label, options)]), or
+    None when the reply started the session."""
+    ask = value.get("choose") if isinstance(value, dict) else None
+    if not isinstance(ask, dict) or not isinstance(ask.get("question"), str) or not ask["question"].strip():
+        return None
+    choices = [(c["label"].strip(), c["options"]) for c in ask.get("choices") or []
+               if isinstance(c, dict) and isinstance(c.get("label"), str) and c["label"].strip()
+               and isinstance(c.get("options"), dict) and isinstance(c["options"].get("prompt"), str)]
+    return (ask["question"].strip(), choices[:MAX_CHOICES]) if choices else None
+
+
+def ask_app_question(message, question, choices):
+    """Keeps the choices for PENDING_SECONDS and asks with a button for each."""
+    pending = load_pending()
+    token = secrets.token_hex(4)
+    pending[token] = {"question": question, "choices": [{"label": l, "options": o} for l, o in choices],
+                      "message_id": message.get("message_id"), "expires": time.time() + PENDING_SECONDS}
+    save_pending(pending)
+    log(f"not started yet: the app asked a question with {len(choices)} choices")
+    labels = [l if len(l) <= CHOICE_LABEL else l[: CHOICE_LABEL - 1] + "…" for l, _ in choices]
+    reply(message, question, [(l, f"env:{token}:{i}") for i, l in enumerate(labels)], stacked=True)
+
+
+def handle_choice_tap(message, token, index):
+    """A tap on one of the local app's choices. Answers the tap, takes the
+    buttons off the question with the choice written under it, and sends the
+    start again with that choice's options, which may ask the next question."""
+    tap = message["callback"]
+    pending = load_pending()
+    kept = pending.pop(token, None)
+    if kept is not None:
+        save_pending(pending)
+    choices = (kept or {}).get("choices") or []
+    picked = choices[index] if index < len(choices) else None
+    toast = picked["label"] if picked else "That question has expired."
+    line = f"→ {picked['label']}" if picked else "Expired: not started."
+    log(f"tap: {'choice ' + str(index) if picked else 'expired'}")
+    bot("answerCallbackQuery", {"callback_query_id": tap.get("id"), "text": toast}, "tap answered")
+    if tap.get("message_id"):
+        bot("editMessageText", {"chat_id": None, "message_id": tap["message_id"],
+                                "text": f"{(kept or {}).get('question') or tap.get('text') or ''}\n{line}".strip()},
+            "question edited")
+    if not picked:
+        return
+    app = local_app.settings(read_config())
+    command = {"chat_id": message.get("chat_id"), "message_id": kept.get("message_id")}
+    if not app:
+        log("not started: the local app was turned off")
+        reply(command, "Couldn't start: the local app is no longer set up")
+        return
+    if not start_with(command, picked["options"], app):
+        log(f"not started: {app['name']} didn't answer")
+        reply(command, f"Couldn't start: {app['name']} didn't answer")
+
+
 def handle_tap(message):
     """A tap on a "Did you mean ...?" button. Answers the tap, takes the buttons
     off the question so it can't be answered twice, and on Yes starts the kept
-    command with the suggested environment."""
+    command with the suggested environment. A tap on one of the local app's
+    choices goes to handle_choice_tap."""
     tap = message["callback"]
+    choice = re.match(r"^env:([0-9a-f]+):(\d)$", tap.get("data") or "")
+    if choice:
+        handle_choice_tap(message, choice.group(1), int(choice.group(2)))
+        return
     match = re.match(r"^env:([0-9a-f]+):([yn])$", tap.get("data") or "")
     pending = load_pending()
     kept = pending.pop(match.group(1), None) if match else None
@@ -606,15 +672,30 @@ def start_in_app(message, prompt, conf, app, environment):
             return False
     elif app["default_folder"]:
         options["cwd"] = app["default_folder"]
+    if start_with(message, options, app, environment):
+        return True
+    log(f"{app['name']} didn't answer: using the Claude desktop app")
+    return False
+
+
+def start_with(message, options, app, environment=None):
+    """Sends the start. The app may answer with a question first (several
+    machines or accounts to pick from, say), asked with a button per choice; a
+    tap sends the start again with that choice's options. True when dealt with
+    (started, asked, or refused with a reply saying why); False when nothing answered."""
+    prompt = options["prompt"]
     try:
-        session = local_app.start(app, options, notify=not test_mode)
+        session = local_app.start(app, options, notify=not test_mode, choose=True)
     except local_app.AppError as e:
         log(f"couldn't start in {app['name']}: {e}")
         reply(message, f"Couldn't start: {e}")
         return True
     if session is local_app.NO_APP:
-        log(f"{app['name']} didn't answer: using the Claude desktop app")
         return False
+    asked = app_question(session)
+    if asked:
+        ask_app_question(message, *asked)
+        return True
     session = session if isinstance(session, dict) else {}
     log(f"started in {app['name']}: message {message.get('message_id')}, prompt of {len(prompt)} characters"
         + (f", in {environment}" if environment else "") + (", session " + str(session["id"])[:8] if session.get("id") else ""))
