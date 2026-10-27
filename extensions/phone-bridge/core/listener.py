@@ -256,10 +256,27 @@ def turn_on_in_app(app, working):
     return done, lines
 
 
+def leave_to_app(sessions, app_working):
+    """The sessions_without_pushes() entries less the ones the local app turns on.
+    The hook marks every session it runs in, the app's too, so a working app
+    session is in both lists; left in, it was turned on twice and counted twice.
+    The app's route stays, since it also gives the push the app's title. A sub-session
+    the app doesn't list keeps its own entry when its starting session goes."""
+    keys = {local_app.session_key(s) for s in app_working}
+    kept = []
+    for entry in sessions:
+        subs = [s for s in entry["subs"] if s["id"] not in keys]
+        if entry["id"] in keys:
+            kept.extend({**s, "subs": []} for s in subs if not s["pushes"])
+        elif not entry["pushes"] or any(not s["pushes"] for s in subs):
+            kept.append({**entry, "subs": subs})
+    return kept
+
+
 def handle_notify_me(config, message):
-    sessions = sessions_without_pushes()
     app, listed = app_sessions(config)
     app_working = local_app.working_sessions(listed) if app else []
+    sessions = leave_to_app(sessions_without_pushes(), app_working)
     if NOTIFY_ME_ALL:
         turned_on = [s for e in sessions for s in (e, *e["subs"]) if not s["pushes"]]
         for s in turned_on:

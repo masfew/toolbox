@@ -1456,6 +1456,40 @@ class LocalAppListener(unittest.TestCase):
         self.assertEqual(seen, ["c2"])
         self.assertIn("✅ Busy one: pushes on", self.edited[-1][1]["text"])
 
+    @staticmethod
+    def scanned(session_id, title, subs=(), pushes=None):
+        """A sessions_without_pushes() entry, as the hook's markers make one."""
+        return {"id": session_id, "record": None, "parent": None, "title": title, "working": True,
+                "tasks": [], "pushes": pushes, "subs": list(subs)}
+
+    def test_notify_me_counts_a_session_both_lists_once(self):
+        # The hook marks the app's sessions too, so "c2" is in both lists.
+        flagged, seen = [], []
+        self.answers["notify"] = lambda body: seen.append(body["session"]) or {"ok": True, "value": {"title": "Busy one"}}
+        scan = [self.scanned("c2", "Busy one"), self.scanned("d1", "Desktop chat")]
+        with mock.patch.object(self.tc, "sessions_without_pushes", lambda: scan), \
+                mock.patch.object(self.tc, "turn_pushes_on", flagged.append):
+            self.tc.handle_notify_me(self.config, {})
+        self.assertEqual((flagged, seen), (["d1"], ["c2"]))
+        self.assertEqual(self.last_text(),
+                         "Done. All notifications are on (turned on for 2 sessions).\n\nSome App:\n• Busy one · working")
+
+    def test_a_sub_session_the_app_does_not_list_is_still_turned_on(self):
+        flagged = []
+        scan = [self.scanned("c2", "Busy one", subs=[self.scanned("d2", "Helper"), self.scanned("d3", "Done", pushes="all")])]
+        with mock.patch.object(self.tc, "sessions_without_pushes", lambda: scan), \
+                mock.patch.object(self.tc, "turn_pushes_on", flagged.append):
+            self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(flagged, ["d2"])
+        self.assertTrue(self.last_text().startswith("Done. All notifications are on (turned on for 2 sessions)."))
+
+    def test_one_button_each_when_both_lists_have_a_session(self):
+        scan = [self.scanned("c2", "Busy one"), self.scanned("d1", "Desktop chat")]
+        with mock.patch.object(self.tc, "NOTIFY_ME_ALL", False), \
+                mock.patch.object(self.tc, "sessions_without_pushes", lambda: scan):
+            self.tc.handle_notify_me(self.config, {})
+        self.assertEqual(self.buttons(), ["on:d1", "on:app:c2"])
+
     def test_a_session_id_too_long_for_a_button_is_left_off(self):
         self.LISTED = [{"id": "s", "conversationId": "c" * 80, "title": "Long", "status": "finished", "working": False}]
         self.tc.handle_archive(self.config, {})

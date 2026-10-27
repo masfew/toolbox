@@ -1,6 +1,6 @@
 # phone-bridge
 
-Version 1.2.4. See the [changes](#changes) at the end.
+Version 1.2.5. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -311,7 +311,7 @@ A local desktop app that takes requests through a folder can run the launcher's 
 
 - **/new_session** (and "Start a new session"): starts the session through the app, with no wait for a quiet PC, no screen waking and no window focus. The folder comes from the saved environment you name (its folder, plus its model, effort and worktree setting when it has them), or from `default_folder` when you name none. With neither, no folder is sent and the app uses its own default for new sessions. A saved environment that has no folder (a cloud one, say), or an app that doesn't answer, starts the session in the Claude desktop app as before. The app's replies title the 🚀 started push, and pushes are on for the session from its first prompt (the app turns them on). The new-session permission mode (`permission_mode` under `launcher`) is passed along. There's no link-length limit on this route. If the app answers with an error, the bot replies "Couldn't start: <the app's reason>" and starts nothing; the same if the app takes the request and then never answers, since it may be running it.
 - **/archive**: lists the app's finished sessions next to the desktop app's, under headings with the app's `name` (the desktop app's are headed "Claude desktop app:"; the buttons of the app's sessions end with ` · <name>`). A session is offered when its status is `finished`, `idle` or `failed`, it isn't working, and no session started from it is still working or waiting on you. A tap or Archive All asks the app to archive it; the app refuses when it isn't safe (a turn running, waiting on you) and the bot shows its reason and keeps the button. The desktop app's list and safety checks are unchanged. With the app configured but not answering, `/archive` is exactly as before.
-- **/notify_me**: turns pushes on for the app's working sessions too, and lists them under the app's name with their titles and statuses, such as "• Fix the login page · working". With `NOTIFY_ME_ALL = False` they get a button each.
+- **/notify_me**: turns pushes on for the app's working sessions too, and lists them under the app's name with their titles and statuses, such as "• Fix the login page · working". A session the app lists is turned on and counted only through the app, even though the hook's markers find it too. With `NOTIFY_ME_ALL = False` they get a button each.
 
 #### The Request Folder Protocol
 
@@ -487,6 +487,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.2.5: `/notify_me` counts a local app's session once. It used to turn it on twice, through the markers and through the app, and report one session too many.
 - 1.2.4: When Telegram doesn't answer the bot's reply to a command (a timeout or other network error), the bot sends it once more instead of leaving the command looking hung.
 - 1.2.3: A message that wakes a subagent which had already finished counts as background work until that subagent reports back, so the session no longer gets a ✅ push while it waits on it.
 - 1.2.2: The listener always starts outside the Claude desktop app's package, so its requests reach a local app even when a desktop session's hook started it.
