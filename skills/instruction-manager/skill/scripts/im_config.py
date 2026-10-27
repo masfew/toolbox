@@ -156,7 +156,7 @@ def global_files():
 
 AT = "@"  # an import line in a CLAUDE.md starts with it
 IMPORT = re.compile(r"(?:^|\s)" + AT + r"((?:~|\.{1,2})?[\w./\\ -]*?[\w-]+\.md)\b", re.M)
-IMPORT_DEPTH = 5  # Claude Code follows imports this many hops deep
+IMPORT_DEPTH = 4  # Claude Code follows imports this many hops deep ("a maximum depth of four hops", its memory docs)
 
 
 def strip_code(text):

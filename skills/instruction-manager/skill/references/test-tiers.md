@@ -39,7 +39,7 @@ Run `python -I <skill folder>/scripts/run_triggers.py <skill folder> --dry-run` 
 
 ## Other places that ask
 
-- **Tuning a description** runs many candidates. Ask once before the first run of the task; the answer covers the whole loop. Quick means `--tier quick` for every run, drafts included. Standard and Full mean `--runs 1` on the default model for drafting candidates, then the chosen tier for the one or two finalists. The trimming pass at the end (SKILL.md, Tuning a description, step 6) runs up to three more drafts the same way. Say that in the question's text, with the totals for every stage.
+- **Tuning a description** runs many candidates. Ask once before the first run of the task; the answer covers the whole loop. Quick means `--tier quick` for every run, drafts included. Standard and Full mean `--runs 1` on the default model for drafting candidates, then the chosen tier for the one or two finalists, on the held-out prompts. The trimming pass at the end ([tuning.md](tuning.md), step 7) runs up to three more drafts the same way. Say that in the question's text, with the totals for every stage.
 - **Auditing all skills** asks once for the whole audit, with the totals across skills (audit.md, Every skill).
 - **An instruction section's tests** (`evals/<section>/` beside the file) ask the same way. Use the options and costs in that folder's README, with the free checks passed as the context above the question. When the README gives none, ask "Run it (about N sessions) / Skip testing", with N from the README or the number of test prompts.
 - **The user's own `CLAUDE.md`** may set a standing answer ("always run Standard on my skills"). That wins; follow it and say in one line which tier you ran and why.

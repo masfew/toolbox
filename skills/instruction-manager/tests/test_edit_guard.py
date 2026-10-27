@@ -94,12 +94,12 @@ class Imports(unittest.TestCase):
             write(HOME / "rules" / n)
         self.assertEqual(sorted(p.name for p in im_config.imported_files()), names)
 
-    def test_depth_stops_after_five_hops(self):
+    def test_depth_stops_after_four_hops(self):
         write(CLAUDE / "CLAUDE.md", f"{AT}~/rules/d1.md")
         for i in range(1, 8):
             write(HOME / "rules" / f"d{i}.md", f"{AT}d{i + 1}.md")
         found = sorted(p.name for p in im_config.imported_files())
-        self.assertEqual(found, [f"d{i}.md" for i in range(1, 6)])
+        self.assertEqual(found, [f"d{i}.md" for i in range(1, 5)])
 
     def test_import_cycle_ends(self):
         write(CLAUDE / "CLAUDE.md", f"{AT}~/rules/a.md")

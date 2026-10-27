@@ -10,7 +10,10 @@ Reports, per skill, as a plain list:
   - description length against the house style
   - word counts against the budgets, with estimated tokens, and the change
     against the last git commit when the file has uncommitted edits
-  - links that point nowhere, and reference files nothing links to
+  - links that point nowhere, reference files nothing links to, and ones that
+    only another reference file links to (references stay one level deep)
+  - reference files over 100 lines or the word budget with no section list at the top
+  - names containing a word the Agent Skills spec reserves
   - sentences that closely match one in another skill or the global instructions
   - a missing evals/triggers.json, or a last trigger run that tested another description
 
@@ -43,6 +46,8 @@ DESC_LIMIT = _B["description_chars"][2]
 BODY_AIM, BODY_LIMIT = _B["skill_body_words"]
 REF_TOC, REF_LIMIT = _B["reference_words"]
 TOKENS_PER_WORD = 1.35
+REF_TOC_LINES = 100  # Claude previews long files with partial reads (head -100), so a longer one lists its sections first
+RESERVED_NAME_WORDS = ("anthropic", "claude")  # the Agent Skills spec refuses names containing them
 SKIP_DIRS = {".git", "node_modules", "__pycache__", "evals", "history"}
 SHINGLE = 5          # words per shingle for the duplicate search
 DUP_MIN_WORDS = 10   # sentences shorter than this are never reported as copies
@@ -342,6 +347,9 @@ def check_skill(folder, qv, dups, show_info):
             add("ERROR", p)
         if fields.get("name", "").strip().strip("\"'") != name:
             add("ERROR", f"name '{fields.get('name', '').strip()}' doesn't match the folder name '{name}'")
+        reserved = [w for w in RESERVED_NAME_WORDS if w in name.lower()]
+        if reserved:
+            add("WARN", f"name contains '{reserved[0]}', a word the Agent Skills spec reserves")
     if qv:
         ok, msg = run_quick_validate(qv, folder)
         if ok is False:
@@ -382,13 +390,19 @@ def check_skill(folder, qv, dups, show_info):
                     # A warning, not an error: a reference only loads when its "Read when" fits.
                     _, m2 = size_line(p.as_posix(), nw, None, REF_LIMIT, git_head_words(folder / p))
                     add("WARN", m2 + "; split it if its parts are read at different times")
-                elif nw > REF_TOC and not re.search(r"^(#{2,3} |(Sections|Contents|Items):)", t[:1500], re.M):
-                    add("WARN", f"{p.as_posix()}: {nw:,} words with no section list near the top")
+                elif (nw > REF_TOC or t.count("\n") > REF_TOC_LINES) and not re.search(
+                        r"^(#{2,3} |(Sections|Contents|Items):)", t[:1500], re.M):
+                    add("WARN", f"{p.as_posix()}: {nw:,} words, {t.count(chr(10)):,} lines, "
+                                "with no section list near the top")
     broken, unlinked = check_links(folder, docs, files, name)
     for b in broken:
         add("ERROR", b)
     for u in unlinked:
         add("WARN", f"{u} is never linked or named, so no session will read it")
+    _, from_body = check_links(folder, {"SKILL.md": body}, files, name)
+    for r in sorted(set(from_body) - set(unlinked)):
+        add("WARN", f"{r} is reached only through another reference file; link it from SKILL.md, "
+                    "since a file found that way may be read only in part")
     if (folder / "history").is_dir() and "history" not in kept and "history/" not in body:
         add("WARN", "history/ exists but SKILL.md doesn't say it's kept on purpose")
 

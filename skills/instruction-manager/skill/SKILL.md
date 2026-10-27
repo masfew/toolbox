@@ -58,8 +58,8 @@ The **edit guard** (a hook the installer adds) never blocks an edit. When a sess
 4. **Draft it to the house style** (house-style.md, SKILL.md layout). Keep `SKILL.md` near 2,000 words; put material only some tasks need in reference files.
 5. **Write `evals/triggers.json`**: about 10 should-load prompts and 10 near-misses, as house-style.md's Tests section describes. Take near-misses from the neighbours named in step 3.
 6. **Run `check_skill.py`** on it and fix every `ERROR`. The checks are free, and the test question in the next step says they passed.
-7. **Ask how to test, then tune the description** ([below](#tuning-a-description)) until it passes, and `--save` the score. The one question covers this step and the next.
-8. **Behaviour tests**, only when output quality matters and the chosen tier is Full: write `evals/evals.json` (2 to 4 prompts with checkable expectations, skill-creator's schema), run each in a subagent told to follow the new skill, grade the output, and fix the skill where it fails. On a smaller tier, say in the report that they weren't run.
+7. **Ask how to test, then tune the description** ([references/tuning.md](references/tuning.md)) until it passes, and `--save` the score. The one question covers this step and the next.
+8. **Behaviour tests**, only when output quality matters and the chosen tier is Full: write `evals/evals.json` (2 to 4 prompts with checkable expectations, skill-creator's schema), run each in a subagent told to follow the new skill and in one without it, grade both, drop checks that pass both ways, and fix the skill where it fails. On a smaller tier, say in the report that they weren't run.
 9. **Install and register it** the way the chosen home's own README says (an install script, a row in a table, a link). A skill in `~/.claude/skills/<name>` needs nothing more. A new skill only appears in sessions started after it's installed.
 10. **Report**: what it does, its word count and description length, the trigger score and tier, and whatever uncommitted-changes reminder the user's instructions require for that repo.
 
@@ -72,21 +72,9 @@ Use this for every change to an existing skill, even a one-line rule added in th
 3. **Look for a rule that already covers the change**, in this skill, its references, the neighbouring skills, the global instructions and the project's `CLAUDE.md` (`grep -ri` for the key words, over the config's skill folders and global instruction files). If one exists, edit that rule rather than adding a second one. If the change contradicts a rule elsewhere, raise it with the user instead of letting both stand.
 4. **Put the change in its one home** (house-style.md, One home per rule), with a short reason. A rule for one project goes in that project's `CLAUDE.md`, not a skill.
 5. **Run `check_skill.py <folder>`.** No new `ERROR`. Its size lines show the words added or removed against the last commit. When the change pushes `SKILL.md` over its aim, move or cut something in the same edit.
-6. **If the description changed**, make sure there's a score to compare against: with no `evals/triggers.json`, write one first (New skill step 5), and with no saved run of the tier you'll use, run the old description first (`--description "<old text>"`, then `--save` after restoring it, or run before editing). Ask how to run the tests (above), then `run_triggers.py <folder> --tier <chosen> --compare --save`, which saves the new score only when it isn't lower. A lower score blocks the edit until it's explained or fixed. If the user skips testing, say so in the report; `check_skill.py` keeps warning that the description changed since its last trigger run.
+6. **If the description changed**, make sure there's a score to compare against: with no `evals/triggers.json`, write one first (New skill step 5), and with no saved run of the tier you'll use, run the old description first (`--description "<old text>"`, then `--save` after restoring it, or run before editing). Ask how to run the tests (above), then `run_triggers.py <folder> --tier <chosen> --compare --save`, which saves the new score only when it isn't lower. A lower score blocks the edit until it's explained or fixed ([references/tuning.md](references/tuning.md)). If the user skips testing, say so in the report; `check_skill.py` keeps warning that the description changed since its last trigger run.
 7. **If a behaviour rule changed** and the skill has `evals/evals.json`, the Full tier reruns the test that covers it (New skill step 8). It's part of the same question as step 6.
 8. **Report** in the reply: what changed and where, the words added and removed, the trigger score and tier if it ran, and whatever uncommitted-changes reminder the user's instructions require for that repo.
-
-## Tuning a description
-
-Ask how to test once, before the first run of the task. The answer covers every candidate below.
-
-1. Run the prompts against the current description. Each failed prompt shows what loaded instead.
-2. For each failure, work out the situation the description doesn't cover, or the neighbour it collides with. Write two or three candidate descriptions that cover the situation in general words, in house-style order. Never paste a test prompt's own wording into the description: it passes the test and generalises to nothing.
-3. Run each candidate with `--description "…"`, then the best one or two with the chosen tier. With Quick, every run is `--tier quick`; with Standard or Full, draft runs use `--runs 1` on the default model and only the finalists use the chosen tier. Prefer the higher score; on a tie, the shorter description, since every session pays for it.
-4. If a near-miss belongs to a neighbouring skill and keeps loading this one, sharpen the "Not for…" clause naming that neighbour, and check the neighbour's description doesn't claim the prompt too.
-5. When the winner only passes after several rounds, add four fresh prompts (two each way) that weren't used while tuning, and check it on those before trusting it. Add them to `triggers.json` afterwards.
-6. **Trim the winner**, since nothing else shortens a passing description: cut the clause least likely to earn its place (house-style.md, Description), run it as step 3 runs a draft, and keep the cut if the score holds. Stop at the first cut that lowers it, or after three.
-7. Write the winner into `SKILL.md` and `--save` its score.
 
 ## Files
 
@@ -96,6 +84,7 @@ Ask how to test once, before the first run of the task. The answer covers every 
 | [references/instruction-files.md](references/instruction-files.md) | Changing the global instructions, a `CLAUDE.md` or a README sessions follow |
 | [references/audit.md](references/audit.md) | Auditing or tidying one skill, all skills or instruction files |
 | [references/test-tiers.md](references/test-tiers.md) | About to run any test that starts sessions: the question to ask and what each option costs |
+| [references/tuning.md](references/tuning.md) | Writing or fixing a description against its trigger tests (New skill step 7, a lower score in Any change step 6, an audit) |
 
 ## Improving this skill
 

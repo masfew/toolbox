@@ -15,7 +15,7 @@ An instruction file is any CLAUDE.md or CLAUDE.local.md: your global
 instructions (the config's global_instructions, and ~/.claude/CLAUDE.md) and
 every project's. Files your global instructions pull in with import lines (an
 at sign and a path) count too, whatever their name, followed the way Claude
-Code follows them (five hops deep, ~ for your home folder, paths relative to
+Code follows them (four hops deep, ~ for your home folder, paths relative to
 the importing file, links and junctions resolved), since every session loads
 them. READMEs aren't
 watched unless imported: most README edits are ordinary documentation, and a

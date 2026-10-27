@@ -1,6 +1,6 @@
 # instruction-manager
 
-Version 1.3.0. See the [changes](#changes) at the end.
+Version 1.4.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -113,8 +113,9 @@ python -I ~/.claude/skills/instruction-manager/scripts/run_triggers.py ~/.claude
 
 | File | What it does |
 |---|---|
-| `skill/SKILL.md` | The new-skill and any-change workflows for skills, tuning a description, and the rule to ask before any test that starts sessions |
-| `skill/references/house-style.md` | The rules every skill follows: what goes in a description (only what makes the skill load when it should), word budgets, layout, one home per rule, links, the test files |
+| `skill/SKILL.md` | The new-skill and any-change workflows for skills, and the rule to ask before any test that starts sessions |
+| `skill/references/house-style.md` | The rules every skill follows: what goes in a description (only what makes the skill load when it should), word budgets, layout, wording, one home per rule, links, the test files |
+| `skill/references/tuning.md` | Tuning a description against its trigger tests, with held-out prompts and a trimming pass |
 | `skill/references/instruction-files.md` | The rules and change workflow for global instructions, project `CLAUDE.md` files and READMEs sessions follow |
 | `skill/references/audit.md` | Auditing one skill, all of them, or instruction files |
 | `skill/references/test-tiers.md` | The Quick, Standard and Full test tiers, and the question the skill asks before running tests |
@@ -191,6 +192,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.4.0: Checked against Anthropic's and OpenAI's skill and CLAUDE.md guidance. The house style gains a Wording section (only what a session would get wrong without it, concrete steps that end on a done condition, a default rather than a menu, one name per thing, plain emphasis, hooks for rules with no exceptions). Descriptions put the trigger first, since Claude Code cuts long ones and drops the least-used when the list is full, and a skill meant only for its slash command uses `disable-model-invocation`. Traps most tasks meet stay in `SKILL.md`; reference files link from `SKILL.md` directly and list their sections past 100 lines. Description tuning moved to `skill/references/tuning.md` and now holds out part of the prompts so a description isn't fitted to its own tests; behaviour tests run with and without the skill. The instruction-file rules add path-scoped rules, what earns a line in `CLAUDE.md`, and hooks for must-hold rules. `check_skill.py` warns about a reference file only another reference file links to, a long reference file with no section list, and a name containing a reserved word. Fix: imports are followed four hops deep, as Claude Code's docs say, not five.
 - 1.3.0: Descriptions hold only what makes a skill load when it should. The house style now tells two kinds of skill apart: one that loads only on words you say or a slash command gets a description naming those words and nothing else, and one that loads on what the task is about keeps the old parts, using only those its trigger tests need. Every clause has to make a test prompt load or stay out, a list of what the skill does is never a description, and there's no minimum length. Tuning a description ends with a trimming pass that cuts clauses one at a time while the score holds. The interview for a new skill asks which kind it is, and audits check descriptions against these rules. `check_skill.py` no longer warns about a short description, and its warning over 900 characters asks you to check each clause; `description_chars` now defaults to `[0, 900, 1024]`, with `0` meaning no minimum.
 - 1.2.0: The edit guard now also watches files your global instructions import (their lines that start with an at sign and a path, for example rule files another tool installs), whatever they're named, so a one-line edit to one of them made without the skill is caught like an edit to `~/.claude/CLAUDE.md`. `check_instructions.py` labels such a file a global import and counts its words toward the file that imports it. `~/.claude/CLAUDE.md` and its imports now count as global instructions in `check_instructions.py --all` and the duplicate search even when `global_instructions` doesn't list it, as the Configuration table always said. Imports are now followed five levels deep, as Claude Code does, instead of stopping after the first five files, so a file with more than five imports is counted in full. New offline tests: `tests/test_edit_guard.py`.
 - 1.1.0: The skill now has behaviour tests (`skill/evals/evals.json`, run by `skill/evals/run_behaviour.py`), which check that a new skill goes to the folder `new_skill_homes` picks, that a changed description is tested only after asking, and that an audit of all skills asks once with totals. The `INSTRUCTION_MANAGER_CONFIG` environment variable can now point the scripts and the edit guard at another config file. Two fixes the tests found: a new skill is drafted only after you've answered the interview questions, and an audit of all skills edits nothing until you've chosen how to test, so each starting score comes from the unedited skill. An audit of a few small skills can now review them without subagents, and says so.

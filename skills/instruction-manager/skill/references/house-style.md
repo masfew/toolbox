@@ -20,11 +20,11 @@ Name rules:
 
 ## Description
 
-The description has one job: make the skill load when it should and not when it shouldn't. It's the only part of a skill every session reads, and all descriptions together sit in every session's context, so a word that doesn't change what loads is paid for in every session for nothing. How the skill works belongs in the body.
+The description has one job: make the skill load when it should and not when it shouldn't. It's the only part of a skill a session reads before choosing, and all descriptions together sit in every session's context, so a word that doesn't change what loads is paid for in every session for nothing. How the skill works belongs in the body. Length costs more than tokens: Claude Code cuts each description at 1,536 characters in its skill list, and once all of them pass about 1% of the context window it drops the descriptions of the least-used skills, which then can't load on their own. So put the trigger first, where a cut can't reach it.
 
 **First decide which kind of skill it is**, since the two need different descriptions:
 
-- **Phrase-triggered:** it loads on words the user says or a slash command, and on nothing else. The description names the words and says it never loads otherwise: "Load only when the user says "ship it" as an instruction, or types /ship. Never load it otherwise, even for a request to build and deploy in one go." Nothing more: what the skill does doesn't help a session spot two words.
+- **Phrase-triggered:** it loads on words the user says or a slash command, and on nothing else. The description names the words and says it never loads otherwise: "Load only when the user says "ship it" as an instruction, or types /ship. Never load it otherwise, even for a request to build and deploy in one go." Nothing more: what the skill does doesn't help a session spot two words. A skill that should run only from its slash command, never from words in a message, sets `disable-model-invocation: true` instead: Claude Code then leaves its description out of every session and never starts it on its own, which suits a workflow with side effects whose timing the user picks (a deploy, a release). Its description becomes a one-line note for the user's `/` menu.
 - **Situation-triggered:** it loads on what the task is about. Use these parts, in this order, and only the ones the trigger tests need:
   1. **The job, in a few words**, from the user's side: "How to write release notes for the docs site", "Checks a recipe's units and scales servings". Name the job, not its steps.
   2. **"Use it whenever…"** with the situations and the words the user actually uses ("asks why the build is slow, hangs, stalls"), not abstract categories.
@@ -32,9 +32,9 @@ The description has one job: make the skill load when it should and not when it 
   4. **"Not for… (`other-skill`)"** for a neighbouring skill that claims the same prompts, in the trigger tests or plainly. Pairs that overlap are the usual cause of a skill that loads when it shouldn't, or not at all. Don't list neighbours that don't collide.
   5. **A precedence line** ("overrides the plugin's `deploy-*` skills where they conflict") only when the skill must win over another one.
 
-**Every clause earns its place.** Each clause either makes the skill load for a should-load prompt in `evals/triggers.json` that it otherwise misses, or stops it loading for a near-miss there. A clause you can't point to such a prompt for is cut; [Tuning a description](../SKILL.md#tuning-a-description) ends with a pass that tests each cut.
+**Every clause earns its place.** Each clause either makes the skill load for a should-load prompt in `evals/triggers.json` that it otherwise misses, or stops it loading for a near-miss there. A clause you can't point to such a prompt for is cut; [tuning.md](tuning.md) ends with a pass that tests each cut.
 
-**Never an inventory.** A list of what the skill does or holds (its steps, tools, outputs, file formats or sections) costs tokens in every session and helps no prompt load. It's the easiest mistake to make, because it reads like a good summary. "Deploys the site: builds it, runs the tests, uploads to the CDN, purges the cache and posts in the team channel" is an inventory; "How to deploy the docs site" names the job, and the steps go in the body.
+**Never an inventory.** A list of what the skill does or holds (its steps, tools, outputs, file formats or sections) costs tokens in every session and helps no prompt load. Worse, a session may follow a summary of the steps instead of reading the body, so the steps it skips are the ones the summary left out. It's the easiest mistake to make, because it reads like a good summary. "Deploys the site: builds it, runs the tests, uploads to the CDN, purges the cache and posts in the team channel" is an inventory; "How to deploy the docs site" names the job, and the steps go in the body.
 
 **Length:** as short as passes the trigger tests. There's no minimum. A situation-triggered skill often needs a few hundred characters to cover its situations and neighbours, and that's fine when each clause passes the test above; over 900 characters is worth a second look. Never over 1,024, which skill-creator's validator rejects.
 
@@ -46,7 +46,7 @@ In this order, leaving out what a skill doesn't need:
 2. **Purpose**, in one short paragraph: what the skill is for and, when it helps, what it's trying to save ("The aim is speed: get the page right in as few rounds as possible"). Audits measure drift against this paragraph, so keep it true.
 3. **Where neighbouring rules live**: the skills and project files to read alongside it, by name and section ("the site-wide rules live in `docs-guidelines`"). Point to them; don't restate them.
 4. **The workflow**, as numbered steps.
-5. **Habits or traps** that save rounds: each a bold one-sentence claim, then what to do instead.
+5. **Habits or traps** that save rounds: each a bold one-sentence claim, then what to do instead. Traps that most tasks can meet stay here, where a session reads them before it hits them; a trap that only one sub-task meets goes in that sub-task's reference file. Add one each time a session fails in a new way: it's the part of a skill that most changes what sessions do.
 6. **Files**: a table of reference files with a "Read when" column.
 7. **Improving this skill** (below).
 
@@ -57,11 +57,13 @@ Count words, not lines. Lines don't measure what a skill costs: an 80-line skill
 | File | Aim | Limit |
 |---|---|---|
 | `SKILL.md` body (loaded every time the skill is used) | 2,000 words | 3,000 words |
-| Each reference file (loaded only when its "Read when" fits) | one topic; over 1,500 words, start it with a list of its sections | 3,000 words, a warning rather than a hard limit: split it when its parts are read at different times |
+| Each reference file (loaded only when its "Read when" fits) | one topic; over 100 lines or 1,500 words, start it with a list of its sections, since Claude previews long files by reading only their first lines | 3,000 words, a warning rather than a hard limit: split it when its parts are read at different times |
+
+The `SKILL.md` limit has a second reason: after a compaction Claude Code puts back only the first 5,000 tokens of each skill in use, and 3,000 words is about 4,050. Put what matters most first anyway, since the steps near the top are the ones a cut can't reach.
 
 The config's `budgets` key overrides these (`skill_body_words` and `reference_words`) and the description lengths (`description_chars`: a minimum, `0` for none, then the second-look length and the limit).
 
-Over the aim, move material that's only needed sometimes (long checklists, worked examples, trap catalogues) into a reference file. Over the limit, an edit that adds lines also moves or cuts at least as many. Estimate tokens as words × 1.35.
+Over the aim, move material that's only needed sometimes (long checklists, worked examples, traps for one sub-task) into a reference file. Over the limit, an edit that adds lines also moves or cuts at least as many. Estimate tokens as words × 1.35.
 
 Reference files are where most of the words end up: a style guide can run to several thousand words. They only cost tokens when a task reads them, so they get a warning, not an error, but a guide read whole for every task in its area costs as much as a `SKILL.md` that size.
 
@@ -70,6 +72,18 @@ Reference files are where most of the words end up: a style guide can run to sev
 - **Every rule carries a short reason**, so a later session can tell whether it still applies: "The service rate-limits uploads to 10 a minute, so batch them…". A rule without a reason gets kept after it stops being true, or dropped without anyone knowing what it protected.
 - **Dates and evidence only when they're the reason.** "measured over ~120 transitions" or "verified live 2026-10-08" say how sure a rule is and stay. Trial narratives, round-by-round history and who decided what on which day go in the skill's plan or README, not in `SKILL.md`, which pays for them on every load.
 - **When a rule changes, change it in place.** Don't add a second rule that contradicts or refines the first. A trap list that says "fix or remove the entry rather than adding a contradicting one" is the model.
+
+## Wording
+
+A skill is read once and stays in context, and the model reading it is already capable. So every line should change what a session does:
+
+- **Only what a session would get wrong without it.** Ask of each line, "would a session get this wrong without this?" If not, cut it, and cut the whole sentence rather than trimming words from it.
+- **Instructions, concrete enough to check, worded for the whole task.** "Run `npm test` after every edit", not "test your changes": the first can be checked and still holds ten turns later.
+- **Every step ends on a condition that says it's done** ("until the check prints no `ERROR`"). A vague end invites stopping early.
+- **Match firmness to how fragile the step is.** Exact commands for steps that break or destroy things; the goal and its limits for steps that need judgement.
+- **A default, not a menu.** Name the one way to do it and when to do otherwise; a list of options leaves the choice to every session.
+- **One name for each thing**, used everywhere, so a session never wonders whether two words mean two things.
+- **Plain emphasis.** State the rule and its reason instead of `MUST`, `NEVER` or capitals: current models follow a plain line and over-apply a shouted one. A rule that must hold every time with no exceptions belongs in a hook, not in words.
 
 ## One home per rule
 
@@ -87,6 +101,7 @@ Don't restate a rule from a higher row. If three skills each end with "remind th
 ## Links and paths
 
 - Link reference files relative to `SKILL.md`, as `references/<file>.md`. A bare `[traps.md](traps.md)` points at a file that isn't there.
+- Link every reference file from `SKILL.md` itself, one level deep, with when to read it. A file a session finds only through another reference file may get read only in part.
 - A pattern such as `styles/<style>.md` counts as linking every file it matches.
 - Never hard-code a path that changes per session, such as another skill's synced copy; find it each time.
 - A folder kept on purpose but never read in normal use (a `history/` folder of old results) says so in `SKILL.md`, so the check script and later sessions don't treat it as clutter.
@@ -106,11 +121,12 @@ Tests live inside the skill folder, in `evals/`, so they move with the skill and
 | File | What it holds | Who has one |
 |---|---|---|
 | `evals/triggers.json` | About 10 prompts that should load the skill and 10 near-misses that shouldn't, as `[{"query": "...", "should_trigger": true}, ...]`, the format skill-creator's `run_eval.py` and `run_loop.py` read | Every skill |
-| `evals.json` | 2 to 4 behaviour tests with checks, in skill-creator's `evals.json` schema (its schemas reference file) | Only skills whose output quality matters |
+| `evals.json` | 2 to 4 behaviour tests with checks, in skill-creator's `evals.json` schema (its schemas reference file). Run each with the skill and without it (or with the previous version): a check that passes both ways proves nothing about the skill and is dropped | Only skills whose output quality matters |
 | `last-run.json` | The latest trigger run at the top level (date, a hash of the description it tested, `tier`, `model`, runs per query, `seconds`, passed and total, and the queries that failed) and the latest run of each tier under `tiers` | Every skill with `triggers.json` |
 
 Writing `triggers.json`:
 
 - Write prompts the way the user types them: casual, with real project names and context, typos and all. Test sessions run in an empty folder, not in a project, so a should-load prompt for a skill about one tool or framework names it somewhere ("in my docs site", "the deploy-checklist skill"); "the footer links are wrong" alone can't tell a session which project it's about. Every prompt carries its own context.
+- Leave out prompts that start with the skill's slash command. Typing `/name` loads the skill without the description being read, so such a prompt tests nothing the description does, and `run_triggers.py` sees no skill load and counts it as failed (seen 2026-10-26: 0 of 2 runs, while the same request in words passed 2 of 2).
 - Take the near-misses from the neighbouring skills' territory (the prompts that should load the neighbour instead), plus requests that share the skill's words but not its job. Those are what catch two skills claiming the same prompt.
 - A drop in the score after a description change blocks the edit until it's explained or fixed. Scores are only compared within the same tier, because a Quick run on a small model and a Full run on a large one aren't the same measurement.
