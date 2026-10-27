@@ -54,7 +54,7 @@ The **edit guard** (a hook the installer adds) never blocks an edit. When a sess
 
 1. **Check nothing already covers it.** List every skill's name and description (`check_skill.py --all`, and the session's skill list for the rest). If one covers the request or most of it, offer to extend it through [Any change](#any-change) instead. 
 2. **Pick the home** from the config's `new_skill_homes`: the first entry whose `when` fits the skill. If two fit, ask. Check the name is free among installed skills too, since a plugin skill can hold it.
-3. **Interview the user, and wait for the answers before drafting anything**, in one round where you can: what it does, the situations and phrasings that should load it, what should not and which neighbouring skill those belong to, and whether output quality matters enough for behaviour tests. The description and near-misses come from those answers, so don't guess them.
+3. **Interview the user, and wait for the answers before drafting anything**, in one round where you can: what it does, whether it loads only on set words or a slash command (house-style.md, Description), the situations and phrasings that should load it, what should not and which neighbouring skill those belong to, and whether output quality matters enough for behaviour tests. The description and near-misses come from those answers, so don't guess them.
 4. **Draft it to the house style** (house-style.md, SKILL.md layout). Keep `SKILL.md` near 2,000 words; put material only some tasks need in reference files.
 5. **Write `evals/triggers.json`**: about 10 should-load prompts and 10 near-misses, as house-style.md's Tests section describes. Take near-misses from the neighbours named in step 3.
 6. **Run `check_skill.py`** on it and fix every `ERROR`. The checks are free, and the test question in the next step says they passed.
@@ -85,7 +85,8 @@ Ask how to test once, before the first run of the task. The answer covers every 
 3. Run each candidate with `--description "…"`, then the best one or two with the chosen tier. With Quick, every run is `--tier quick`; with Standard or Full, draft runs use `--runs 1` on the default model and only the finalists use the chosen tier. Prefer the higher score; on a tie, the shorter description, since every session pays for it.
 4. If a near-miss belongs to a neighbouring skill and keeps loading this one, sharpen the "Not for…" clause naming that neighbour, and check the neighbour's description doesn't claim the prompt too.
 5. When the winner only passes after several rounds, add four fresh prompts (two each way) that weren't used while tuning, and check it on those before trusting it. Add them to `triggers.json` afterwards.
-6. Write the winner into `SKILL.md` and `--save` its score.
+6. **Trim the winner**, since nothing else shortens a passing description: cut the clause least likely to earn its place (house-style.md, Description), run it as step 3 runs a draft, and keep the cut if the score holds. Stop at the first cut that lowers it, or after three.
+7. Write the winner into `SKILL.md` and `--save` its score.
 
 ## Files
 

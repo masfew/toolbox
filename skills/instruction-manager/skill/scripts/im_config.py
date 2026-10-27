@@ -38,7 +38,7 @@ DEFAULTS = {
     "skill_prefixes": [],
     "new_skill_homes": [{"when": "anything", "path": "~/.claude/skills/<name>"}],
     "budgets": {
-        "description_chars": [500, 900, 1024],  # aim low, aim high, limit
+        "description_chars": [0, 900, 1024],    # minimum (0: none), second look, limit
         "skill_body_words": [2000, 3000],        # aim, limit
         "reference_words": [1500, 3000],         # list sections above this, limit
         "global_words": [4000, 5000],            # aim, limit, imports included

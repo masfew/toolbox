@@ -20,19 +20,23 @@ Name rules:
 
 ## Description
 
-The description is the only part of a skill every session reads, and it decides whether the skill loads. All descriptions together sit in every session's context, so each one earns its length.
+The description has one job: make the skill load when it should and not when it shouldn't. It's the only part of a skill every session reads, and all descriptions together sit in every session's context, so a word that doesn't change what loads is paid for in every session for nothing. How the skill works belongs in the body.
 
-Build it in this order:
+**First decide which kind of skill it is**, since the two need different descriptions:
 
-1. **What it does, in one clause**, from the user's side: "How to write release notes for the docs site", "Checks a recipe's units and scales servings".
-2. **"Use it whenever…"** with the situations and the words the user actually uses ("asks why the build is slow, hangs, stalls"), not abstract categories.
-3. **"even if the user doesn't say X"**, naming the word they'd most likely leave out.
-4. **"Not for… (`other-skill`)"** whenever a neighbouring skill claims similar prompts. Pairs that overlap are the usual cause of a skill that loads when it shouldn't, or not at all.
-5. **A precedence line** ("overrides the plugin's `deploy-*` skills where they conflict") only when the skill must win over another one.
+- **Phrase-triggered:** it loads on words the user says or a slash command, and on nothing else. The description names the words and says it never loads otherwise: "Load only when the user says "ship it" as an instruction, or types /ship. Never load it otherwise, even for a request to build and deploy in one go." Nothing more: what the skill does doesn't help a session spot two words.
+- **Situation-triggered:** it loads on what the task is about. Use these parts, in this order, and only the ones the trigger tests need:
+  1. **The job, in a few words**, from the user's side: "How to write release notes for the docs site", "Checks a recipe's units and scales servings". Name the job, not its steps.
+  2. **"Use it whenever…"** with the situations and the words the user actually uses ("asks why the build is slow, hangs, stalls"), not abstract categories.
+  3. **"even if the user doesn't say X"**, naming the word they'd most likely leave out.
+  4. **"Not for… (`other-skill`)"** for a neighbouring skill that claims the same prompts, in the trigger tests or plainly. Pairs that overlap are the usual cause of a skill that loads when it shouldn't, or not at all. Don't list neighbours that don't collide.
+  5. **A precedence line** ("overrides the plugin's `deploy-*` skills where they conflict") only when the skill must win over another one.
 
-Say when to load it, not what's inside. A list of the skill's sections, steps or tools costs tokens in every session and doesn't help it load. Keep the inventory in the skill body.
+**Every clause earns its place.** Each clause either makes the skill load for a should-load prompt in `evals/triggers.json` that it otherwise misses, or stops it loading for a near-miss there. A clause you can't point to such a prompt for is cut; [Tuning a description](../SKILL.md#tuning-a-description) ends with a pass that tests each cut.
 
-**Length:** aim for 500 to 900 characters; never over 1,024, which skill-creator's validator rejects. Descriptions in that range loaded most reliably in trigger tests.
+**Never an inventory.** A list of what the skill does or holds (its steps, tools, outputs, file formats or sections) costs tokens in every session and helps no prompt load. It's the easiest mistake to make, because it reads like a good summary. "Deploys the site: builds it, runs the tests, uploads to the CDN, purges the cache and posts in the team channel" is an inventory; "How to deploy the docs site" names the job, and the steps go in the body.
+
+**Length:** as short as passes the trigger tests. There's no minimum. A situation-triggered skill often needs a few hundred characters to cover its situations and neighbours, and that's fine when each clause passes the test above; over 900 characters is worth a second look. Never over 1,024, which skill-creator's validator rejects.
 
 ## SKILL.md layout
 
@@ -55,7 +59,7 @@ Count words, not lines. Lines don't measure what a skill costs: an 80-line skill
 | `SKILL.md` body (loaded every time the skill is used) | 2,000 words | 3,000 words |
 | Each reference file (loaded only when its "Read when" fits) | one topic; over 1,500 words, start it with a list of its sections | 3,000 words, a warning rather than a hard limit: split it when its parts are read at different times |
 
-The config's `budgets` key overrides these (`skill_body_words` and `reference_words`) and the description lengths (`description_chars`: aim low, aim high, limit).
+The config's `budgets` key overrides these (`skill_body_words` and `reference_words`) and the description lengths (`description_chars`: a minimum, `0` for none, then the second-look length and the limit).
 
 Over the aim, move material that's only needed sometimes (long checklists, worked examples, trap catalogues) into a reference file. Over the limit, an edit that adds lines also moves or cuts at least as many. Estimate tokens as words × 1.35.
 

@@ -1,6 +1,6 @@
 # instruction-manager
 
-Version 1.2.0. See the [changes](#changes) at the end.
+Version 1.3.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -86,7 +86,7 @@ Settings are read from `~/.claude/instruction-manager.json`, which the install c
 | `global_instructions` | Files checked as global instructions, against the global word budget. `~/.claude/CLAUDE.md` always counts, and files a listed file imports (its lines that start with an at sign and a path) are followed. The edit guard watches those imported files too, so rules you keep in separate files and import need no setting of their own | `["~/.claude/CLAUDE.md"]` | `["~/.claude/CLAUDE.md", "~/notes/claude-rules.md"]` |
 | `skill_prefixes` | Name prefixes that mark a backticked word in an instruction file as a skill name, so a renamed or removed skill is reported | `[]` | `["web-", "docs-"]` |
 | `new_skill_homes` | Where a new skill goes, tried in order: the first entry whose `when` fits. A home's own README says how skills there are registered | `[{"when": "anything", "path": "~/.claude/skills/<name>"}]` | `[{"when": "web work", "path": "~/code/web-skills/web-<name>"}, {"when": "anything else", "path": "~/.claude/skills/<name>"}]` |
-| `budgets` | Overrides for the size budgets: `description_chars` [aim low, aim high, limit], `skill_body_words` [aim, limit], `reference_words` [list sections above, limit], `global_words` and `project_words` [aim, limit] | `[500, 900, 1024]`, `[2000, 3000]`, `[1500, 3000]`, `[4000, 5000]`, `[1000, 3000]` | `{"global_words": [3000, 4000]}` |
+| `budgets` | Overrides for the size budgets: `description_chars` [minimum (`0` for none), second look, limit], `skill_body_words` [aim, limit], `reference_words` [list sections above, limit], `global_words` and `project_words` [aim, limit] | `[0, 900, 1024]`, `[2000, 3000]`, `[1500, 3000]`, `[4000, 5000]`, `[1000, 3000]` | `{"global_words": [3000, 4000]}` |
 
 A config file that isn't valid JSON, or has a setting the scripts don't know, makes the scripts stop and say what to fix. The edit guard never stops an edit over it: it then watches only `CLAUDE.md` files until the config is fixed.
 
@@ -114,7 +114,7 @@ python -I ~/.claude/skills/instruction-manager/scripts/run_triggers.py ~/.claude
 | File | What it does |
 |---|---|
 | `skill/SKILL.md` | The new-skill and any-change workflows for skills, tuning a description, and the rule to ask before any test that starts sessions |
-| `skill/references/house-style.md` | The rules every skill follows: the description's shape and length, word budgets, layout, one home per rule, links, the test files |
+| `skill/references/house-style.md` | The rules every skill follows: what goes in a description (only what makes the skill load when it should), word budgets, layout, one home per rule, links, the test files |
 | `skill/references/instruction-files.md` | The rules and change workflow for global instructions, project `CLAUDE.md` files and READMEs sessions follow |
 | `skill/references/audit.md` | Auditing one skill, all of them, or instruction files |
 | `skill/references/test-tiers.md` | The Quick, Standard and Full test tiers, and the question the skill asks before running tests |
@@ -191,6 +191,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.3.0: Descriptions hold only what makes a skill load when it should. The house style now tells two kinds of skill apart: one that loads only on words you say or a slash command gets a description naming those words and nothing else, and one that loads on what the task is about keeps the old parts, using only those its trigger tests need. Every clause has to make a test prompt load or stay out, a list of what the skill does is never a description, and there's no minimum length. Tuning a description ends with a trimming pass that cuts clauses one at a time while the score holds. The interview for a new skill asks which kind it is, and audits check descriptions against these rules. `check_skill.py` no longer warns about a short description, and its warning over 900 characters asks you to check each clause; `description_chars` now defaults to `[0, 900, 1024]`, with `0` meaning no minimum.
 - 1.2.0: The edit guard now also watches files your global instructions import (their lines that start with an at sign and a path, for example rule files another tool installs), whatever they're named, so a one-line edit to one of them made without the skill is caught like an edit to `~/.claude/CLAUDE.md`. `check_instructions.py` labels such a file a global import and counts its words toward the file that imports it. `~/.claude/CLAUDE.md` and its imports now count as global instructions in `check_instructions.py --all` and the duplicate search even when `global_instructions` doesn't list it, as the Configuration table always said. Imports are now followed five levels deep, as Claude Code does, instead of stopping after the first five files, so a file with more than five imports is counted in full. New offline tests: `tests/test_edit_guard.py`.
 - 1.1.0: The skill now has behaviour tests (`skill/evals/evals.json`, run by `skill/evals/run_behaviour.py`), which check that a new skill goes to the folder `new_skill_homes` picks, that a changed description is tested only after asking, and that an audit of all skills asks once with totals. The `INSTRUCTION_MANAGER_CONFIG` environment variable can now point the scripts and the edit guard at another config file. Two fixes the tests found: a new skill is drafted only after you've answered the interview questions, and an audit of all skills edits nothing until you've chosen how to test, so each starting score comes from the unedited skill. An audit of a few small skills can now review them without subagents, and says so.
 - 1.0.0: First public version.

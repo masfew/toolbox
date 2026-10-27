@@ -354,9 +354,9 @@ def check_skill(folder, qv, dups, show_info):
     if n > DESC_LIMIT:
         add("ERROR", f"description: {n:,} characters, over the {DESC_LIMIT:,} limit")
     elif n > DESC_AIM[1]:
-        add("WARN", f"description: {n:,} characters, over the {DESC_AIM[1]}-character aim")
+        add("WARN", f"description: {n:,} characters, over {DESC_AIM[1]}: check each clause earns its place")
     elif n < DESC_AIM[0]:
-        add("WARN", f"description: {n:,} characters, under the {DESC_AIM[0]}-character aim")
+        add("WARN", f"description: {n:,} characters, under the {DESC_AIM[0]}-character minimum")
     else:
         add("INFO", f"description: {n:,} characters (~{round(n / 4):,} tokens in every session)")
     if desc and "not for" not in desc.lower():
