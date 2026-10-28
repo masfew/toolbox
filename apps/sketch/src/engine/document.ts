@@ -119,10 +119,16 @@ export function fillFor(canvas: OffscreenCanvas): string | null {
   return '#ffffff';
 }
 
-/** Whether a canvas has no painted pixel at all. Reads every pixel back, so it's only for one-off actions. */
+/**
+ * Whether a canvas has no painted pixel at all. Reads every pixel back, so it's only for one-off actions.
+ * It reads 512 rows at a time, since one read of a 16K canvas would need a gigabyte.
+ */
 export function isBlank(canvas: OffscreenCanvas): boolean {
-  const data = ctxOf(canvas).getImageData(0, 0, canvas.width, canvas.height).data;
-  for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return false;
+  const ctx = ctxOf(canvas);
+  for (let y = 0; y < canvas.height; y += 512) {
+    const data = ctx.getImageData(0, y, canvas.width, Math.min(512, canvas.height - y)).data;
+    for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return false;
+  }
   return true;
 }
 

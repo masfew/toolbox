@@ -557,7 +557,7 @@ export function rasterizePicked(): void {
 export function flattenImage(): void {
   settle();
   const layers = app.doc.layers;
-  if (layers.length === 1 && !layers[0].objects.length && layers[0].visible) return toast('The picture is already one layer.');
+  if (layers.length === 1 && !layers[0].objects.length) return toast('The picture is already one layer.');
   // Shapes and text off a whiteboard's or capture's canvas would be cut off.
   if (isOpen(app.doc)) growBoardForNext(objectsBounds(app.doc.layers.flatMap((l) => (l.visible ? l.objects : []))));
   app.history.record(flattenLayers(app.doc));
