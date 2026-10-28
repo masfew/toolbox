@@ -25,7 +25,7 @@ About 95% of an update is model time, so the cost is round trips (3–8 s each) 
 
 ## Skill files
 
-- `SKILL.md` is the database plans' core: the routing table with each request's first calls, Headings, record updates, lookup updates, reading for context, and the plan source. `making.md` (new plans: source, `plan.py new`, the seed batch; the template's sections and markup), `ideas.md` (the board's cards and buttons, adding ideas), `selections.md` (Feature Selections on a database plan, accepting straight away), `snapshots.md`, `batches.md`, `light.md`, `older-plans.md` (plans without `plan/_plan`) and `older-selections.md` (their future ideas) are read only when the routing table says. When adding a rule, put it in the file of the request that needs it.
+- `SKILL.md` is the database plans' core: the routing table with each request's first calls, Headings, record updates, lookup updates, reading for context, and the plan source. `making.md` (new plans: source, `plan.py new`, the seed batch; the template's sections and markup), `ideas.md` (the board's cards and buttons, adding ideas), `selections.md` (Feature Selections on a database plan, accepting straight away), `snapshots.md`, `batches.md`, `older-plans.md` (plans without `plan/_plan`) and `older-selections.md` (their future ideas) are read only when the routing table says. When adding a rule, put it in the file of the request that needs it.
 - Every record update's first message also `get`s `plan/_plan` and `statuses/_meta`: that is how a session learns it's on an older plan (no `_plan`), and then it deletes the record it just saved (`if_version` 1) and follows `older-plans.md`; a status-only record stays, since older pages show status records. About 1–2 s per update for the two gets.
 - The routing table gives each request's **first calls**, so the reference `Read` rides in the same message. Without that, test runs read the reference file in a message of its own (+1 round trip).
 - The frontmatter `description` is how the skill is chosen. Keep "load ArtifactData with the skill when deferred" in it: a run that loads the deferred tool in a message of its own takes a round trip more.
@@ -113,7 +113,6 @@ Added in 1.4.0 (25 Oct 2026). `building.md` is the procedure; `dbplan.py` (`buil
 - **Real pages in the built-in browser:** Artifact pages render in a cross-origin iframe (`*.frame.claudeusercontent.com`): `find`, `get_page_text` and `javascript_tool` can't see inside, so check with screenshots and `zoom`, and check writes with `ArtifactData` `list`. While the pane is hidden, `left_click_drag` on a drag handle works; clicking a handle doesn't focus it, so the arrow keys move a card only after Tab. Bring the tab to the front with `tabs_select` before driving it.
 - **The page's database code locally:** put a small stand-in before `plan.js` that defines `window.claude.use('db')` returning collections whose `onSnapshot` delivers fixed documents (and `use('user')` with `canEdit`). Compare old and new `plan.js` under the **same** stand-in (empty database, `use('db')` resolving null, and no `window.claude` at all): with a stand-in on only one side, the owner buttons appear on that side and every card differs.
 - **Sharing:** checked with `ArtifactData` `as_level`, a viewer the plan is shared with can read the live plan (`list` at `view` returns the documents) and nobody but the owner and editors can write (`set` at `interact` is refused). Not yet tested with real accounts: a signed-out visitor, a shared viewer and a stranger with a public link. Expected: signed out sees the last snapshot; signed-in viewers see the live plan with no Save Snapshot line and no idea buttons (`canEdit` false). To test, use a private test copy with a status record the snapshot doesn't have (a viewer who sees it is reading the database). Never share a real plan for a test.
-- **Python can't read the desktop app's notes folder** (`%APPDATA%\Roaming\Claude`) from Bash on Windows; see Light plans. Copy tools into the scratchpad first.
 
 ## Timing tests
 
@@ -123,18 +122,6 @@ Added in 1.4.0 (25 Oct 2026). `building.md` is the procedure; `dbplan.py` (`buil
 - **Test pages:** make fresh private copies of a plan for a test, and delete them afterwards. Subagents have no desktop task list or next-step box; a real desktop session adds about 7–12 s per turn on top.
 - **Nested `CLAUDE.md` in timing tests:** a subagent that Reads a skill copy inside its working folder gets every `CLAUDE.md` on that path attached (this file is ~10k tokens). The installed skill under `~/.claude/skills` doesn't trigger it. Run test copies from outside the working folder, or subtract it.
 - **Handing updates to a smaller model doesn't pay.** A Sonnet or Haiku subagent doing an update for an Opus session was slower end to end (73 s and 99 s against 40 s for the session itself on the same request): the handoff costs 9–10 s fixed, a smaller model's round trip is only 2–3 s faster, and fresh subagents explore (reading the skill again, running `outline` several times). A handoff only breaks even past about 6 parent round trips, and every flow is 3–4. Its one gain is ~10k less context in the parent. Revisit only if the model gap per round trip grows a lot.
-
-## Light plans
-
-`skill/light.md` is the format and rules; `skill/session_resume.py` the SessionStart hook, added by `install.py` through `~/.claude/tools/better-plans` (no matcher, `python -I`).
-
-- **Session key:** `CLAUDE_CODE_HOST_SESSION_ID` holds the desktop app's `local_…` id, which stays the same across `/clear`. The CLI id (`CLAUDE_CODE_SESSION_ID`, and `session_id` in hook input) changes on `/clear`. Never key by project folder: several sessions share one.
-- **The desktop app is a packaged (MSIX) Windows app.** Its `%APPDATA%\Claude` is really `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude`. Claude's tools (Read, Write, Edit, Bash's `ls`) see the Roaming path; Python doesn't. The hook globs `Packages\Claude_*\...` for it.
-- **The app's `/clear` reports `source=startup`, not `clear`.** It starts a fresh CLI process (new transcript, new CLI id, same `local_…` id). The hook restores on `startup` too. That's safe: a new session's `local_…` id has no plan yet, and reopening a session reports `resume` (context kept, skipped). Hand tests with fake `source=clear` stdin can't catch this; test with a real `/clear`.
-- **Outside the desktop app** (no `CLAUDE_CODE_HOST_SESSION_ID` and no notes folder) the hook returns at once and writes nothing.
-- **Hook log:** one line per session start in `~/.claude/better-plans-session-resume.log` (source, host id, CLI id, plan found, files removed; last 500 lines). Use it to check the hook fired and to count clears and compacts.
-- **Cleanup** deletes only `*/session-plan.md` files older than 14 days in the notes folder, never other files, and leaves the folders.
-- macOS and Linux: untested. The desktop app's notes folder there isn't known to the hook, so light plans aren't restored.
 
 ## Shared palette
 

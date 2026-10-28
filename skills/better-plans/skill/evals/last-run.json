@@ -1,13 +1,32 @@
 {
-  "date": "2026-10-24",
-  "description_sha256": "316cae846f49ed87c53c0675f690e925aad39d762556a70cd4fb2f3e308016f3",
-  "description_chars": 897,
+  "date": "2026-10-28",
+  "tier": "standard",
+  "description_sha256": "377df79e64330302d3fd1b6e9e48191a4a7e7ade86ace75b1845552340140fae",
+  "description_chars": 743,
   "model": "default",
   "runs_per_query": 3,
   "runs_made": 40,
+  "seconds": 57,
   "passed": 20,
   "total": 20,
   "should_load_rate": 1.0,
   "near_miss_rate": 0.0,
-  "failed": []
+  "failed": [],
+  "tiers": {
+    "standard": {
+      "date": "2026-10-28",
+      "tier": "standard",
+      "description_sha256": "377df79e64330302d3fd1b6e9e48191a4a7e7ade86ace75b1845552340140fae",
+      "description_chars": 743,
+      "model": "default",
+      "runs_per_query": 3,
+      "runs_made": 40,
+      "seconds": 57,
+      "passed": 20,
+      "total": 20,
+      "should_load_rate": 1.0,
+      "near_miss_rate": 0.0,
+      "failed": []
+    }
+  }
 }

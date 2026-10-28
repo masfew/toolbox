@@ -23,16 +23,13 @@ What it does:
 3. Installs the skill as ~/.claude/skills/better-plans, a link to the skill
    folder in ~/.claude/tools/better-plans where the system allows it, or a
    copy if not.
-4. Adds the light plans' SessionStart hook (skill/session_resume.py) to
-   ~/.claude/settings.json, through ~/.claude/tools/better-plans. It backs the
-   file up first and leaves every other setting alone.
-5. Adds a few lines to ~/.claude/CLAUDE.md, between marker lines, telling every
+4. Adds a few lines to ~/.claude/CLAUDE.md, between marker lines, telling every
    session to use the skill for plans, after showing them and asking.
    --instructions and --no-instructions answer ahead of time. With no terminal
    to ask in (as when Claude Code runs the install) and neither flag, it leaves
    them out and prints the command that adds them.
-6. Saves what it installed to ~/.claude/tools/better-plans.install.json.
-7. Offers artifact-style, the matching look for every other Artifact page, if
+5. Saves what it installed to ~/.claude/tools/better-plans.install.json.
+6. Offers artifact-style, the matching look for every other Artifact page, if
    it's in the same clone and not installed yet. --with-artifact-style and
    --no-artifact-style answer ahead of time; with no terminal and neither flag,
    it skips it and prints the command that adds it. Yes runs artifact-style's
@@ -40,10 +37,11 @@ What it does:
 
 On a rerun it reads that record first and takes out whatever the earlier
 install added that this one doesn't, so a rerun from a moved or renamed
-folder leaves nothing stale behind.
+folder leaves nothing stale behind. That includes the light plans
+SessionStart hook that versions before 2.0.0 added.
 
---remove undoes 2 to 6, using the record (or, for an install made before
-there was one, the skill and hook this folder would add).
+--remove undoes 2 to 5, using the record (or, for an install made before
+there was one, the skill this folder would add).
 
 Ends with "Setup complete" (or "Removed"), or exits with status 1 and a
 FAILED message saying what to do.
@@ -74,7 +72,7 @@ FILES = {"skill": "skills/better-plans"}
 # the hook keeps working wherever this folder is, even after it moves.
 # Example: ("Stop", None, 'python "{tool}/hook.py"')
 PYTHON = "python" if os.name == "nt" else "python3"
-HOOKS = [("SessionStart", None, f'{PYTHON} -I "{{tool}}/skill/session_resume.py"')]
+HOOKS = []
 
 # Programs the tool needs: (command, how to install it).
 # Example: ("gitleaks", "winget install Gitleaks.Gitleaks")

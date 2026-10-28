@@ -13,7 +13,7 @@ The tools are grouped by kind, and each kind has its own folder in the repo: `sk
 | Tool | What it does | Tested on |
 |---|---|---|
 | <a id="artifact-style"></a>[artifact-style](skills/artifact-style/) | Skill that gives every Artifact page Claude writes by hand (write-ups, handoffs, reports, runbooks, small tools) one shared look, soft greys, one blue accent, status colours and IBM Plex fonts in light and dark mode, instead of each session picking its own palette | Windows 11 (macOS and Linux untested) |
-| <a id="better-plans"></a>[better-plans](skills/better-plans/) | Skill that publishes every plan Claude writes as an Artifact page from one fixed template (overview, step cards, statuses, future idea cards you accept or reject) and updates the same page in place, plus light plans that carry a session across `/clear` in the desktop app | Windows 11 (macOS and Linux untested) |
+| <a id="better-plans"></a>[better-plans](skills/better-plans/) | Skill that publishes every plan Claude writes as an Artifact page from one fixed template (overview, step cards, statuses, future idea cards you accept or reject) and updates the same page in place | Windows 11 (macOS and Linux untested) |
 | <a id="instruction-manager"></a>[instruction-manager](skills/instruction-manager/) | Skill that every session loads before it creates, changes or audits your skills and CLAUDE.md files: a house style, word budgets, duplicate and broken-link checks, trigger tests at a cost you choose before each run, audits, and a hook that catches edits made without it | Windows 11 (macOS and Linux untested) |
 
 ### Extensions

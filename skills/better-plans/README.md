@@ -1,6 +1,6 @@
 # better-plans
 
-Version 1.6.0. See the [changes](#changes) at the end.
+Version 2.0.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -14,13 +14,10 @@ Every plan page has the same parts:
 - the build outline: collapsible phase and step cards with What / How / Why details
 - future idea cards with Accept (✓), Reject (✕) and Edit (pencil) buttons, and drag handles to reorder planned features, whose choices and edits the page saves for Claude to read back
 
-For long work inside one session, the skill also keeps a **light plan**: a short Markdown file that is the session's plan and saved state, which a hook pastes back in after `/clear` (see [Light Plans](#light-plans)).
-
 ## Requirements
 
 - Claude Code with Artifacts (the desktop app or claude.ai/code), signed in to an account that can publish Artifact pages with a page database. Plan pages declare the `db`, `user` and `artifact` capabilities; an account without them can't publish a plan.
 - Python 3.9 or newer, for the installer and the skill's scripts
-- Light plans need the Claude desktop app, since they live in its session notes folder. Elsewhere the skill makes full plan pages only, and the hook does nothing.
 - Optional: [artifact-style](https://github.com/masfew/toolbox#artifact-style), which gives every other Artifact page the same look as plan pages. The install offers it.
 - Optional, for changing the skill: Node.js, which two of the tests use
 - Tested on Windows 11. macOS and Linux: untested.
@@ -47,11 +44,11 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
    - whether to add the lines in [Install](#install) step 2 to `~/.claude/CLAUDE.md`, which make every session use the skill for plans
    - whether to install artifact-style too, the matching look for every other Artifact page (plans look the same either way)
 3. Runs `python install.py` from `skills/better-plans` with your answers as flags: `--instructions` or `--no-instructions`, and `--with-artifact-style` or `--no-artifact-style` (`python3` on macOS and Linux). For example, `python install.py --instructions --with-artifact-style`.
-4. Checks it ends with **Setup complete**, that `~/.claude/skills/better-plans/SKILL.md` now exists, and that `~/.claude/settings.json` has a `SessionStart` hook whose command is `python -I "<home>/.claude/tools/better-plans/skill/session_resume.py"` (`python3` on macOS and Linux), with your home folder's full path. If you chose artifact-style, also that `~/.claude/skills/artifact-style/SKILL.md` exists.
+4. Checks it ends with **Setup complete**, that `~/.claude/skills/better-plans/SKILL.md` now exists. If you chose artifact-style, also that `~/.claude/skills/artifact-style/SKILL.md` exists.
 
 **You do:**
 
-1. Start a new Claude Code session, so it loads the skill and the hook.
+1. Start a new Claude Code session, so it loads the skill.
 
 ## Install
 
@@ -59,7 +56,6 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
 2. From this folder, run `python install.py` (PowerShell or bash). It:
    - puts the tool at `~/.claude/tools/better-plans`. In a git clone that's a link to this folder (a directory junction on Windows, which needs no admin rights; a symlink on macOS and Linux), so a `git pull` updates the tool. From an unzipped release it's a copy, and the unzipped folder can be deleted afterwards. `--copy` or `--link` overrides the choice.
    - links `~/.claude/skills/better-plans` to the `skill` folder in `~/.claude/tools/better-plans`
-   - adds the light plans' `SessionStart` hook to `~/.claude/settings.json`, running `~/.claude/tools/better-plans/skill/session_resume.py`. It backs the file up first and leaves your other settings alone.
    - shows these lines and asks whether to add them to `~/.claude/CLAUDE.md`, between two marker lines:
 
      ```markdown
@@ -74,7 +70,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
    - asks whether to install [artifact-style](https://github.com/masfew/toolbox#artifact-style) too, if it's in the same clone and not installed yet. Yes runs artifact-style's own `install.py`, which asks about its own `CLAUDE.md` lines. `--with-artifact-style` or `--no-artifact-style` answers ahead of time; with no terminal and neither flag, it leaves artifact-style out and says how to add it.
 3. Start a new Claude Code session.
 
-The install is safe to rerun. It never adds an entry twice, and it leaves the rest of `settings.json` and `CLAUDE.md` alone, backing each up before any change.
+The install is safe to rerun. It never adds an entry twice, and it leaves the rest of `CLAUDE.md` alone, backing it up before any change. A rerun over an install from before 2.0.0 also takes the old light plans hook out of `~/.claude/settings.json`, backing that file up first.
 
 ## Configuration
 
@@ -100,25 +96,16 @@ On the page, a round button in the bottom-right corner takes you to the next ste
 
 **Building selected phases.** Each unfinished planned feature in the overview has a tick box in its phase cell, and so does each unfinished core phase in a plan without batches. Tick the ones you want built next, in any order, then tell a new session *"build the selected phases in the <plan>"*. The session claims them all at once, so another session can't take them: each shows "Claimed" with the session's name in place of its box, and a Release button for a session that stopped without finishing. It works out the order from the phases' dependencies, asks you first if a ticked phase depends on unfinished work you didn't tick, then builds them one at a time, handing each phase to a worker subagent while it checks the work and keeps the plan up to date. The same happens when you name two or more phases for one session.
 
-### Light Plans
-
-For a long piece of work in one session, Claude keeps a light plan: a short Markdown file holding the goal, where things stand, decisions, steps, key files and dead ends. It isn't a page. Claude makes one when you ask for a light plan, a session plan or session notes, or by itself once the work has three or more steps that change files; *"make a plan"* still makes a full plan page.
-
-The point is the `/clear` habit. Letting a long session compact is one of the most expensive requests it makes; `/clear` costs nothing. With a light plan, at a natural break Claude says the plan is current, you run `/clear`, and the hook pastes the light plan back in so Claude carries on where it was. Say *"save state"* any time to bring it up to date, or *"make this a full plan"* to turn it into a plan page.
-
-Light plans live in the desktop app's session notes folder (`%APPDATA%\Claude\side-session-notes\<session id>\session-plan.md` on Windows). The hook deletes ones not changed for 14 days.
-
 ## How It Works
 
-- `skill/SKILL.md` is what every request loads: which file to read for which request, headings, record and lookup updates, reading a plan for context, and the plan source format. The other `skill/*.md` files are read only when a request needs them: `making.md` (new plans), `ideas.md` and `selections.md` (the Future Ideas board), `building.md` (building ticked phases), `snapshots.md`, `batches.md`, `light.md` (light plans), and `older-plans.md` and `older-selections.md` (plans published before the database pages, which are HTML pages republished to change them).
+- `skill/SKILL.md` is what every request loads: which file to read for which request, headings, record and lookup updates, reading a plan for context, and the plan source format. The other `skill/*.md` files are read only when a request needs them: `making.md` (new plans), `ideas.md` and `selections.md` (the Future Ideas board), `building.md` (building ticked phases), `snapshots.md`, `batches.md`, and `older-plans.md` and `older-selections.md` (plans published before the database pages, which are HTML pages republished to change them).
 - **Making a plan:** Claude writes a short plan source (title, summary, sections, phases, steps and ideas under light headings), and `skill/plan.py new` builds the page and the plan's database entries from it. Claude publishes the page with `skill/plan.css` and `skill/plan.js` beside it and saves the entries in one write.
 - **Updating a plan:** every update is one small record in the page's database (its `statuses` collection), written by `skill/plan.py record`. Records name steps by number or by name, as you'd say them. The page replays the records over the plan's entries and works out every number itself. `skill/dbplan.py` holds the plan model and page builder, and `skill/plan.js` has their twin for the page; tests keep the two identical.
 - **The look and behaviour** live in `skill/plan.css` and `skill/plan.js`, published beside each plan. A published plan keeps the copies it was published with; ask Claude to refresh a plan's look to give it newer ones.
-- **Light plans:** `skill/session_resume.py` is the `SessionStart` hook. After `/clear` or a compaction it pastes the session's light plan into the new context, and on every start it deletes light plans older than 14 days. In the desktop app it logs one line per session start to `~/.claude/better-plans-session-resume.log`; outside it, it does nothing.
 - `skill/evals/triggers.json` holds 20 test prompts, 10 that should load the skill and 10 near-misses that shouldn't, for checking the description after a change.
 - `tests/` holds the test suite (`python -I tests/run_all.py`), with a made-up plan in `tests/sample-db`. `CLAUDE.md` in this folder has the notes for anyone changing the skill.
 
-Everything the install adds points at `~/.claude/tools/better-plans`, never at the folder you installed from: the skill link and the hook. Only `~/.claude/tools/better-plans` itself points at that folder (or holds a copy of it). The install keeps a record of what it added in `~/.claude/tools/better-plans.install.json`. A rerun reads it first and takes out anything the earlier install added that the new one doesn't, and `--remove` reads it to undo everything.
+Everything the install adds points at `~/.claude/tools/better-plans`, never at the folder you installed from: the skill link. Only `~/.claude/tools/better-plans` itself points at that folder (or holds a copy of it). The install keeps a record of what it added in `~/.claude/tools/better-plans.install.json`. A rerun reads it first and takes out anything the earlier install added that the new one doesn't, and `--remove` reads it to undo everything.
 
 ## Updating
 
@@ -143,7 +130,7 @@ python install.py
 
 This moves the whole clone, so every other tool in it goes back to that point too. To return to the latest version, run `git checkout main` and `git pull`, then rerun the install. To keep this tool on one version without moving the others, download its zip from the release instead, unzip it, and run `python install.py` from the `better-plans` folder inside it. The install copies the tool to `~/.claude/tools/better-plans`, so the unzipped folder can be deleted afterwards.
 
-If the tool's folder moves or is renamed (for example when a `git pull` reorganises the repo), what happens depends on how it was installed. In a git clone, `~/.claude/tools/better-plans` is a link to the folder, so the link is left pointing at a folder that's gone and the tool's hooks and skills stop working until you rerun `python install.py` from the new folder, which points the link there and takes out anything stale. An install made as a copy (an unzipped release, or `--copy`) keeps working as it is, and rerunning from the new folder switches it over.
+If the tool's folder moves or is renamed (for example when a `git pull` reorganises the repo), what happens depends on how it was installed. In a git clone, `~/.claude/tools/better-plans` is a link to the folder, so the link is left pointing at a folder that's gone and the skill stops working until you rerun `python install.py` from the new folder, which points the link there and takes out anything stale. An install made as a copy (an unzipped release, or `--copy`) keeps working as it is, and rerunning from the new folder switches it over.
 
 Published plans keep the `plan.css` and `plan.js` they were published with, so an update doesn't change them. Ask Claude to refresh a plan's look to give it the new files.
 
@@ -157,7 +144,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/better-plans` instead.
 
-This removes everything the install added: the skill link, the hook in `~/.claude/settings.json`, the lines in `~/.claude/CLAUDE.md`, `~/.claude/tools/better-plans` and its install record, even if the install was made from a different folder. `~/.claude/settings.json` and `~/.claude/CLAUDE.md` are backed up before they're changed, and the `settings.json.bak-<date>-<time>` and `CLAUDE.md.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them. It leaves artifact-style installed; remove that with its own `install.py --remove`. Your published plans stay as they are, and the hook's log, `~/.claude/better-plans-session-resume.log`, can be deleted by hand.
+This removes everything the install added: the skill link, the lines in `~/.claude/CLAUDE.md` (and the light plans hook in `~/.claude/settings.json`, for an install from before 2.0.0), `~/.claude/tools/better-plans` and its install record, even if the install was made from a different folder. Files are backed up before they're changed, and the `CLAUDE.md.bak-<date>-<time>` and `settings.json.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them. It leaves artifact-style installed; remove that with its own `install.py --remove`. Your published plans stay as they are.
 
 ## Troubleshooting
 
@@ -166,7 +153,7 @@ This removes everything the install added: the skill link, the hook in `~/.claud
 | Plans come out as plain chat text or a hand-made page | The session started before the install, or the `CLAUDE.md` lines were left out, so the skill only loads when its description matches | Start a new session. Rerun `python install.py --instructions` to add the lines |
 | Claude doesn't list the `better-plans` skill | Claude Code reads skills when a session starts | Start a new session, or restart Claude Code |
 | Publishing a plan fails with a capabilities error | The account can't give Artifact pages a database | Plans need Artifacts with the `db`, `user` and `artifact` capabilities; without them the skill can't publish |
-| A light plan isn't restored after `/clear` | The session isn't in the desktop app, or the hook wasn't loaded | Light plans need the desktop app. Start a new session after installing; check `~/.claude/better-plans-session-resume.log` has a line for the session (the file appears with the first session start after the install) |
+| Every session start shows a `SessionStart` hook error about `session_resume.py` | The tool was updated to 2.0.0 or later without rerunning the install, so the old light plans hook points at a file that's gone | Rerun `python install.py`, which takes the old hook out |
 | A plan page shows the old look after an update | Published plans keep the `plan.css` and `plan.js` they were published with | Ask Claude to refresh the plan's look |
 | `FAILED: ~/.claude/tools/better-plans exists but isn't this tool` | Something else is in that folder | Move it elsewhere, then rerun |
 
@@ -176,6 +163,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.0.0: Light plans are gone: the skill no longer keeps a session's own Markdown plan and saved state, and the install no longer adds the `SessionStart` hook that pasted it back in after `/clear`. They only worked in the Claude desktop app and went unused. **Rerun `python install.py` after updating**, so it takes the old hook out of `~/.claude/settings.json`; until then every session start reports that `session_resume.py` is missing. You can delete `~/.claude/better-plans-session-resume.log` and any `session-plan.md` files left in the desktop app's `side-session-notes` folder. Plan pages work as before.
 - 1.6.0: A Future Ideas button under the plan's summary, on the right of the Save Snapshot line, jumps straight down to the Future Ideas board, so long plans need no scrolling to reach it. Published plans get it the next time their look is refreshed.
 - 1.5.0: Batches group whole phases into as few sessions as the plan allows. A batch now ends only where the work waits on something outside the plan or the session would run too long; approvals, hands-on checks and decisions are pauses inside a batch, and the Batches table says why each batch ends. Plans already split into batches keep their batches until you ask to regroup them.
 - 1.4.0: Plans get build boxes. Tick the planned features (and, in a plan without batches, the core phases) you want built next, and tell a new session to build the selected phases. It claims them all in one write, so no other session can take them, shows them as Claimed with a Release button, and builds them in dependency order as an orchestrator, one worker subagent per phase. Naming two or more phases for one session works the same way. Published plans get the boxes the next time their look is refreshed.
