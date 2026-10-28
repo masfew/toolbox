@@ -1,13 +1,12 @@
 import { app, changed } from '../app/store';
 import { currentTool, onOptionChange, settingsOf } from '../app/tools';
 import { ObjectsCommand } from '../engine/commands';
-import type { ObjectLayer } from '../engine/document';
+import type { Layer } from '../engine/document';
 import { LINE_HEIGHT, layoutText, newObjectId, type TextObject } from '../engine/objects';
 import type { Point } from './box';
 import type { ToolDrag } from './drag';
 import { dragged } from './shapes';
-import { startEdit, textAt, textDrag, updateText } from './text';
-import { MARKUP_LAYER } from './marks';
+import { newTextBlocked, startEdit, textAt, textDrag, updateText } from './text';
 
 /**
  * The Callout tool (step 5.2): a speech bubble with a tail pointing at something. A callout is a text
@@ -22,13 +21,13 @@ const HIT = 8;
 const CLICK_OFFSET = { x: 60, y: -70 };
 
 /** Callouts whose tails can be dragged now: the one being typed in, and with the Callout tool, every one that can be changed. */
-export function tailHandles(): { x: number; y: number; layer: ObjectLayer | null; obj: TextObject }[] {
-  const out: { x: number; y: number; layer: ObjectLayer | null; obj: TextObject }[] = [];
+export function tailHandles(): { x: number; y: number; layer: Layer | null; obj: TextObject }[] {
+  const out: { x: number; y: number; layer: Layer | null; obj: TextObject }[] = [];
   const te = app.textEdit;
   if (te?.obj.tail) out.push({ ...te.obj.tail, layer: te.layer, obj: te.obj });
   if (currentTool().id !== 'callout') return out;
   for (const layer of app.doc.layers) {
-    if (layer.kind !== 'objects' || !layer.visible || layer.locked) continue;
+    if (!layer.visible || layer.locked) continue;
     for (const o of layer.objects) if (o.type === 'text' && o.tail && o.id !== te?.obj.id) out.push({ ...o.tail, layer, obj: o });
   }
   return out;
@@ -100,6 +99,8 @@ function newCallout(tip: Point, at: Point, swap: boolean): TextObject {
  */
 export function calloutDrag(p: Point, e: PointerEvent): ToolDrag {
   if (textAt(p.x, p.y, 4 / app.viewport.zoom)) return textDrag(p, e.button);
+  const blocked = newTextBlocked();
+  if (blocked) return blocked;
   const swap = e.button === 2;
   return {
     cursor: 'default',
@@ -111,7 +112,7 @@ export function calloutDrag(p: Point, e: PointerEvent): ToolDrag {
     up: (q) => {
       app.draft = null;
       const at = dragged(p, q) ? q : { x: p.x + CLICK_OFFSET.x, y: p.y + CLICK_OFFSET.y };
-      startEdit({ layer: null, original: null, obj: newCallout(p, at, swap), newLayer: MARKUP_LAYER });
+      startEdit({ layer: null, original: null, obj: newCallout(p, at, swap) });
     },
   };
 }

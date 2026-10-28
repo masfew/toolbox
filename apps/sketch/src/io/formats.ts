@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, type Zippable } from 'fflate';
 import { BOARD_BACKGROUND, exportArea, flattenArea, pictureArea } from '../engine/board';
-import { checkSize, createLayer, createObjectLayer, ctxOf, flatten, PaintDocument, type Layer } from '../engine/document';
+import { checkSize, createLayer, ctxOf, flatten, PaintDocument, type Layer } from '../engine/document';
 import { readObject, reserveObjectIds, type SketchObject } from '../engine/objects';
 import type { FileFormat } from '../app/store';
 import type { EncodeRequest, EncodeResponse } from './encoder.worker';
@@ -75,23 +75,36 @@ export async function readDocument(bytes: Uint8Array): Promise<PaintDocument> {
   return doc;
 }
 
-interface LayerJsonBase {
+/**
+ * One layer in `document.json`. Up to version 5 a layer held either pixels (`file`, no `kind`) or objects
+ * (`kind: 'objects'`, no `file`). From version 6 (Sketch 1.6.0) every layer holds both: its PNG and,
+ * when it has any, its objects. A file is read the same way whatever its version: pixels from `file`
+ * when there is one (else a see-through canvas), objects from `objects` when there are any.
+ */
+interface LayerJson {
   name: string;
   visible: boolean;
   /** Missing in files from before step 5.1, which read as unlocked; older builds ignore it. */
   locked?: boolean;
   opacity: number;
+  /** The layer's PNG in the zip. Missing on the object layers of versions 2 to 5. */
+  file?: string;
+  /** Written by versions 2 to 5 on object layers only; version 6 doesn't write it. */
+  kind?: 'pixel' | 'objects';
+  objects?: SketchObject[];
 }
 
 /**
- * Version 1 files hold only pixel layers (no `kind`). Version 2 adds object layers (text); version 3 shapes
- * and lines in them; version 4 mark-up and callouts; version 5 whiteboards (`board`).
+ * Version 1 files hold only pixel layers. Version 2 adds object layers (text); version 3 shapes and lines
+ * in them; version 4 mark-up and callouts; version 5 whiteboards (`board`). Version 6 lets one layer
+ * hold pixels and objects together. A Sketch from before a version refuses its files, saying a newer
+ * Sketch saved them, rather than opening them without what it can't read.
  */
-type LayerJson = (LayerJsonBase & { kind?: 'pixel'; file: string }) | (LayerJsonBase & { kind: 'objects'; objects: SketchObject[] });
+const NEWEST = 6;
 
 interface SketchJson {
   format: 'sketch' | 'quickpaint';
-  version: 1 | 2 | 3 | 4 | 5;
+  version: 1 | 2 | 3 | 4 | 5 | 6;
   /** A whiteboard, whose shapes and text can sit off its canvas. */
   board?: boolean;
   /**
@@ -111,25 +124,20 @@ async function readSketch(bytes: Uint8Array): Promise<PaintDocument> {
   const meta = files['document.json'] && (JSON.parse(strFromU8(files['document.json'])) as SketchJson);
   // 'quickpaint' is the tag written while the app was called Quick Paint.
   if (!meta || (meta.format !== 'sketch' && meta.format !== 'quickpaint')) throw new Error("This file isn't a Sketch picture.");
-  if (meta.version > 5) throw new Error('This picture was saved by a newer Sketch. Update the app to open it.');
+  if (meta.version > NEWEST) throw new Error('This picture was saved by a newer Sketch. Update the app to open it.');
   const tooBig = checkSize(meta.width, meta.height);
   if (tooBig) throw new Error(tooBig);
   const layers = await Promise.all(
     meta.layers.map(async (l): Promise<Layer> => {
-      if (l.kind === 'objects') {
-        const objects = (Array.isArray(l.objects) ? l.objects : []).map(readObject).filter((o): o is SketchObject => o !== null);
-        reserveObjectIds(objects);
-        const layer = createObjectLayer(l.name, objects);
-        layer.visible = l.visible;
-        layer.locked = l.locked === true;
-        layer.opacity = l.opacity;
-        return layer;
-      }
-      const layer = createLayer(l.name, meta.width, meta.height);
+      // An object layer from before version 6 becomes a layer with a see-through canvas, so the
+      // picture looks the same and keeps its layers.
+      const objects = (Array.isArray(l.objects) ? l.objects : []).map(readObject).filter((o): o is SketchObject => o !== null);
+      reserveObjectIds(objects);
+      const layer = createLayer(l.name, meta.width, meta.height, null, objects);
       layer.visible = l.visible;
       layer.locked = l.locked === true;
       layer.opacity = l.opacity;
-      const png = files[l.file];
+      const png = typeof l.file === 'string' ? files[l.file] : undefined;
       if (png) {
         const bmp = await decodeImage(png);
         ctxOf(layer.canvas).drawImage(bmp, 0, 0);
@@ -213,30 +221,44 @@ export async function encodeDocument(doc: PaintDocument, format: FileFormat, qua
 }
 
 async function encodeSketch(doc: PaintDocument): Promise<Uint8Array> {
-  const pngs = await Promise.all(doc.layers.map((l) => (l.kind === 'pixel' ? encodeCanvas(l.canvas, 'png', 1) : null)));
-  const objectLayers = doc.layers.filter((l) => l.kind === 'objects');
-  const hasShapes = objectLayers.some((l) => l.objects.some((o) => o.type !== 'text'));
-  const hasMarkup = objectLayers.some((l) => l.objects.some((o) => o.type === 'mark' || (o.type === 'text' && o.tail)));
+  const { files, pngs } = await sketchFiles(doc, (c) => encodeCanvas(c, 'png', 1));
+  return send({ id: nextId++, zip: files }, pngs.map((png) => png.buffer as ArrayBuffer));
+}
+
+/**
+ * What a `.sktch` zip holds (`document.json` and one PNG per layer), with `png` encoding each layer's
+ * canvas. Kept apart from the zipping, which runs in the encoder worker, so tests can read it back.
+ */
+export async function sketchFiles(doc: PaintDocument, png: (canvas: OffscreenCanvas) => Promise<Uint8Array>): Promise<{ files: Zippable; pngs: Uint8Array[] }> {
+  const pngs = await Promise.all(doc.layers.map((l) => png(l.canvas)));
+  const withObjects = doc.layers.some((l) => l.objects.length);
   const meta: SketchJson = {
     format: 'sketch',
-    // The oldest version that holds everything in the picture, so it opens in as many Sketches as it can.
-    // A Sketch too old for shapes or mark-up says so, rather than opening the picture without them.
-    version: doc.board ? 5 : hasMarkup ? 4 : hasShapes ? 3 : objectLayers.length ? 2 : 1,
+    // A picture with no objects still opens in every Sketch that can show it (version 1, or 5 for a
+    // whiteboard). Objects need version 6, so an older Sketch refuses the file rather than open it
+    // without them.
+    version: withObjects ? NEWEST : doc.board ? 5 : 1,
     ...(doc.board ? { board: true } : {}),
     ...(doc.edges ? { edges: [doc.edges.left, doc.edges.top, doc.edges.right, doc.edges.bottom] } : {}),
     width: doc.width,
     height: doc.height,
     fill: doc.fill,
     active: doc.active,
-    layers: doc.layers.map((l, i): LayerJson => {
-      const base = { name: l.name, visible: l.visible, locked: l.locked, opacity: l.opacity };
-      return l.kind === 'pixel' ? { ...base, file: `layers/${i}.png` } : { ...base, kind: 'objects', objects: [...l.objects] };
-    }),
+    layers: doc.layers.map(
+      (l, i): LayerJson => ({
+        name: l.name,
+        visible: l.visible,
+        locked: l.locked,
+        opacity: l.opacity,
+        file: `layers/${i}.png`,
+        ...(l.objects.length ? { objects: [...l.objects] } : {}),
+      }),
+    ),
   };
   const files: Zippable = { 'document.json': strToU8(JSON.stringify(meta, null, 2)) };
   // PNGs are already compressed, so store them as they are.
   pngs.forEach((png, i) => {
-    if (png) files[`layers/${i}.png`] = [png, { level: 0 }];
+    files[`layers/${i}.png`] = [png, { level: 0 }];
   });
-  return send({ id: nextId++, zip: files }, pngs.flatMap((png) => (png ? [png.buffer as ArrayBuffer] : [])));
+  return { files, pngs };
 }

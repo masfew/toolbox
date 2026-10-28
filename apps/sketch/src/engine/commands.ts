@@ -1,23 +1,13 @@
-import {
-  createLayer,
-  createObjectLayer,
-  ctxOf,
-  drawLayer,
-  fillFor,
-  flatten,
-  newCanvas,
-  NO_EDGES,
-  type Edges,
-  type Layer,
-  type ObjectLayer,
-  type PaintDocument,
-  type PixelLayer,
-} from './document';
+import { createLayer, ctxOf, fillFor, flatten, isBlank, newCanvas, NO_EDGES, type Edges, type Layer, type PaintDocument } from './document';
 import { CompositeCommand, type Command } from './history';
 import { changeObject, drawObjects, layoutText, objectPaintBounds, type PictureChange, type SketchObject } from './objects';
 import { PixelEdit } from './tiles';
 
-type LayerContent = OffscreenCanvas | readonly SketchObject[];
+/** A layer's pixels and objects at one moment. */
+interface LayerContent {
+  canvas: OffscreenCanvas;
+  objects: readonly SketchObject[];
+}
 
 interface DocState {
   width: number;
@@ -28,7 +18,7 @@ interface DocState {
 }
 
 function contentOf(layer: Layer): LayerContent {
-  return layer.kind === 'pixel' ? layer.canvas : layer.objects;
+  return { canvas: layer.canvas, objects: layer.objects };
 }
 
 function capture(doc: PaintDocument): DocState {
@@ -43,8 +33,8 @@ function restore(doc: PaintDocument, s: DocState): void {
   for (const layer of doc.layers) {
     const c = s.content.get(layer.id);
     if (c === undefined) continue;
-    if (layer.kind === 'pixel') layer.canvas = c as OffscreenCanvas;
-    else layer.objects = c as readonly SketchObject[];
+    layer.canvas = c.canvas;
+    layer.objects = c.objects;
   }
 }
 
@@ -57,8 +47,7 @@ class DocStateCommand implements Command {
     private readonly before: DocState,
     private readonly after: DocState,
   ) {
-    const layers = doc.layers.filter((l) => l.kind === 'pixel').length;
-    this.bytes = (before.width * before.height + after.width * after.height) * 4 * layers;
+    this.bytes = (before.width * before.height + after.width * after.height) * 4 * doc.layers.length;
   }
   apply(): void {
     restore(this.doc, this.after);
@@ -69,29 +58,27 @@ class DocStateCommand implements Command {
 }
 
 /**
- * Changes the whole picture and applies it: each pixel layer gets a new canvas from `pixels`,
- * and each object moves with `change`. A capture's open edges become `size.edges`; by default the
+ * Changes the whole picture and applies it: each layer gets a new canvas from `pixels`,
+ * and each of its objects moves with `change`. A capture's open edges become `size.edges`; by default the
  * changed canvas is all picture (crop, canvas size), so it no longer reaches past it.
  */
 function changeDocument(
   doc: PaintDocument,
   label: string,
   size: { width: number; height: number; fill?: string | null; edges?: Edges | null },
-  pixels: (layer: PixelLayer, index: number) => OffscreenCanvas,
+  pixels: (layer: Layer, index: number) => OffscreenCanvas,
   change: PictureChange,
 ): Command {
   const before = capture(doc);
   const content = new Map<number, LayerContent>();
   doc.layers.forEach((layer, i) => {
-    if (layer.kind === 'pixel') content.set(layer.id, pixels(layer, i));
-    else
-      content.set(
-        layer.id,
-        layer.objects.map((o) => {
-          const l = change.kind === 'flip' && o.type === 'text' ? layoutText(o) : null;
-          return changeObject(o, change, l ? { w: l.width, h: l.height } : undefined);
-        }),
-      );
+    content.set(layer.id, {
+      canvas: pixels(layer, i),
+      objects: layer.objects.map((o) => {
+        const l = change.kind === 'flip' && o.type === 'text' ? layoutText(o) : null;
+        return changeObject(o, change, l ? { w: l.width, h: l.height } : undefined);
+      }),
+    });
   });
   const fill = size.fill === undefined ? doc.fill : size.fill;
   const edges = size.edges === undefined ? (doc.edges ? NO_EDGES : null) : size.edges;
@@ -236,7 +223,7 @@ export function replaceWithImage(
   open = false,
 ): Command {
   let bottom: OffscreenCanvas | null = null;
-  const pixelsOf = (_: PixelLayer, i: number) => {
+  const pixelsOf = (i: number) => {
     const c = newCanvas(image.width, image.height);
     if (i === 0) {
       ctxOf(c).drawImage(image, 0, 0);
@@ -246,7 +233,7 @@ export function replaceWithImage(
   };
   const before = capture(doc);
   const content = new Map<number, LayerContent>();
-  doc.layers.forEach((layer, i) => content.set(layer.id, layer.kind === 'pixel' ? pixelsOf(layer, i) : layer.objects));
+  doc.layers.forEach((layer, i) => content.set(layer.id, { canvas: pixelsOf(i), objects: layer.objects }));
   const after: DocState = { width: image.width, height: image.height, fill: open ? null : '#ffffff', edges: open ? NO_EDGES : null, content };
   const cmd = new DocStateCommand(label, doc, before, after);
   cmd.apply();
@@ -258,7 +245,7 @@ export function replaceWithImage(
   if (first) {
     setTimeout(() => {
       after.fill = fillFor(first);
-      if (doc.layers.some((l) => l.kind === 'pixel' && l.canvas === first)) doc.fill = after.fill;
+      if (doc.layers.some((l) => l.canvas === first)) doc.fill = after.fill;
     }, 250);
   }
   return cmd;
@@ -273,7 +260,7 @@ class AddLayerCommand implements Command {
     private readonly layer: Layer,
     private readonly index: number,
   ) {
-    this.bytes = layer.kind === 'pixel' ? layer.canvas.width * layer.canvas.height * 4 : 4096;
+    this.bytes = layer.canvas.width * layer.canvas.height * 4;
   }
   apply(): void {
     this.prevActive = this.doc.active;
@@ -293,22 +280,15 @@ export function addLayer(doc: PaintDocument, layer: Layer, label: string): Comma
   return cmd;
 }
 
-/** Adds a layer holding an image at (x, y), above the current layer, and applies it. */
-export function addImageLayer(doc: PaintDocument, image: CanvasImageSource, x: number, y: number, name: string): Command {
-  const layer = createLayer(name, doc.width, doc.height);
-  ctxOf(layer.canvas).drawImage(image, x, y);
-  return addLayer(doc, layer, 'Add layer from file');
-}
-
 /**
- * Swaps an object layer's list of objects. Recorded after the change is made. `after` can be moved on
+ * Swaps a layer's list of objects. Recorded after the change is made. `after` can be moved on
  * while it's the last step, so a run of small changes (dragging a slider, nudging) is one step.
  */
 export class ObjectsCommand implements Command {
   readonly bytes = 4096;
   constructor(
     readonly label: string,
-    private readonly layer: ObjectLayer,
+    private readonly layer: Layer,
     private readonly before: readonly SketchObject[],
     public after: readonly SketchObject[],
   ) {}
@@ -349,53 +329,59 @@ function swapLayers(doc: PaintDocument, label: string, layers: Layer[], active: 
   return cmd;
 }
 
-/** The visible layers under `index` merged, for blur and pixelate marks to take their pixels from. */
+/**
+ * What's under a layer's objects, for blur and pixelate marks to take their pixels from: the visible
+ * layers under `index` merged, with the layer's own pixels over them at its opacity.
+ */
 function backdropFor(doc: PaintDocument, index: number): OffscreenCanvasRenderingContext2D {
-  return ctxOf(flatten(doc, null, index));
-}
-
-/** Turns an object layer into a pixel layer that looks the same, in its place, and applies it. */
-export function rasterizeLayer(doc: PaintDocument, index: number): Command {
-  const old = doc.layers[index] as ObjectLayer;
-  const layer = createLayer(old.name, doc.width, doc.height);
-  drawObjects(ctxOf(layer.canvas), old.objects, backdropFor(doc, index));
-  layer.visible = old.visible;
-  layer.locked = old.locked;
-  layer.opacity = old.opacity;
-  return swapLayers(doc, 'Rasterize layer', doc.layers.map((l, i) => (i === index ? layer : l)), doc.active);
-}
-
-/** Merges the layers that are showing into one pixel layer, and applies it. Hidden layers are dropped. */
-export function flattenLayers(doc: PaintDocument): Command {
-  const layer = createLayer('Background', doc.width, doc.height);
-  ctxOf(layer.canvas).drawImage(flatten(doc), 0, 0);
-  return swapLayers(doc, 'Flatten', [layer], 0);
+  const back = ctxOf(flatten(doc, null, index));
+  const layer = doc.layers[index];
+  back.globalAlpha = layer.opacity;
+  back.drawImage(layer.canvas, 0, 0);
+  back.globalAlpha = 1;
+  return back;
 }
 
 /**
- * Turns some of a layer's objects into pixels on the nearest pixel layer under it, and applies it.
- * Null when there's no pixel layer under it.
+ * Draws some of a layer's objects into its own pixels and takes them out of its objects, as one step,
+ * and applies it. They look as they did, except where they overlapped objects that stay (the pixels
+ * are under every object). Null when none of `ids` is in the layer.
  */
-export function rasterizeObjects(doc: PaintDocument, layer: ObjectLayer, ids: number[], label: string): Command | null {
+export function rasterizeObjects(doc: PaintDocument, layer: Layer, ids: number[], label: string): Command | null {
   const index = doc.layers.indexOf(layer);
-  let target: PixelLayer | null = null;
-  for (let i = index - 1; i >= 0 && !target; i--) {
-    const l = doc.layers[i];
-    if (l.kind === 'pixel') target = l;
-  }
-  if (!target) return null;
   const objects = layer.objects.filter((o) => ids.includes(o.id));
-  const edit = new PixelEdit(target, label);
+  if (index < 0 || !objects.length) return null;
+  const back = backdropFor(doc, index);
+  const edit = new PixelEdit(layer, label);
   for (const o of objects) {
     const r = objectPaintBounds(o);
     edit.touch(r.x, r.y, r.w, r.h);
   }
-  // Drawn as the layer shows them: at the layer's opacity.
-  drawLayer(ctxOf(target.canvas), { ...layer, objects }, 1, backdropFor(doc, index));
+  // At full strength: the canvas shows at the layer's opacity, as the objects did.
+  back.globalAlpha = layer.opacity;
+  drawObjects(ctxOf(layer.canvas), objects, back);
   const before = layer.objects;
   layer.objects = before.filter((o) => !ids.includes(o.id));
   const parts = [edit.finish(), new ObjectsCommand(label, layer, before, layer.objects)].filter((c): c is Command => c !== null);
   return new CompositeCommand(label, parts);
+}
+
+/** Draws all of a layer's objects into its pixels as one step, and applies it. Null when it has none. */
+export function rasterizeLayer(doc: PaintDocument, index: number): Command | null {
+  const layer = doc.layers[index];
+  return rasterizeObjects(
+    doc,
+    layer,
+    layer.objects.map((o) => o.id),
+    'Rasterize layer',
+  );
+}
+
+/** Merges the layers that are showing into one layer of pixels, and applies it. Hidden layers are dropped. */
+export function flattenLayers(doc: PaintDocument): Command {
+  const layer = createLayer('Background', doc.width, doc.height);
+  ctxOf(layer.canvas).drawImage(flatten(doc), 0, 0);
+  return swapLayers(doc, 'Flatten', [layer], 0);
 }
 
 // ---------- Layers (step 5.1) ----------
@@ -445,30 +431,38 @@ export function moveLayer(doc: PaintDocument, from: number, to: number): Command
 }
 
 /**
- * Merges the layer at `index` into the one under it, and applies it. Two object layers at the same
- * opacity stay objects; anything else becomes pixels. The result keeps the lower layer's name and opacity.
+ * Merges the layer at `index` into the one under it, and applies it. The result keeps the lower layer's
+ * name and opacity (as Photoshop does), so it looks the same whenever the lower layer is at full
+ * opacity. Objects stay editable where that doesn't change the look: the upper layer's when both layers
+ * have the same opacity, and the lower layer's when none of the upper layer goes into pixels over them
+ * (it has no painted pixels, and its objects stay objects). The rest becomes pixels.
  */
 export function mergeDown(doc: PaintDocument, index: number): Command {
   const upper = doc.layers[index];
   const lower = doc.layers[index - 1];
-  let merged: Layer;
-  if (upper.kind === 'objects' && lower.kind === 'objects' && upper.opacity === lower.opacity) {
-    merged = createObjectLayer(lower.name, [...lower.objects, ...upper.objects]);
-  } else {
-    merged = createLayer(lower.name, doc.width, doc.height);
-    const ctx = ctxOf(merged.canvas);
-    // What's under both, for blur and pixelate marks; each layer is drawn on it too as it goes.
-    const back = backdropFor(doc, index - 1);
-    back.globalAlpha = lower.opacity;
-    if (lower.kind === 'pixel') {
-      ctx.drawImage(lower.canvas, 0, 0);
-      back.drawImage(lower.canvas, 0, 0);
-    } else {
-      drawObjects(ctx, lower.objects, back);
-    }
-    back.globalAlpha = 1;
-    drawLayer(ctx, upper, 1, back);
+  const keepUpper = upper.opacity === lower.opacity;
+  // Reading the upper layer's pixels back costs a moment, so it's only done when there's something to keep.
+  const keepLower = !lower.objects.length || ((keepUpper || !upper.objects.length) && isBlank(upper.canvas));
+  const merged = createLayer(lower.name, doc.width, doc.height);
+  const ctx = ctxOf(merged.canvas);
+  ctx.drawImage(lower.canvas, 0, 0);
+  // What's under each object that becomes pixels, for blur and pixelate marks; each part is drawn on it as it goes.
+  const back = keepLower && keepUpper ? null : backdropFor(doc, index - 1);
+  if (!keepLower) {
+    back!.globalAlpha = lower.opacity;
+    drawObjects(ctx, lower.objects, back!);
   }
+  ctx.globalAlpha = upper.opacity;
+  ctx.drawImage(upper.canvas, 0, 0);
+  if (back) {
+    back.globalAlpha = upper.opacity;
+    back.drawImage(upper.canvas, 0, 0);
+  }
+  if (!keepUpper) drawObjects(ctx, upper.objects, back!);
+  ctx.globalAlpha = 1;
+  merged.objects = [...(keepLower ? lower.objects : []), ...(keepUpper ? upper.objects : [])];
+  merged.visible = lower.visible;
+  merged.locked = lower.locked;
   merged.opacity = lower.opacity;
   const layers = doc.layers.flatMap((l, i) => (i === index ? [] : i === index - 1 ? [merged] : [l]));
   return swapLayers(doc, 'Merge down', layers, index - 1);

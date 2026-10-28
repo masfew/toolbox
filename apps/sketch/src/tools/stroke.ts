@@ -1,12 +1,12 @@
 import { opaqueHex, parseHex } from '../app/color';
-import { ctxOf, newCanvas, type PixelLayer } from '../engine/document';
+import { ctxOf, newCanvas, type Layer } from '../engine/document';
 import type { Command } from '../engine/history';
 import { linePixels } from '../engine/pixels';
 import { PixelEdit } from '../engine/tiles';
 
 /** A stroke being drawn see-through, for the renderer to show over its layer until it ends. */
 export interface LiveStroke {
-  layer: PixelLayer;
+  layer: Layer;
   canvas: OffscreenCanvas;
   alpha: number;
   blend: GlobalCompositeOperation;
@@ -66,7 +66,7 @@ export class Stroke {
   last: StrokePoint;
 
   constructor(
-    layer: PixelLayer,
+    layer: Layer,
     private readonly spec: StrokeSpec,
     start: StrokePoint,
   ) {

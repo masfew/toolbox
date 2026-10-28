@@ -1,6 +1,5 @@
 import { checkSize, createLayer, ctxOf, DEFAULT_HEIGHT, DEFAULT_WIDTH, flatten, newCanvas, nextLayerName, PaintDocument } from '../engine/document';
 import {
-  addImageLayer,
   addLayer,
   cropTo,
   flattenLayers,
@@ -195,12 +194,17 @@ async function writeAs(format: FileFormat, quality: number, path: string | null,
   }
 }
 
+/** Whether a flat picture file would lose something: layers, editable shapes and text, or a whiteboard. */
+export function needsSketchFile(doc: PaintDocument): boolean {
+  return doc.layers.length > 1 || doc.board || doc.layers.some((l) => l.objects.length > 0);
+}
+
 /** Ctrl+S: saves to the open file in its format, or asks where when there isn't one. */
 export async function save(): Promise<boolean> {
   settle();
   const f = app.file;
   if (!f.path || !f.format || !FORMATS[f.format].writable) return saveAs();
-  if (f.format !== 'sktch' && (app.doc.layers.length > 1 || app.doc.board) && !app.flattenOk) {
+  if (f.format !== 'sktch' && needsSketchFile(app.doc) && !app.flattenOk) {
     const choice = await openModal('keep-layers');
     if (choice === 'cancel') return false;
     if (choice === 'sktch') return saveAs('sktch');
@@ -213,7 +217,7 @@ export async function save(): Promise<boolean> {
 export async function saveAs(initial?: FileFormat): Promise<boolean> {
   settle();
   const current = app.file.format && FORMATS[app.file.format].writable ? app.file.format : null;
-  const start = initial ?? current ?? (app.doc.layers.length > 1 || app.doc.board ? 'sktch' : 'png');
+  const start = initial ?? current ?? (needsSketchFile(app.doc) ? 'sktch' : 'png');
   const picked = await openModal('save-as', { initial: start });
   if (!picked) return false;
   const name = withExtension(app.file.name === 'Untitled' ? 'Untitled' : app.file.name, picked.format);
@@ -225,63 +229,73 @@ export async function saveAs(initial?: FileFormat): Promise<boolean> {
 
 // ---------- Paste ----------
 
-export async function pasteImage(bitmap: ImageBitmap | OffscreenCanvas): Promise<void> {
+/**
+ * Pastes an image as a floating selection on the current layer (or a new layer, when Paste onto New Layer
+ * is on). `at` is a view point to centre it on (a drop); otherwise it goes at the top-left of the part of
+ * the picture on screen, like Paint. A locked or hidden current layer refuses it, saying why.
+ */
+export async function pasteImage(bitmap: ImageBitmap | OffscreenCanvas, at?: { x: number; y: number }): Promise<void> {
   settle();
   app.objectSel = null;
   const doc = app.doc;
   const tooBig = checkSize(Math.max(doc.width, bitmap.width), Math.max(doc.height, bitmap.height));
   if (tooBig) return toast(tooBig, 5000);
 
-  if (isOpen(doc)) return pasteOnBoard(bitmap);
-  if (app.docIsNew && app.history.position === 0) {
+  if (app.docIsNew && app.history.position === 0 && !isOpen(doc)) {
     // Pasting into a fresh picture: the picture becomes the image.
     app.history.record(replaceWithImage(doc, bitmap, 'Paste'));
     app.viewport.fit(doc.width, doc.height, 1);
     changed();
     return;
   }
+  const blocked = layerPrefs.pasteNewLayer ? null : blockedReason(doc.activeLayer);
+  if (blocked) return toast(blocked, 4000);
+  if (isOpen(doc)) return pasteOnBoard(bitmap, at);
 
-  let pendingResize: Command | null = null;
+  let pending: Command | null = null;
   if (bitmap.width > doc.width || bitmap.height > doc.height) {
-    pendingResize = resizeCanvas(doc, Math.max(doc.width, bitmap.width), Math.max(doc.height, bitmap.height), 'Resize canvas');
+    pending = resizeCanvas(doc, Math.max(doc.width, bitmap.width), Math.max(doc.height, bitmap.height), 'Resize canvas');
   }
-  // Onto a new layer when that's turned on, or when the layer it would go on can't be changed.
-  const blocked = blockedReason(doc.paintLayer);
-  if (layerPrefs.pasteNewLayer || blocked) {
-    const add = addLayer(doc, createLayer(nextLayerName(doc), doc.width, doc.height), 'Paste');
-    pendingResize = pendingResize ? new CompositeCommand('Paste', [pendingResize, add]) : add;
-    if (blocked && !layerPrefs.pasteNewLayer) toast('The current layer is locked or hidden, so the paste went on a new layer.', 4000);
-  }
+  pending = withNewLayer(pending);
   const image = newCanvas(bitmap.width, bitmap.height);
   ctxOf(image).drawImage(bitmap, 0, 0);
-  // Paste at the top-left of the part of the picture on screen, like Paint.
   let x = 0;
   let y = 0;
-  if (!pendingResize) {
+  if (at) {
+    // Centred on the drop point, kept inside the picture.
+    const p = app.viewport.toDoc(at.x, at.y);
+    x = Math.round(Math.min(Math.max(0, p.x - image.width / 2), doc.width - image.width));
+    y = Math.round(Math.min(Math.max(0, p.y - image.height / 2), doc.height - image.height));
+  } else if (!pending) {
+    // At the top-left of the part of the picture on screen, like Paint.
     const tl = app.viewport.toDoc(0, 0);
     x = Math.min(Math.max(0, Math.floor(tl.x)), doc.width - image.width);
     y = Math.min(Math.max(0, Math.floor(tl.y)), doc.height - image.height);
   }
-  pasteSelection(image, x, y, pendingResize);
+  pasteSelection(image, x, y, pending);
 }
 
-/** A paste on a whiteboard or a capture lands in the middle of the view, and the canvas grows to hold it. */
-function pasteOnBoard(bitmap: ImageBitmap | OffscreenCanvas): void {
+/** With Paste onto New Layer on, adds the layer the paste goes on, as part of the paste's pending step. */
+function withNewLayer(pending: Command | null): Command | null {
+  if (!layerPrefs.pasteNewLayer) return pending;
   const doc = app.doc;
+  const add = addLayer(doc, createLayer(nextLayerName(doc), doc.width, doc.height), 'Paste');
+  return pending ? new CompositeCommand('Paste', [pending, add]) : add;
+}
+
+/**
+ * A paste on a whiteboard or a capture lands in the middle of the view (or centred on `at`, a view point),
+ * and the canvas grows to hold it.
+ */
+function pasteOnBoard(bitmap: ImageBitmap | OffscreenCanvas, at?: { x: number; y: number }): void {
   const v = app.viewport;
-  const middle = () => v.toDoc(v.width / 2, v.height / 2);
-  const c = middle();
-  let pending = growBoard({ x: c.x - bitmap.width / 2, y: c.y - bitmap.height / 2, w: bitmap.width, h: bitmap.height });
-  const blocked = blockedReason(doc.paintLayer);
-  if (layerPrefs.pasteNewLayer || blocked) {
-    const add = addLayer(doc, createLayer(nextLayerName(doc), doc.width, doc.height), 'Paste');
-    pending = pending ? new CompositeCommand('Paste', [pending, add]) : add;
-    if (blocked && !layerPrefs.pasteNewLayer) toast('The current layer is locked or hidden, so the paste went on a new layer.', 4000);
-  }
+  const centre = () => (at ? v.toDoc(at.x, at.y) : v.toDoc(v.width / 2, v.height / 2));
+  const c = centre();
+  const pending = withNewLayer(growBoard({ x: c.x - bitmap.width / 2, y: c.y - bitmap.height / 2, w: bitmap.width, h: bitmap.height }));
   const image = newCanvas(bitmap.width, bitmap.height);
   ctxOf(image).drawImage(bitmap, 0, 0);
-  // The view moved if the board grew up or left, so find the middle again.
-  const m = middle();
+  // The view moved if the board grew up or left, so find the point again.
+  const m = centre();
   pasteSelection(image, Math.round(m.x - image.width / 2), Math.round(m.y - image.height / 2), pending);
 }
 
@@ -446,7 +460,10 @@ export async function copy(wholePicture: boolean): Promise<boolean> {
 
 // ---------- Drag and drop ----------
 
-/** A drop on the picture adds the image as a layer; a drop beside it opens the file. */
+/**
+ * A drop on the picture pastes the image there, as a floating selection on the current layer, as Ctrl+V
+ * does; a drop beside it opens the file.
+ */
 export async function dropFiles(items: platform.DroppedItem[], viewX: number, viewY: number): Promise<void> {
   const item = items.find((i) => isPictureName(i.name));
   if (!item) return toast('Drop a picture file (PNG, JPEG, WebP, BMP, GIF or .sktch).');
@@ -455,32 +472,9 @@ export async function dropFiles(items: platform.DroppedItem[], viewX: number, vi
   const onPicture = app.doc.board || (p.x >= 0 && p.y >= 0 && p.x < app.doc.width && p.y < app.doc.height);
   try {
     if (!onPicture || formatFromName(item.name) === 'sktch') return await openFromBytes(await item.read(), item.name, item.path);
-    settle();
     const bitmap = await decodeImage(await item.read());
-    const doc = app.doc;
-    const parts: Command[] = [];
-    if (isOpen(doc)) {
-      // Centred on the drop point, with the board or capture grown to hold it.
-      const grow = growBoard({ x: p.x - bitmap.width / 2, y: p.y - bitmap.height / 2, w: bitmap.width, h: bitmap.height });
-      if (grow) parts.push(grow);
-      const q = app.viewport.toDoc(viewX, viewY);
-      parts.push(addImageLayer(doc, bitmap, Math.round(q.x - bitmap.width / 2), Math.round(q.y - bitmap.height / 2), item.name));
-      bitmap.close();
-      app.history.record(parts.length === 1 ? parts[0] : new CompositeCommand('Add layer from file', parts));
-      return toast(`Added ${item.name} as a new layer`);
-    }
-    if (bitmap.width > doc.width || bitmap.height > doc.height) {
-      const tooBig = checkSize(Math.max(doc.width, bitmap.width), Math.max(doc.height, bitmap.height));
-      if (tooBig) return toast(tooBig, 5000);
-      parts.push(resizeCanvas(doc, Math.max(doc.width, bitmap.width), Math.max(doc.height, bitmap.height)));
-    }
-    // Centre the image on the drop point, kept inside the picture.
-    const x = Math.round(Math.min(Math.max(0, p.x - bitmap.width / 2), doc.width - bitmap.width));
-    const y = Math.round(Math.min(Math.max(0, p.y - bitmap.height / 2), doc.height - bitmap.height));
-    parts.push(addImageLayer(doc, bitmap, x, y, item.name));
+    await pasteImage(bitmap, { x: viewX, y: viewY });
     bitmap.close();
-    app.history.record(parts.length === 1 ? parts[0] : new CompositeCommand('Add layer from file', parts));
-    toast(`Added ${item.name} as a new layer`);
   } catch (e) {
     toast(errorText(e), 5000);
   }
@@ -528,37 +522,44 @@ export async function cut(): Promise<void> {
 
 // ---------- Rasterize and flatten ----------
 
-/** Turns the current layer's shapes and text into pixels. */
+/** Draws the current layer's shapes and text into its pixels, so painting can go over them. */
 export function rasterizeCurrentLayer(): void {
   settle();
   const doc = app.doc;
   const layer = doc.activeLayer;
-  if (layer.kind !== 'objects') return;
+  if (!layer.objects.length) return toast(`${layer.name} has no shapes or text to rasterize.`);
+  const why = blockedReason(layer);
+  if (why) return toast(why, 4000);
+  if (app.objectSel?.layer === layer) app.objectSel = null;
+  // Shapes and text off a whiteboard's or capture's canvas would be cut off.
   growBoardForObjects(layer.objects);
-  app.history.record(rasterizeLayer(doc, doc.active));
-  toast('The layer is pixels now. Undo turns it back into shapes.');
+  const cmd = rasterizeLayer(doc, doc.active);
+  if (!cmd) return;
+  app.history.record(cmd);
+  toast('The shapes and text are pixels now. Undo turns them back into shapes.');
   changed();
 }
 
-/** Turns the picked shapes into pixels on the layer under them. */
+/** Draws the picked shapes into the pixels of their layer. */
 export function rasterizePicked(): void {
   const picked = pickedObjects();
   if (!picked) return;
   const n = picked.objects.length;
   growBoardForObjects(picked.objects);
   const cmd = rasterizeObjects(app.doc, picked.layer, picked.objects.map((o) => o.id), n === 1 ? 'Rasterize shape' : 'Rasterize shapes');
-  if (!cmd) return toast('There is no pixel layer under these shapes to put them on.');
+  if (!cmd) return;
   app.objectSel = null;
   app.history.record(cmd);
   changed();
 }
 
-/** Merges every layer that's showing into one pixel layer. */
+/** Merges every layer that's showing into one layer of pixels. */
 export function flattenImage(): void {
   settle();
-  if (app.doc.layers.length === 1 && app.doc.layers[0].kind === 'pixel') return toast('The picture is already one layer.');
+  const layers = app.doc.layers;
+  if (layers.length === 1 && !layers[0].objects.length && layers[0].visible) return toast('The picture is already one layer.');
   // Shapes and text off a whiteboard's or capture's canvas would be cut off.
-  if (isOpen(app.doc)) growBoardForNext(objectsBounds(app.doc.layers.flatMap((l) => (l.kind === 'objects' && l.visible ? l.objects : []))));
+  if (isOpen(app.doc)) growBoardForNext(objectsBounds(app.doc.layers.flatMap((l) => (l.visible ? l.objects : []))));
   app.history.record(flattenLayers(app.doc));
   changed();
 }

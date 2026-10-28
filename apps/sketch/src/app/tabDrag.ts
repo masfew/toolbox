@@ -4,8 +4,8 @@
  * comes along under the pointer: shapes stay editable, pixels arrive as a floating selection to place.
  * Each picture gets its own undo step: taking them out of one, putting them in the other.
  */
-import { addLayer, ObjectsCommand } from '../engine/commands';
-import { createObjectLayer, objectLayerForNew, type ObjectLayer } from '../engine/document';
+import { ObjectsCommand } from '../engine/commands';
+import { blockedReason } from '../engine/document';
 import { moveObject, newObjectId } from '../engine/objects';
 import { moveBox, type Box, type Point } from '../tools/box';
 import type { ToDoc, ToolDrag } from '../tools/drag';
@@ -13,7 +13,7 @@ import { deleteSelection, pasteSelection, selectionImage } from '../tools/select
 import { labelFor, pickObjects, removeObjects, type Drawn } from '../tools/shapes';
 import { growBoard } from './board';
 import { isOpen } from '../engine/board';
-import { app, changed, tabs } from './store';
+import { app, changed, tabs, toast } from './store';
 import { switchTo } from './tabs';
 
 /** How long the pointer rests on a tab before it switches. */
@@ -46,6 +46,12 @@ export function carryTo(index: number, drag: ToolDrag, pointer: { clientX: numbe
   if (!carry || index < 0 || index >= tabs.list.length) return null;
   const from = toDoc(pointer);
   const to = tabName(index);
+  // They'd go on the other picture's current layer, so a locked or hidden one leaves them here.
+  const target = tabs.list[index].doc.activeLayer;
+  if (blockedReason(target)) {
+    toast(`${target.name} in ${to} is ${target.locked ? 'locked' : 'hidden'}, so nothing can be moved onto it.`, 4000);
+    return null;
+  }
   if (carry.kind === 'objects') {
     const { layer, ids } = carry;
     // Where they are now, moved by the drag so far; then the drag is undone and they're taken out as one step.
@@ -81,19 +87,10 @@ function objectsArrive(moving: Drawn[], from: Point, at: Point, label: string): 
   const dy = Math.round(at.y - from.y);
   const arrived = moving.map((o) => ({ ...moveObject(o, dx, dy), id: newObjectId() }));
   const ids = arrived.map((o) => o.id);
-  const doc = app.doc;
-  const existing = objectLayerForNew(doc);
-  let layer: ObjectLayer;
-  let before: ObjectLayer['objects'] = [];
-  let added: ReturnType<typeof addLayer> | null = null;
-  if (existing) {
-    layer = existing;
-    before = layer.objects;
-    layer.objects = [...before, ...arrived];
-  } else {
-    layer = createObjectLayer('Shapes', arrived);
-    added = addLayer(doc, layer, label);
-  }
+  // On the picture's current layer, which `carryTo` checked can be changed.
+  const layer = app.doc.activeLayer;
+  const before = layer.objects;
+  layer.objects = [...before, ...arrived];
   pickObjects(layer, ids);
   changed();
   const place = (q: Point) => {
@@ -107,8 +104,7 @@ function objectsArrive(moving: Drawn[], from: Point, at: Point, label: string): 
     move: (q) => place(q),
     up: (q) => {
       place(q);
-      // A new layer is recorded holding them where they ended up; else the layer's objects change.
-      app.history.record(added ?? new ObjectsCommand(label, layer, before, layer.objects));
+      app.history.record(new ObjectsCommand(label, layer, before, layer.objects));
       changed();
     },
   };

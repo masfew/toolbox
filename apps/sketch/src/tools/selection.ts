@@ -1,7 +1,7 @@
 import { parseHex } from '../app/color';
 import { app, changed, colorSignal, toast } from '../app/store';
 import { onOptionChange, onToolChange, settingsOf, tools } from '../app/tools';
-import { ctxOf, newCanvas, type PixelLayer } from '../engine/document';
+import { ctxOf, newCanvas, type Layer } from '../engine/document';
 import { CompositeCommand, type Command } from '../engine/history';
 import { clearColor } from '../engine/pixels';
 import { PixelEdit } from '../engine/tiles';
@@ -28,7 +28,7 @@ import { floodArea } from './floodClient';
  * lifted off (leaving a see-through hole) and shown in the box until the selection is placed.
  */
 export interface Selection extends Box {
-  layer: PixelLayer;
+  layer: Layer;
   /** Where the picked pixels came from, in picture pixels. */
   sx: number;
   sy: number;
@@ -65,7 +65,7 @@ function rectPath(w: number, h: number): Path2D {
   return p;
 }
 
-function create(layer: PixelLayer, sx: number, sy: number, sw: number, sh: number, mask: OffscreenCanvas | null, outline: Path2D): Selection {
+function create(layer: Layer, sx: number, sy: number, sw: number, sh: number, mask: OffscreenCanvas | null, outline: Path2D): Selection {
   return {
     layer,
     sx,
@@ -101,7 +101,7 @@ function clampRect(x: number, y: number, w: number, h: number) {
 
 export function selectRect(x: number, y: number, w: number, h: number): void {
   const r = clampRect(x, y, w, h);
-  app.selection = r ? create(app.doc.paintLayer, r.x, r.y, r.w, r.h, null, rectPath(r.w, r.h)) : null;
+  app.selection = r ? create(app.doc.activeLayer, r.x, r.y, r.w, r.h, null, rectPath(r.w, r.h)) : null;
   changed();
 }
 
@@ -126,7 +126,7 @@ function selectPolygon(points: Point[]): void {
   const m = ctxOf(mask);
   m.fillStyle = '#000';
   m.fill(outline);
-  app.selection = create(app.doc.paintLayer, r.x, r.y, r.w, r.h, mask, outline);
+  app.selection = create(app.doc.activeLayer, r.x, r.y, r.w, r.h, mask, outline);
   changed();
 }
 
@@ -139,13 +139,13 @@ function selectMask(pixels: Uint8ClampedArray, runs: Int32Array, r: { x: number;
     outline.moveTo(runs[i], runs[i + 1]);
     outline.lineTo(runs[i + 2], runs[i + 3]);
   }
-  app.selection = create(app.doc.paintLayer, r.x, r.y, r.w, r.h, mask, outline);
+  app.selection = create(app.doc.activeLayer, r.x, r.y, r.w, r.h, mask, outline);
   changed();
 }
 
 /** Shows a pasted picture at (x, y), ready to move, resize or turn before it's placed. */
 export function pasteSelection(image: OffscreenCanvas, x: number, y: number, pendingResize: Command | null): void {
-  const sel = create(app.doc.paintLayer, x, y, image.width, image.height, null, rectPath(image.width, image.height));
+  const sel = create(app.doc.activeLayer, x, y, image.width, image.height, null, rectPath(image.width, image.height));
   sel.raw = image;
   sel.pasted = true;
   sel.pendingResize = pendingResize;
@@ -449,7 +449,7 @@ export async function wandSelect(p: Point): Promise<void> {
     app.selection = null;
     return changed();
   }
-  const layer = doc.paintLayer;
+  const layer = doc.activeLayer;
   const data = ctxOf(layer.canvas).getImageData(0, 0, doc.width, doc.height);
   const tolerance = (settingsOf('magic-wand').tolerance as number) / 100;
   const area = await floodArea(data, x, y, tolerance);

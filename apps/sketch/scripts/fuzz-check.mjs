@@ -50,17 +50,16 @@ const VALIDATE = `(() => {
   if (!(d.width >= 1 && d.height >= 1 && d.width <= 16384 && d.height <= 16384)) return 'bad size ' + d.width + 'x' + d.height;
   if (!d.layers.length) return 'no layers';
   if (d.active < 0 || d.active >= d.layers.length) return 'current layer ' + d.active + ' of ' + d.layers.length;
-  if (!d.layers.some((l) => l.kind === 'pixel')) return 'no pixel layer';
   for (const l of d.layers) {
-    if (l.kind === 'pixel' && (l.canvas.width !== d.width || l.canvas.height !== d.height)) return 'layer ' + l.name + ' is ' + l.canvas.width + 'x' + l.canvas.height;
-    if (l.kind === 'objects' && !Array.isArray(l.objects)) return 'layer ' + l.name + ' has no object list';
+    if (!l.canvas || l.canvas.width !== d.width || l.canvas.height !== d.height) return 'layer ' + l.name + ' is ' + l.canvas?.width + 'x' + l.canvas?.height;
+    if (!Array.isArray(l.objects)) return 'layer ' + l.name + ' has no object list';
     if (!(l.opacity >= 0 && l.opacity <= 1)) return 'layer opacity ' + l.opacity;
   }
   if (app.history.position < 0) return 'history position ' + app.history.position;
   return null;
 })()`;
 
-const summary = `(() => { const d = window.sketch.app.doc; return d.width + 'x' + d.height + ' ' + d.layers.map((l) => l.kind + (l.kind === 'objects' ? l.objects.length : '')).join(','); })()`;
+const summary = `(() => { const d = window.sketch.app.doc; return d.width + 'x' + d.height + ' ' + d.layers.map((l) => 'layer' + l.objects.length).join(','); })()`;
 
 let app;
 let steps = 0;

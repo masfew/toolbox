@@ -6,7 +6,7 @@ Design decisions for each phase, and why, are in [docs/decisions.md](docs/decisi
 
 ## Checks
 
-The local checks of the real app are `check:native` (100 checks, 97 without `SKETCH_TEST_CUTOUT_FILES`, which the Remove Background ones need; README), `check:speed`, `check:fuzz`, `check:update` (8 checks in `update-check.mjs`, then 12 in `update-remote-check.mjs`; README, Build and Check), `check:uninstall` (7 checks, seconds) and the timings `npm run perf`. A tool or command not built yet goes in `src/tools/registry.ts` or `src/app/commandList.ts` with `planned: '<step>'`, and shows greyed out until its step. Release build: installer 1.8 MB, start-up median under 0.7 s. Building needs what the README's Requirements list; Rust from rustup lives in `%USERPROFILE%\.cargo\bin`, which may need adding to PATH in a new shell.
+The local checks of the real app are `check:native` (101 checks, 98 without `SKETCH_TEST_CUTOUT_FILES`, which the Remove Background ones need; README), `check:speed`, `check:fuzz`, `check:update` (8 checks in `update-check.mjs`, then 12 in `update-remote-check.mjs`; README, Build and Check), `check:uninstall` (7 checks, seconds) and the timings `npm run perf`. A tool or command not built yet goes in `src/tools/registry.ts` or `src/app/commandList.ts` with `planned: '<step>'`, and shows greyed out until its step. Release build: installer 1.8 MB, start-up median under 0.7 s. Building needs what the README's Requirements list; Rust from rustup lives in `%USERPROFILE%\.cargo\bin`, which may need adding to PATH in a new shell.
 
 ## Versions and releases
 
@@ -19,7 +19,7 @@ Before offering to commit any change, time what it touches: work out which actio
 ## Traps
 
 - A window holds several pictures as tabs (F14). `app.doc`, `app.history`, `app.viewport`, `app.file` and the other per-picture fields are getters onto `tabs.list[tabs.active]` (`src/app/store.ts`), and each tab has its own autosave slot. New state that belongs to a picture goes on `Tab`, or it leaks between tabs; something written for later (a timer, an autosave) must hold its `Tab`, not read `app`, since the tab showing may have changed by then. New, Open and launches open a new tab, so a test that wants a fresh picture closes the others (`perf.mjs`'s `newPicture`).
-- The app was called Quick Paint until 21 Oct 2026. Its layered files were `.qpaint` with `format: 'quickpaint'`; now `.sktch` and `format: 'sketch'` (no other app uses `.sktch`; `.sketch`, `.skch`, `.sktz` and `.skt` belong to other apps). Opening still accepts the old ones so older files keep working. Keep that fallback.
+- The app was called Quick Paint until 21 Oct 2026. Its layered files were `.qpaint` with `format: 'quickpaint'`; now `.sktch` and `format: 'sketch'` (no other app uses `.sktch`; `.sketch`, `.skch`, `.sktz` and `.skt` belong to other apps). Opening still accepts the old ones so older files keep working. Keep that fallback, and the reading of every older `.sktch` version (up to 5 a layer held pixels or objects, never both; decisions doc, one layer section).
 
 - Vite's file watcher on Windows sometimes misses an edit made seconds after another to the same file, and keeps serving the old version. If the browser shows code that doesn't match the disk, rewrite the file (read and write it back) and reload.
 - In the browser pane, `import('/src/...')` from a test script can load a second copy of the modules after a hot reload (the page's imports carry `?t=` timestamps). Drive the page through real DOM and keyboard events instead, or reload first.

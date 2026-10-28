@@ -1,9 +1,9 @@
 import { app, changed, colorSignal, toast } from '../app/store';
 import { loadOptions, onOptionChange, onToolChange, settingsOf } from '../app/tools';
 import { frameOf, inkBounds, isOpen } from '../engine/board';
-import { addLayer, ObjectsCommand } from '../engine/commands';
+import { ObjectsCommand } from '../engine/commands';
 import type { Command } from '../engine/history';
-import { createObjectLayer, ctxOf, newCanvas, objectLayerForNew, type ObjectLayer } from '../engine/document';
+import { blockedReason, ctxOf, newCanvas, type Layer } from '../engine/document';
 import { renumbered, type MarkObject } from '../engine/marks';
 import { drawObject, hitObject, moveObject, newObjectId, objectBounds, objectPaintBounds, type SketchObject } from '../engine/objects';
 import { bendToward, lineMiddle, rectAround, type Dash, type Head, type LineObject, type Rect, type ShapeKind, type ShapeObject } from '../engine/shapes';
@@ -57,7 +57,7 @@ function labelFor(verb: string, objects: Drawn[]): string {
 // ---------- Picking ----------
 
 /** The picked shapes and lines still in their layer, in drawing order. Clears the pick when none are left. */
-export function pickedObjects(): { layer: ObjectLayer; objects: Drawn[] } | null {
+export function pickedObjects(): { layer: Layer; objects: Drawn[] } | null {
   const sel = app.objectSel;
   if (!sel) return null;
   const objects = app.doc.layers.includes(sel.layer) ? sel.layer.objects.filter((o): o is Drawn => isDrawn(o) && sel.ids.includes(o.id)) : [];
@@ -105,7 +105,7 @@ function styleOf(o: Drawn): Record<string, OptionValue> {
 }
 
 /** Picks objects in a layer, and shows the first one's settings on the options bar. */
-export function pickObjects(layer: ObjectLayer, ids: number[]): void {
+export function pickObjects(layer: Layer, ids: number[]): void {
   app.objectSel = ids.length ? { layer, ids } : null;
   const first = layer.objects.find((o): o is Drawn => isDrawn(o) && o.id === ids[0]);
   if (!first) return changed();
@@ -124,13 +124,13 @@ export function clearPicked(): void {
  * Text is left to the text tool. A spotlight is only picked when nothing else is there, since what
  * it lights up usually sits inside it.
  */
-export function objectAt(p: Point): { layer: ObjectLayer; obj: Drawn } | null {
+export function objectAt(p: Point): { layer: Layer; obj: Drawn } | null {
   const slop = SLOP / app.viewport.zoom;
   const layers = app.doc.layers;
   for (const spot of [false, true]) {
     for (let i = layers.length - 1; i >= 0; i--) {
       const layer = layers[i];
-      if (layer.kind !== 'objects' || !layer.visible || layer.locked) continue;
+      if (!layer.visible || layer.locked) continue;
       for (let j = layer.objects.length - 1; j >= 0; j--) {
         const o = layer.objects[j];
         if (!isDrawn(o) || (o.type === 'mark' && o.kind === 'spotlight') !== spot) continue;
@@ -149,7 +149,7 @@ let joinable: { key: string; cmd: ObjectsCommand; at: number } | null = null;
  * Records a change to a layer's objects. Changes with the same `join` key that follow each other
  * within a second and a half (a slider being dragged, nudges) become one step.
  */
-function record(label: string, layer: ObjectLayer, before: readonly SketchObject[], join?: string): void {
+function record(label: string, layer: Layer, before: readonly SketchObject[], join?: string): void {
   const now = performance.now();
   const last = joinable;
   if (join && last && last.key === join && app.history.top === last.cmd && app.history.dirty && now - last.at < 1500) {
@@ -164,7 +164,7 @@ function record(label: string, layer: ObjectLayer, before: readonly SketchObject
 }
 
 /** Takes objects out of their layer as one history step (moving them to another tab, F14.3). */
-export function removeObjects(layer: ObjectLayer, ids: number[], label: string): void {
+export function removeObjects(layer: Layer, ids: number[], label: string): void {
   const before = layer.objects;
   layer.objects = before.filter((o) => !ids.includes(o.id));
   if (app.objectSel?.layer === layer) app.objectSel = null;
@@ -195,11 +195,13 @@ function changePicked(label: string, fn: (o: Drawn) => Drawn | null, join?: stri
 }
 
 /**
- * Adds new objects, to the layer given if it's still in the picture and can be changed, else the usual
- * layer for new objects (or a new one called `newName`), and picks them.
+ * Adds new objects on top of a layer's objects and picks them: the layer given if it's still in the
+ * picture and can be changed (the copied shapes' own layer, a duplicate's), else the current layer.
+ * Never a new layer: when the current layer is locked or hidden, a toast says so and nothing is added.
  */
-export function addObjects(objects: Drawn[], label: string, prefer?: ObjectLayer, newName = 'Shapes'): void {
-  const step = addObjectsStep(objects, label, prefer, newName);
+export function addObjects(objects: Drawn[], label: string, prefer?: Layer): void {
+  const step = addObjectsStep(objects, label, prefer);
+  if (!step) return changed();
   joinable = null;
   app.history.record(step.cmd);
   pickObjects(step.layer, objects.map((o) => o.id));
@@ -208,17 +210,19 @@ export function addObjects(objects: Drawn[], label: string, prefer?: ObjectLayer
 /**
  * Adds objects as `addObjects` does, but hands back the change (already made) instead of recording it,
  * for a caller that records it together with another change as one step (a rough stroke becoming a
- * shape, `quickshape.ts`). Pick the objects with `pickObjects` once it's recorded.
+ * shape, `quickshape.ts`). Pick the objects with `pickObjects` once it's recorded. Null (after the
+ * toast) when the layer can't be changed.
  */
-export function addObjectsStep(objects: Drawn[], label: string, prefer?: ObjectLayer, newName = 'Shapes'): { cmd: Command; layer: ObjectLayer } {
-  const layer = prefer && app.doc.layers.includes(prefer) && prefer.visible && !prefer.locked ? prefer : objectLayerForNew(app.doc);
-  if (layer) {
-    const before = layer.objects;
-    layer.objects = [...before, ...objects];
-    return { cmd: new ObjectsCommand(label, layer, before, layer.objects), layer };
+export function addObjectsStep(objects: Drawn[], label: string, prefer?: Layer): { cmd: Command; layer: Layer } | null {
+  const layer = prefer && app.doc.layers.includes(prefer) && !blockedReason(prefer) ? prefer : app.doc.activeLayer;
+  const why = blockedReason(layer);
+  if (why) {
+    toast(why, 4000);
+    return null;
   }
-  const made = createObjectLayer(newName, objects);
-  return { cmd: addLayer(app.doc, made, label), layer: made };
+  const before = layer.objects;
+  layer.objects = [...before, ...objects];
+  return { cmd: new ObjectsCommand(label, layer, before, layer.objects), layer };
 }
 
 // ---------- Snapping ----------
@@ -227,7 +231,7 @@ export function addObjectsStep(objects: Drawn[], label: string, prefer?: ObjectL
 export function snapTargets(skip: Set<number>): SnapTargets {
   const rects: Rect[] = [];
   for (const layer of app.doc.layers) {
-    if (layer.kind !== 'objects' || !layer.visible) continue;
+    if (!layer.visible) continue;
     for (const o of layer.objects) if (!skip.has(o.id)) rects.push(objectBounds(o));
   }
   return { rects, canvas: app.doc.board ? null : frameOf(app.doc) };
@@ -397,7 +401,7 @@ export function objectHandles(o: Drawn): { id: ObjectHandle; x: number; y: numbe
 }
 
 /** The handle of the one picked object under a view point. */
-function handleAt(sx: number, sy: number): { o: Drawn; layer: ObjectLayer; id: ObjectHandle } | null {
+function handleAt(sx: number, sy: number): { o: Drawn; layer: Layer; id: ObjectHandle } | null {
   const picked = pickedObjects();
   if (picked?.objects.length !== 1) return null;
   const o = picked.objects[0];
@@ -438,7 +442,7 @@ export function objectPress(sx: number, sy: number, p: Point, e: PointerEvent): 
 }
 
 /** Drags the picked objects, snapping their box to other objects, the picture and equal spacing. */
-function moveDrag(layer: ObjectLayer, ids: number[], p: Point, narrowTo: number | null): ToolDrag {
+function moveDrag(layer: Layer, ids: number[], p: Point, narrowTo: number | null): ToolDrag {
   const before = layer.objects;
   const moving = before.filter((o) => ids.includes(o.id));
   const box = rectAround(moving.flatMap((o) => {
@@ -481,7 +485,7 @@ function moveDrag(layer: ObjectLayer, ids: number[], p: Point, narrowTo: number 
   };
 }
 
-function handleDrag(layer: ObjectLayer, o: Drawn, id: ObjectHandle, p: Point): ToolDrag {
+function handleDrag(layer: Layer, o: Drawn, id: ObjectHandle, p: Point): ToolDrag {
   const before = layer.objects;
   const targets = snapTargets(new Set([o.id]));
   const set = (n: Drawn) => {
@@ -620,7 +624,7 @@ export const pickedCount = () => pickedObjects()?.objects.length ?? 0;
  * Shapes and lines copied with Ctrl+C, and the clipboard's change count just after copying, so a paste
  * can tell they're still what's on the clipboard. Their picture goes on the clipboard too, for other apps.
  */
-let copied: { objects: Drawn[]; layer: ObjectLayer; seq: number; pastes: number } | null = null;
+let copied: { objects: Drawn[]; layer: Layer; seq: number; pastes: number } | null = null;
 
 /** The picked objects drawn on a canvas just big enough for them, as they look in their layer. */
 export function pickedImage(): OffscreenCanvas | null {
@@ -668,14 +672,18 @@ export function pasteCopied(): void {
 const offered = new Set<number>();
 
 /**
- * Pixel tools paint on the pixel layer under an object layer, so shapes and text stay editable.
- * The first time that happens on a layer, says so, with a button to rasterize the layer instead.
+ * Pixel tools paint a layer's pixels, which are under its shapes and text, so those stay editable and
+ * on top. The first time that happens on a layer with objects, says so, with a button to rasterize the
+ * layer so painting can go over them.
  */
 export function offerRasterize(rasterize: () => void): void {
   const layer = app.doc.activeLayer;
-  if (layer.kind !== 'objects' || offered.has(layer.id) || !layer.objects.length) return;
+  if (offered.has(layer.id) || !layer.objects.length) return;
   offered.add(layer.id);
-  toast('Shapes and text stay editable, so painting goes on the layer under them.', 8000, { label: 'Rasterize layer', run: rasterize });
+  toast('Painting goes under the shapes and text on this layer, which stay on top. Rasterize the layer to paint over them.', 8000, {
+    label: 'Rasterize layer',
+    run: rasterize,
+  });
 }
 
 // ---------- Restyling ----------

@@ -3,8 +3,8 @@ import { BOARD_BACKGROUND, frameOf, isOpen } from '../engine/board';
 import { TILE } from '../engine/tiles';
 import { currentTool } from '../app/tools';
 import { onThemeChange } from '../app/theme';
-import { ctxOf, drawLayer, newCanvas, type Layer } from '../engine/document';
-import { drawObject, drawText } from '../engine/objects';
+import { ctxOf, newCanvas, type Layer } from '../engine/document';
+import { drawObject, drawObjects, drawText } from '../engine/objects';
 import { curvePoints, lineCurve, shapeCorners } from '../engine/shapes';
 import { corners, type Point } from '../tools/box';
 import { cropBox, cropHandles } from '../tools/crop';
@@ -217,15 +217,13 @@ export class Renderer {
     }
   }
 
+  /**
+   * One layer: its pixels (with a stroke being drawn, an adjustment's preview or a floating selection on
+   * them), then its objects over them, as `drawLayer` draws it everywhere else.
+   */
   private drawLayer(layer: Layer): void {
     const ctx = this.ctx;
-    const te = app.textEdit;
-    if (layer.kind === 'objects' && te?.original && te.layer === layer) {
-      // Show the text being typed in place of the saved one.
-      ctx.globalAlpha = layer.opacity;
-      for (const o of layer.objects) drawObject(ctx, o.id === te.obj.id ? te.obj : o);
-      ctx.globalAlpha = 1;
-    } else if (app.adjustPreview?.layer === layer) {
+    if (app.adjustPreview?.layer === layer) {
       const ap = app.adjustPreview;
       ctx.globalAlpha = layer.opacity;
       if (ap.filter) ctx.filter = ap.filter;
@@ -233,12 +231,10 @@ export class Renderer {
       ctx.filter = 'none';
       if (ap.part) ctx.drawImage(ap.part, ap.x, ap.y);
       ctx.globalAlpha = 1;
-    } else if (layer.kind === 'pixel') {
+    } else {
       ctx.globalAlpha = layer.opacity;
       this.drawShrunk(layer.canvas);
       ctx.globalAlpha = 1;
-    } else {
-      drawLayer(ctx, layer);
     }
     const live = app.liveStroke;
     if (live && live.layer === layer) {
@@ -257,6 +253,13 @@ export class Renderer {
       ctx.drawImage(sel.image, 0, 0);
       ctx.restore();
     }
+    if (!layer.objects.length) return;
+    const te = app.textEdit;
+    // Text being typed shows in place of the saved one.
+    const objects = te?.original && te.layer === layer ? layer.objects.map((o) => (o.id === te.obj.id ? te.obj : o)) : layer.objects;
+    ctx.globalAlpha = layer.opacity;
+    drawObjects(ctx, objects);
+    ctx.globalAlpha = 1;
   }
 
   /**

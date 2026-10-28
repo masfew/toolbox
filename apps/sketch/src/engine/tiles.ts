@@ -1,4 +1,4 @@
-import { ctxOf, newCanvas, type PixelLayer } from './document';
+import { ctxOf, newCanvas, type Layer } from './document';
 import type { Command } from './history';
 
 export const TILE = 256;
@@ -53,7 +53,7 @@ export class PixelEdit {
   private tiles = new Map<number, TileSnap>();
 
   constructor(
-    readonly layer: PixelLayer,
+    readonly layer: Layer,
     readonly label: string,
   ) {}
 
@@ -80,7 +80,7 @@ class TileCommand implements Command {
   readonly bytes: number;
 
   constructor(
-    private readonly layer: PixelLayer,
+    private readonly layer: Layer,
     readonly label: string,
     private readonly snaps: TileSnap[],
   ) {

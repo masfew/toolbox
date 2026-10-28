@@ -91,11 +91,9 @@ export function contentBounds(doc: PaintDocument): Rect | null {
   let r: Rect | null = null;
   for (const layer of doc.layers) {
     if (!layer.visible) continue;
-    if (layer.kind === 'objects') r = union(r, objectsBounds(layer.objects));
-    else {
-      const c = layer.canvas;
-      r = union(r, alphaBounds(ctxOf(c).getImageData(0, 0, c.width, c.height).data, c.width, c.height));
-    }
+    const c = layer.canvas;
+    r = union(r, objectsBounds(layer.objects));
+    r = union(r, alphaBounds(ctxOf(c).getImageData(0, 0, c.width, c.height).data, c.width, c.height));
   }
   return r;
 }
@@ -127,7 +125,7 @@ function outsideBounds(doc: PaintDocument, frame: Rect): Rect | null {
   ].filter((s) => s.w > 0 && s.h > 0);
   let r: Rect | null = null;
   for (const layer of doc.layers) {
-    if (!layer.visible || layer.kind !== 'pixel') continue;
+    if (!layer.visible) continue;
     const ctx = ctxOf(layer.canvas);
     for (const s of strips) {
       const b = alphaBounds(ctx.getImageData(s.x, s.y, s.w, s.h).data, s.w, s.h);
@@ -144,7 +142,7 @@ function outsideBounds(doc: PaintDocument, frame: Rect): Rect | null {
  */
 export function pictureArea(doc: PaintDocument, extra: Rect | null = null): Rect {
   const frame = frameOf(doc);
-  const objects = doc.layers.flatMap((l) => (l.kind === 'objects' && l.visible ? l.objects : []));
+  const objects = doc.layers.flatMap((l) => (l.visible ? l.objects : []));
   const grown = frame.w !== doc.width || frame.h !== doc.height;
   const r = union(union(union(frame, objectsBounds(objects)), grown ? outsideBounds(doc, frame) : null), extra)!;
   const x = Math.floor(r.x);

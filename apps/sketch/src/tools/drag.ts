@@ -1,4 +1,4 @@
-import type { ObjectLayer } from '../engine/document';
+import type { Layer } from '../engine/document';
 import type { Point } from './box';
 
 export type ToDoc = (e: { clientX: number; clientY: number }) => Point;
@@ -13,7 +13,7 @@ export interface ToolDrag {
    * Set while moving a selection or picked shapes, which can be carried onto another tab (F14.3):
    * the selection, or the shapes' layer and ids.
    */
-  carry?: { kind: 'selection' } | { kind: 'objects'; layer: ObjectLayer; ids: number[] };
+  carry?: { kind: 'selection' } | { kind: 'objects'; layer: Layer; ids: number[] };
   /** Puts back what the drag has moved so far, as if it never started. */
   cancel?(): void;
 }

@@ -1,5 +1,5 @@
 import { adjustedPart, adjustLayer, filterFor, isNoChange, type AdjustArea, type Adjustment } from '../engine/adjust';
-import type { PixelLayer } from '../engine/document';
+import type { Layer } from '../engine/document';
 import { replaceFloating, type Selection } from '../tools/selection';
 import { commitText } from '../tools/text';
 import { blockedReason } from './layers';
@@ -7,17 +7,17 @@ import { app, changed, openModal, toast } from './store';
 
 /**
  * The Adjust menu (step 5.3). An adjustment changes the selection if there is one, otherwise the
- * layer the pixel tools paint on. A lifted or pasted selection changes before it's placed.
+ * current layer's pixels. A lifted or pasted selection changes before it's placed.
  */
 
-type Target = { kind: 'layer'; layer: PixelLayer; area: AdjustArea; whole: boolean } | { kind: 'floating'; sel: Selection };
+type Target = { kind: 'layer'; layer: Layer; area: AdjustArea; whole: boolean } | { kind: 'floating'; sel: Selection };
 
 /** What the adjustment changes, or null (with a message) when that can't be changed now. */
 function target(): Target | null {
   commitText();
   const sel = app.selection;
   if (sel?.raw) return { kind: 'floating', sel };
-  const layer = sel ? sel.layer : app.doc.paintLayer;
+  const layer = sel ? sel.layer : app.doc.activeLayer;
   const why = blockedReason(layer);
   if (why) {
     toast(why, 4000);
@@ -52,8 +52,8 @@ function apply(t: Target, change: Adjustment | 'auto'): void {
   }
   const cmd = adjustLayer(t.layer, t.area, change);
   if (cmd) app.history.record(cmd);
-  // Shapes and text can't be adjusted, so say where the change went.
-  if (!app.selection && app.doc.activeLayer.kind === 'objects') toast(`Adjustments change pixels, so this changed ${t.layer.name}.`, 4000);
+  // Shapes and text can't be adjusted, so say they were left as they were.
+  if (!app.selection && t.layer.objects.length) toast(`Adjustments change pixels, so the shapes and text on ${t.layer.name} stay as they were.`, 4000);
   changed();
 }
 

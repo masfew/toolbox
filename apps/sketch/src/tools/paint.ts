@@ -46,7 +46,7 @@ function lookOf(spec: StrokeSpec): Look {
 
 /** Brush, pencil and eraser. Shift+click draws a straight line from where the last stroke ended. */
 export function paintDrag(toolId: string, p: Point, e: PointerEvent): ToolDrag {
-  const layer = app.doc.paintLayer;
+  const layer = app.doc.activeLayer;
   const at = { x: p.x, y: p.y, p: pressureOf(e) };
   const last = app.lastPoint;
   const fromLast = e.shiftKey && last && last.layerId === layer.id;

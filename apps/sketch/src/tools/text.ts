@@ -1,20 +1,18 @@
-import { app, changed, colorSignal } from '../app/store';
+import { app, changed, colorSignal, toast } from '../app/store';
 import { loadOptions, onOptionChange, onToolChange, settingsOf } from '../app/tools';
-import { addLayer, ObjectsCommand } from '../engine/commands';
-import { createObjectLayer, objectLayerForNew, type ObjectLayer } from '../engine/document';
+import { ObjectsCommand } from '../engine/commands';
+import { blockedReason, type Layer } from '../engine/document';
 import { hitObject, LINE_HEIGHT, newObjectId, objectBounds, type SketchObject, type TextAlign, type TextObject } from '../engine/objects';
 import type { Point } from './box';
 import type { ToolDrag } from './drag';
 import { snapsNow, snapTargets, snapTolerance } from './shapes';
 import { snapRect } from './snap';
 
-/** Text being typed: a new text box, or one already in a layer. */
+/** Text being typed: a new text box (no layer yet; it goes on the current layer), or one already in a layer. */
 export interface TextEdit {
-  layer: ObjectLayer | null;
+  layer: Layer | null;
   original: TextObject | null;
   obj: TextObject;
-  /** The name for a new layer, if one is needed for a new text box. */
-  newLayer?: string;
 }
 
 /** The text tool's option keys that are also text box settings. */
@@ -34,11 +32,11 @@ function styleFromOptions(): Pick<TextObject, (typeof STYLE_KEYS)[number]> {
 }
 
 /** The topmost text box under a picture point, in a layer that's showing. */
-export function textAt(x: number, y: number, slop = 0): { layer: ObjectLayer; obj: TextObject } | null {
+export function textAt(x: number, y: number, slop = 0): { layer: Layer; obj: TextObject } | null {
   const layers = app.doc.layers;
   for (let i = layers.length - 1; i >= 0; i--) {
     const layer = layers[i];
-    if (layer.kind !== 'objects' || !layer.visible || layer.locked) continue;
+    if (!layer.visible || layer.locked) continue;
     for (let j = layer.objects.length - 1; j >= 0; j--) {
       const obj = layer.objects[j];
       if (obj.type === 'text' && hitObject(obj, x, y, slop)) return { layer, obj };
@@ -82,15 +80,12 @@ export function commitText(): void {
     layer.objects = after;
     app.history.record(new ObjectsCommand(label, layer, before, after));
   } else if (!empty) {
-    const layer = objectLayerForNew(app.doc);
-    const label = obj.tail ? 'Add callout' : 'Add text';
-    if (layer) {
-      const before = layer.objects;
-      layer.objects = [...before, obj];
-      app.history.record(new ObjectsCommand(label, layer, before, layer.objects));
-    } else {
-      app.history.record(addLayer(app.doc, createObjectLayer(te.newLayer ?? 'Text', [obj]), label));
-    }
+    // On the current layer, which was checked when the box was started: locking, hiding or changing
+    // layers finishes the typing first.
+    const layer = app.doc.activeLayer;
+    const before = layer.objects;
+    layer.objects = [...before, obj];
+    app.history.record(new ObjectsCommand(obj.tail ? 'Add callout' : 'Add text', layer, before, layer.objects));
   }
   changed();
 }
@@ -101,6 +96,14 @@ export function updateText(patch: Partial<TextObject>): void {
   if (!te) return;
   te.obj = { ...te.obj, ...patch };
   changed();
+}
+
+/** A drag that does nothing, after saying why, when new text can't go on the current layer; else null. */
+export function newTextBlocked(): ToolDrag | null {
+  const why = blockedReason(app.doc.activeLayer);
+  if (!why) return null;
+  toast(why, 4000);
+  return { move: () => {}, up: () => {} };
 }
 
 /**
@@ -138,6 +141,8 @@ export function textDrag(p: Point, button: number): ToolDrag {
     };
   }
 
+  const blocked = newTextBlocked();
+  if (blocked) return blocked;
   const style = styleFromOptions();
   const color = button === 2 ? app.secondary : app.primary;
   const accent = button === 2 ? app.primary : app.secondary;

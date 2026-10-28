@@ -188,6 +188,8 @@ export class CanvasController {
       return;
     }
 
+    // New shapes and mark-up go on the current layer, so a locked or hidden one refuses them, as for painting.
+    if (isObjectTool(tool.id) && !(e.altKey && SHAPE_TOOLS.includes(tool.id)) && paintBlocked()) return;
     if (SHAPE_TOOLS.includes(tool.id)) return this.startTool(shapeDrag(tool.id, p, e, rememberColor));
     if (LINE_TOOLS.includes(tool.id)) return this.startTool(lineDrag(tool.id, p, e));
     if (PAINT_TOOLS.includes(tool.id)) {

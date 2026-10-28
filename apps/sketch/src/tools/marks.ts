@@ -13,8 +13,6 @@ import { addObjects, dragged, guided, onMarkersChanged, snapTargets, snapThePoin
  * restyled like shapes afterwards. Callouts are in `callout.ts`.
  */
 
-/** New marks go on a layer of this name when there's no object layer to put them in. */
-export const MARKUP_LAYER = 'Mark-up';
 
 function newMark(kind: MarkKind, box: { x: number; y: number; w: number; h: number }): MarkObject {
   const st = settingsOf(kind);
@@ -72,7 +70,7 @@ export function markBoxDrag(kind: MarkKind, p: Point, e: PointerEvent): ToolDrag
       const draft = app.draft as MarkObject | null;
       app.draft = null;
       if (!draft || draft.w < 2 || draft.h < 2) return changed();
-      addObjects([draft], `Add ${nameOf(kind)}`, undefined, MARKUP_LAYER);
+      addObjects([draft], `Add ${nameOf(kind)}`);
     },
   };
 }
@@ -112,7 +110,7 @@ export function highlightDrag(p: Point, e: PointerEvent): ToolDrag {
       const mark = app.draft as MarkObject | null;
       app.draft = null;
       if (!mark) return changed();
-      addObjects([mark], 'Add highlight', undefined, MARKUP_LAYER);
+      addObjects([mark], 'Add highlight');
     },
   };
 }
@@ -121,7 +119,7 @@ export function highlightDrag(p: Point, e: PointerEvent): ToolDrag {
 
 /** Every marker in the picture. */
 function markers(): MarkObject[] {
-  return app.doc.layers.flatMap((l) => (l.kind === 'objects' ? l.objects.filter((o): o is MarkObject => o.type === 'mark' && o.kind === 'marker') : []));
+  return app.doc.layers.flatMap((l) => l.objects.filter((o): o is MarkObject => o.type === 'mark' && o.kind === 'marker'));
 }
 
 /** Sets the marker tool's next number to one more than the highest marker in the picture. */
@@ -154,7 +152,7 @@ export function markerDrag(p: Point, button: number): ToolDrag {
       const mark = app.draft as MarkObject | null;
       app.draft = null;
       if (!mark) return changed();
-      addObjects([mark], `Add marker ${number}`, undefined, MARKUP_LAYER);
+      addObjects([mark], `Add marker ${number}`);
       loadOptions('marker', { next: Math.min(99, number + 1) });
     },
   };

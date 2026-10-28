@@ -274,10 +274,22 @@ try {
       payload: { paths: [${JSON.stringify(path)}], position: { x: ${cssX * app.dpr}, y: ${cssY * app.dpr} } },
     })`);
 
-  await check('Dropping a picture file on the picture adds it as a new layer', async () => {
+  await check('Dropping a picture file on the picture pastes it there on the current layer, as Ctrl+V does', async () => {
     const b = app.canvasBox;
+    const layers = () => app.evaluate('window.sketch.app.doc.layers.length');
+    const before = await layers();
     await dropAt(dropped, b.x + b.w / 2, b.y + b.h / 2);
-    await waitFor('the new layer', (s) => s.toast === 'Added dropped.png as a new layer' && s.title === 'small.png* - Sketch');
+    await waitFor('the dropped picture to float', (s) => s.floating === '120 × 90 px');
+    // Centred on the drop point, kept inside the picture.
+    const at = await app.evaluate(`(() => {
+      const a = window.sketch.app, s = a.selection, d = a.doc;
+      const r = document.querySelector('canvas.view').getBoundingClientRect();
+      const p = a.viewport.toDoc(${b.x + b.w / 2} - r.left, ${b.y + b.h / 2} - r.top);
+      const want = { x: Math.round(Math.min(Math.max(0, p.x - s.w / 2), d.width - s.w)), y: Math.round(Math.min(Math.max(0, p.y - s.h / 2), d.height - s.h)) };
+      return { x: s.x, y: s.y, want };
+    })()`);
+    expect(Math.abs(at.x - at.want.x) <= 1 && Math.abs(at.y - at.want.y) <= 1, `Dropped at ${JSON.stringify(at)}`);
+    expect((await layers()) === before, `The drop made a layer: ${before} became ${await layers()}`);
   });
 
   await check('Dropping a picture file beside the picture opens it in a new tab, which shows the tab strip', async () => {
@@ -754,8 +766,8 @@ try {
   const world = async () => {
     const w = await app.evaluate(`(() => {
       const a = window.sketch.app;
-      const objects = a.doc.layers.filter((l) => l.kind === 'objects').flatMap((l) => l.objects.map((o) => JSON.parse(JSON.stringify(o))));
-      const c = a.doc.paintLayer.canvas;
+      const objects = a.doc.layers.flatMap((l) => l.objects.map((o) => JSON.parse(JSON.stringify(o))));
+      const c = a.doc.activeLayer.canvas;
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let ink = 0;
       let hash = 0;
@@ -836,7 +848,7 @@ try {
     expect(near(r.x, 100, 8) && near(r.y, 100, 8) && near(r.w, 200, 12) && near(r.h, 120, 12), `Rectangle at ${r.x}, ${r.y}, ${r.w} x ${r.h}`);
     expect(r.stroke === '#d11a1a' && r.width === 6 && r.opacity === 1 && !r.filled && r.angle === 0, `Rectangle look: ${r.stroke}, ${r.width}, ${r.opacity}`);
     expect(w.ink === 0, `The rough stroke's ${w.ink} pixels were still committed`);
-    expect(w.layers === 2 && w.picked === 1 && w.draft === null, `Layers ${w.layers}, picked ${w.picked}, draft ${w.draft}`);
+    expect(w.layers === 1 && w.picked === 1 && w.draft === null, `Layers ${w.layers}, picked ${w.picked}, draft ${w.draft}`);
     expect(w.undo === 'Clean up rectangle' && w.position === before.position + 2, `Undo says "${w.undo}", ${w.position - before.position} steps made`);
     // One undo brings the rough stroke back exactly as drawn (the colour differs, so the pixels are compared on a black stroke below).
     await app.press('z', ctrl);
@@ -847,7 +859,7 @@ try {
     await app.press('y', ctrl);
     await sleep(150);
     u = await world();
-    expect(u.objects.length === 1 && u.ink === 0 && u.layers === 2, `After redo: ${u.objects.length} shapes, ink ${u.ink}`);
+    expect(u.objects.length === 1 && u.ink === 0 && u.layers === 1, `After redo: ${u.objects.length} shapes, ink ${u.ink}`);
     // Undoing twice takes the stroke away too, back to the empty picture.
     await app.press('z', ctrl);
     await app.press('z', ctrl);
@@ -1222,7 +1234,7 @@ try {
     await sleep(200);
     const r = await app.evaluate(`(() => {
       const t = window.sketch.tabs.list;
-      const shapes = (i) => t[i].doc.layers.filter((l) => l.kind === 'objects').reduce((n, l) => n + l.objects.length, 0);
+      const shapes = (i) => t[i].doc.layers.reduce((n, l) => n + l.objects.length, 0);
       return { here: shapes(0), there: shapes(1), undoHere: t[0].history.undoLabel, undoThere: t[1].history.undoLabel, picked: window.sketch.app.objectSel?.ids.length ?? 0 };
     })()`);
     expect(r.here === 1 && r.there === 0 && r.picked === 1, `Shapes: ${JSON.stringify(r)}`);
@@ -1279,6 +1291,8 @@ try {
     await app.quit();
     app = await launch(exe, work, [], null, tabData.env);
     await app.waitFor('three tabs back', (s) => s.tabs === 3, 10000);
+    // The third tab exists before its file has been read back and the tab that was showing is shown again.
+    await waitUntil('the tabs to finish loading', async () => (await tabNames()) === 'Untitled, [Whiteboard], dropped.png', 5000).catch(() => {});
     const names = await tabNames();
     expect(names === 'Untitled, [Whiteboard], dropped.png', `Tabs after the crash: ${names}`);
     const kinds = await app.evaluate(`window.sketch.tabs.list.map((t) => (t.doc.board ? 'board' : t.doc.width + 'x' + t.doc.height) + (t.history.dirty ? '*' : '')).join(', ')`);
@@ -1393,6 +1407,82 @@ try {
     const text = await app.text('.about-build');
     expect(/^Build [0-9a-f]{7}/.test(text ?? ''), `About box says: ${text}`);
     await app.press('Escape');
+  });
+  await app.quit();
+
+  // ---------- One layer unless the person adds one (1.6.0) ----------
+
+  const oneLayer = dataFor('one-layer');
+  await check('A rectangle, text and a brush stroke on a new picture stay on its one layer, and the rectangle is still a shape after saving and reopening the .sktch', async () => {
+    app = await launch(exe, work, [], 'one-layer', oneLayer.env);
+    const layerFile = join(work, 'one-layer.sktch');
+    // A point on the picture, in CSS pixels, from shares of its size.
+    const at = async (fx, fy) => {
+      const p = await inPicture(fx, fy);
+      return [p.x, p.y];
+    };
+    await app.press('u');
+    await app.waitFor('the Rectangle tool', (s) => s.tool === 'Rectangle');
+    await app.drag(...(await at(0.2, 0.2)), ...(await at(0.45, 0.6)));
+    await app.press('t');
+    await app.waitFor('the Text tool', (s) => s.tool === 'Text');
+    const [tx, ty] = await at(0.6, 0.3);
+    await app.drag(tx, ty, tx, ty);
+    await sleep(300);
+    await app.send('Input.insertText', { text: 'One layer' });
+    await app.press('Escape');
+    await app.press('b');
+    await app.waitFor('the Brush tool', (s) => s.tool === 'Brush');
+    // Through the rectangle: painting goes under the layer's shapes, and says so the first time.
+    await app.drag(...(await at(0.1, 0.4)), ...(await at(0.9, 0.4)));
+    await app.waitFor('the painting toast', (s) => (s.toast ?? '').includes('Painting goes under the shapes and text on this layer'));
+    // The Layers panel, opened, shows one layer.
+    await app.evaluate(`(() => {
+      const b = [...document.querySelectorAll('.panel-section h2 button')].find((b) => b.textContent.includes('Layers'));
+      if (b && b.getAttribute('aria-expanded') !== 'true') b.click();
+    })()`);
+    await sleep(200);
+    const panel = await app.evaluate(`document.querySelectorAll('.layers .layer-row').length`);
+    const picture = () =>
+      app.evaluate(`(() => {
+        const d = window.sketch.app.doc;
+        const l = d.layers[0];
+        const c = l.canvas;
+        const data = c.getContext('2d').getImageData(0, Math.round(d.height * 0.4), c.width, 1).data;
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) if (data[i] < 128 && data[i + 3] > 200) ink++;
+        return { layers: d.layers.length, types: l.objects.map((o) => o.type).join(','), ink, history: window.sketch.app.history.entries().map((e) => e.label).join(', ') };
+      })()`);
+    const before = await picture();
+    expect(panel === 1, `The Layers panel shows ${panel} layers`);
+    expect(before.layers === 1 && before.types === 'shape,text' && before.ink > 100, `Before saving: ${JSON.stringify(before)}`);
+    // Saved as .sktch (Save As offers it, since the picture has shapes), then opened again in a new tab.
+    await app.press('s', ctrl | shift);
+    await app.waitFor('the Save As box', (s) => s.dialog === 'Save As');
+    const format = await app.evaluate(`document.querySelector('.dialog select')?.value ?? ''`);
+    expect(format === 'sktch', `Save As starts on ${format}`);
+    await app.press('Enter');
+    fillFileDialog(app.pid, layerFile);
+    await app.waitFor('the save', (s) => s.title === 'one-layer.sktch - Sketch');
+    await app.press('o', ctrl);
+    fillFileDialog(app.pid, layerFile);
+    await app.waitFor('the file in a second tab', (s) => s.tabs === 2 && s.title === 'one-layer.sktch - Sketch');
+    const after = await picture();
+    expect(after.layers === 1 && after.types === 'shape,text' && after.ink === before.ink, `After reopening: ${JSON.stringify(after)}`);
+    // The rectangle can still be picked, on that layer: a click on its left edge with the Rectangle tool.
+    await app.press('u');
+    await app.waitFor('the Rectangle tool', (s) => s.tool === 'Rectangle');
+    const edge = await app.evaluate(`(() => {
+      const a = window.sketch.app;
+      const o = a.doc.layers[0].objects.find((o) => o.type === 'shape');
+      const r = document.querySelector('canvas.view').getBoundingClientRect();
+      const p = a.viewport.toScreen(o.x, o.y + o.h / 2);
+      return [Math.round(r.left + p.x), Math.round(r.top + p.y)];
+    })()`);
+    await app.drag(...edge, ...edge);
+    await sleep(200);
+    const picked = await app.evaluate(`(() => { const a = window.sketch.app; return a.objectSel ? { ids: a.objectSel.ids.length, first: a.objectSel.layer === a.doc.layers[0] } : null; })()`);
+    expect(picked?.ids === 1 && picked.first, `Picked after reopening: ${JSON.stringify(picked)}`);
   });
   await app.quit();
 
@@ -1737,7 +1827,8 @@ try {
       await app.waitFor('the Brush tool', (s) => s.tool === 'Brush');
       await app.drag(...(await onPicture(-80, -60)), ...(await onPicture(-70, 60)));
       const layers = await app.evaluate('window.sketch.app.doc.layers.length');
-      expect(layers >= 3, `The picture has ${layers} layers`);
+      // The arrow and text are on the capture's own layer; Ctrl+Shift+N added the one painted on.
+      expect(layers === 2, `The picture has ${layers} layers`);
       await clickCopy();
       const r = await clipboardMatches();
       expect(!r.size && r.bad === 0, `Clipboard against the picture: ${JSON.stringify(r)}`);

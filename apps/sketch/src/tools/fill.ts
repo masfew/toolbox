@@ -16,7 +16,7 @@ export function fillAt(p: Point, button: number): Promise<void> {
     const doc = app.doc;
     if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return;
     const st = settingsOf('fill');
-    const layer = doc.paintLayer;
+    const layer = doc.activeLayer;
     const ctx = ctxOf(layer.canvas);
     const target = ctx.getImageData(0, 0, doc.width, doc.height);
     const sample = st.sample === 'picture' ? ctxOf(flatten(doc)).getImageData(0, 0, doc.width, doc.height) : null;
@@ -65,7 +65,7 @@ export function colorAt(x: number, y: number, sample: 'layer' | 'picture'): stri
   if (px < 0 || py < 0 || px >= doc.width || py >= doc.height) return null;
   let d: Uint8ClampedArray;
   if (sample === 'layer') {
-    d = ctxOf(doc.paintLayer.canvas).getImageData(px, py, 1, 1).data;
+    d = ctxOf(doc.activeLayer.canvas).getImageData(px, py, 1, 1).data;
   } else {
     const one = newCanvas(1, 1);
     const ctx = ctxOf(one);

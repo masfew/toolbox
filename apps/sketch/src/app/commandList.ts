@@ -151,7 +151,7 @@ export const COMMANDS: AppCommand[] = [
     label: 'Rasterize Layer',
     group: 'Image',
     run: actions.rasterizeCurrentLayer,
-    enabled: () => app.doc.activeLayer.kind === 'objects',
+    enabled: () => app.doc.activeLayer.objects.length > 0,
     keywords: 'flatten shapes text pixels',
   },
   { id: 'image.newLayer', label: 'New Layer', group: 'Image', keys: ['Ctrl+Shift+N'], run: layers.newLayer, keywords: 'add layers', icon: 'layer-new' },

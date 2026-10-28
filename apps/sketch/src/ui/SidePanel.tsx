@@ -151,7 +151,7 @@ function LayerList() {
               </button>
               <Thumb layer={layer} />
               <LayerName layer={layer} editing={renaming === layer.id} onDone={() => setRenaming(null)} />
-              {layer.kind === 'objects' && <Icon name="shapes" size={13} class="layer-kind" />}
+              {layer.objects.length > 0 && <Icon name="shapes" size={13} class="layer-kind" />}
               <button
                 type="button"
                 class={`icon-btn small layer-lock${layer.locked ? ' on' : ''}`}

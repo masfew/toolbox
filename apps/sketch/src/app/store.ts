@@ -1,5 +1,5 @@
 import type { Adjustment } from '../engine/adjust';
-import { DEFAULT_HEIGHT, DEFAULT_WIDTH, PaintDocument, type ObjectLayer, type PixelLayer } from '../engine/document';
+import { DEFAULT_HEIGHT, DEFAULT_WIDTH, PaintDocument, type Layer } from '../engine/document';
 import { History } from '../engine/history';
 import type { SketchObject } from '../engine/objects';
 import type { Box, Point } from '../tools/box';
@@ -192,7 +192,7 @@ export const app = {
   /** Text being typed. */
   textEdit: null as TextEdit | null,
   /** Shapes and lines picked for moving, restyling or lining up. They're always in one layer. */
-  objectSel: null as { layer: ObjectLayer; ids: number[] } | null,
+  objectSel: null as { layer: Layer; ids: number[] } | null,
   /** A shape or line being drawn, shown on top until it's added. */
   draft: null as SketchObject | null,
   /** Smart guides shown while dragging, in picture pixels. */
@@ -205,7 +205,7 @@ export const app = {
    * An adjustment being tried in its dialog: the whole layer drawn through `filter`, or `part` (the
    * changed area) drawn over it at (x, y).
    */
-  adjustPreview: null as { layer: PixelLayer; filter: string | null; part: OffscreenCanvas | null; x: number; y: number } | null,
+  adjustPreview: null as { layer: Layer; filter: string | null; part: OffscreenCanvas | null; x: number; y: number } | null,
   /** A see-through brush stroke in progress, drawn over its layer until it ends. */
   liveStroke: null as LiveStroke | null,
   primary: '#000000',

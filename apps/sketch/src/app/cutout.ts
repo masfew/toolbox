@@ -1,6 +1,6 @@
-import { addLayer, setLayerProp } from '../engine/commands';
-import { createLayer, ctxOf, newCanvas, type PaintDocument, type PixelLayer } from '../engine/document';
-import { CompositeCommand } from '../engine/history';
+import { addLayer, ObjectsCommand, setLayerProp } from '../engine/commands';
+import { createLayer, ctxOf, newCanvas, type PaintDocument, type Layer } from '../engine/document';
+import { CompositeCommand, type Command } from '../engine/history';
 import * as platform from '../platform';
 import { replaceFloating } from '../tools/selection';
 import { commitText } from '../tools/text';
@@ -43,7 +43,7 @@ async function cutOut(): Promise<void> {
   const history = app.history;
   const sel = app.selection;
   const floating = sel?.raw ? sel : null;
-  const layer = sel ? sel.layer : doc.paintLayer;
+  const layer = sel ? sel.layer : doc.activeLayer;
   if (!floating) {
     const why = blockedReason(layer);
     if (why) {
@@ -106,8 +106,11 @@ function keepOnly(image: OffscreenCanvas, keep: OffscreenCanvas): OffscreenCanva
   return out;
 }
 
-/** Adds the cut-out above `layer` and hides `layer`, as one step. Inside a selection only the picked pixels change. */
-function cutOntoNewLayer(doc: PaintDocument, layer: PixelLayer, area: Area, cut: OffscreenCanvas) {
+/**
+ * Adds the cut-out above `layer` and hides `layer`, as one step. Inside a selection only the picked pixels
+ * change. The layer's shapes and text move up onto the cut-out, so they still show and stay editable.
+ */
+function cutOntoNewLayer(doc: PaintDocument, layer: Layer, area: Area, cut: OffscreenCanvas) {
   let keep = cut;
   if (area.mask) {
     // Keep everything outside the selection: the unpicked part fully, plus the cut-out inside it.
@@ -132,5 +135,12 @@ function cutOntoNewLayer(doc: PaintDocument, layer: PixelLayer, area: Area, cut:
   doc.active = doc.layers.indexOf(layer);
   const add = addLayer(doc, result, 'Remove background');
   const hide = setLayerProp(layer, 'visible', false, 'Remove background');
-  return new CompositeCommand('Remove background', hide ? [add, hide] : [add]);
+  const parts: Command[] = hide ? [add, hide] : [add];
+  if (layer.objects.length) {
+    const objects = layer.objects;
+    result.objects = objects;
+    layer.objects = [];
+    parts.push(new ObjectsCommand('Remove background', layer, objects, layer.objects));
+  }
+  return new CompositeCommand('Remove background', parts);
 }

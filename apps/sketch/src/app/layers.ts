@@ -1,5 +1,5 @@
 import { deleteLayer, LayerPropsCommand, mergeDown, moveLayer, setLayerProp, addLayer, type LayerProps } from '../engine/commands';
-import { createLayer, nextLayerName, type Layer } from '../engine/document';
+import { blockedReason, createLayer, nextLayerName, type Layer } from '../engine/document';
 import { settle } from './actions';
 import { growBoardForObjects } from './board';
 import { loadPref, savePref } from './prefs';
@@ -19,16 +19,14 @@ export function togglePasteNewLayer(): void {
   changed();
 }
 
-/** Why a layer can't be painted or changed now, or null when it can. */
-export function blockedReason(layer: Layer): string | null {
-  if (layer.locked) return `${layer.name} is locked. Unlock it in the Layers panel to change it.`;
-  if (!layer.visible) return `${layer.name} is hidden. Show it in the Layers panel to change it.`;
-  return null;
-}
+export { blockedReason };
 
-/** For pixel tools: says why the layer they'd paint on can't be changed, and returns true, or returns false. */
+/**
+ * For the tools that paint or add shapes, text and mark-up: says why the current layer can't be
+ * changed, and returns true, or returns false. Nothing goes on another layer instead.
+ */
 export function paintBlocked(): boolean {
-  const why = blockedReason(app.doc.paintLayer);
+  const why = blockedReason(app.doc.activeLayer);
   if (why) toast(why, 4000);
   return !!why;
 }
@@ -55,16 +53,15 @@ function showLayers(): void {
   savePref('showPanel', app.showPanel);
 }
 
-/** A picture always keeps at least one pixel layer, for the pixel tools to paint on. */
-export function canDeleteLayer(index = app.doc.active): boolean {
-  const layers = app.doc.layers;
-  return layers.length > 1 && (layers[index].kind === 'objects' || layers.some((l, i) => i !== index && l.kind === 'pixel'));
+/** A picture always keeps at least one layer. */
+export function canDeleteLayer(): boolean {
+  return app.doc.layers.length > 1;
 }
 
 export function removeLayer(index = app.doc.active): void {
   settle();
-  if (!canDeleteLayer(index)) {
-    toast(app.doc.layers.length === 1 ? 'A picture needs at least one layer.' : 'A picture needs at least one pixel layer to paint on.');
+  if (!canDeleteLayer()) {
+    toast('A picture needs at least one layer.');
     return;
   }
   if (app.objectSel?.layer === app.doc.layers[index]) app.objectSel = null;
@@ -101,7 +98,7 @@ export function mergeCurrentDown(): void {
   const doc = app.doc;
   if (app.objectSel && (app.objectSel.layer === doc.activeLayer || app.objectSel.layer === doc.layers[doc.active - 1])) app.objectSel = null;
   // Shapes and text off a whiteboard's canvas would be cut off if they become pixels.
-  growBoardForObjects([doc.activeLayer, doc.layers[doc.active - 1]].flatMap((l) => (l.kind === 'objects' ? l.objects : [])));
+  growBoardForObjects([doc.activeLayer, doc.layers[doc.active - 1]].flatMap((l) => l.objects));
   app.history.record(mergeDown(doc, doc.active));
   changed();
 }

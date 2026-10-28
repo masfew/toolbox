@@ -7,7 +7,7 @@
  */
 import { app, changed, tabs, type Tab } from '../app/store';
 import { settingsOf } from '../app/tools';
-import type { PixelLayer } from '../engine/document';
+import type { Layer } from '../engine/document';
 import { CompositeCommand, type Command } from '../engine/history';
 import { newObjectId } from '../engine/objects';
 import type { Head, LineObject, ShapeObject } from '../engine/shapes';
@@ -72,7 +72,7 @@ export class QuickShape {
 
   constructor(
     private readonly stroke: Stroke,
-    private readonly layer: PixelLayer,
+    private readonly layer: Layer,
     private readonly look: Look,
     start: Pt[],
     e: PointerEvent,
@@ -209,7 +209,17 @@ export class QuickShape {
       return true;
     }
     const label = `Clean up ${nameOf(object)}`;
-    const step = addObjectsStep([object], label);
+    // The shape goes on the layer the stroke was painted on.
+    const step = addObjectsStep([object], label, this.layer);
+    if (!step) {
+      // That layer was locked or hidden meanwhile: it keeps the stroke as drawn.
+      if (this.strokeCmd) {
+        this.strokeCmd.apply();
+        app.history.record(this.strokeCmd);
+      }
+      changed();
+      return true;
+    }
     // The rough stroke is a step of its own (the one an ordinary stroke makes, joined to a whiteboard's growth),
     // and the clean-up takes its pixels off and puts the shape on, so undoing the clean-up gives the stroke back.
     if (this.strokeCmd) app.history.record(this.strokeCmd);

@@ -4,7 +4,7 @@
  * preview keeps up while a slider is dragged. Auto level works out levels from the pixels first.
  */
 
-import { ctxOf, newCanvas, type PixelLayer } from './document';
+import { ctxOf, newCanvas, type Layer } from './document';
 import type { Command } from './history';
 import { PixelEdit } from './tiles';
 
@@ -131,7 +131,7 @@ export function adjustedPart(src: OffscreenCanvas, area: AdjustArea, change: Adj
 }
 
 /** Changes an area of a layer and returns the undo step. */
-export function adjustLayer(layer: PixelLayer, area: AdjustArea, change: Adjustment | 'auto'): Command | null {
+export function adjustLayer(layer: Layer, area: AdjustArea, change: Adjustment | 'auto'): Command | null {
   const label = ADJUST_LABELS[change === 'auto' ? 'auto' : change.kind];
   const part = adjustedPart(layer.canvas, area, change);
   const edit = new PixelEdit(layer, label);

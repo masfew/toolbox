@@ -5,32 +5,21 @@ export const MAX_SIZE = 16384;
 export const DEFAULT_WIDTH = 1280;
 export const DEFAULT_HEIGHT = 720;
 
-export interface PixelLayer {
+/**
+ * A layer: a canvas of pixels, which the pixel tools paint on, and a list of objects that stay
+ * editable (text, shapes, lines, mark-up). Within a layer the pixels draw first and the objects on top.
+ * The objects list is never changed in place: every edit makes a new array, so undo can keep the old one.
+ */
+export interface Layer {
   id: number;
-  kind: 'pixel';
   name: string;
   canvas: OffscreenCanvas;
+  objects: readonly SketchObject[];
   visible: boolean;
   /** A locked layer can't be painted on, and its objects can't be picked. */
   locked: boolean;
   opacity: number;
 }
-
-/**
- * A layer of objects that stay editable (text, shapes, lines). The list is never changed
- * in place: every edit makes a new array, so undo can keep the old one.
- */
-export interface ObjectLayer {
-  id: number;
-  kind: 'objects';
-  name: string;
-  objects: readonly SketchObject[];
-  visible: boolean;
-  locked: boolean;
-  opacity: number;
-}
-
-export type Layer = PixelLayer | ObjectLayer;
 
 let nextLayerId = 1;
 
@@ -42,30 +31,25 @@ export function ctxOf(canvas: OffscreenCanvas): OffscreenCanvasRenderingContext2
   return canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
 }
 
-export function createLayer(name: string, width: number, height: number, fill: string | null = null): PixelLayer {
+/** A layer whose canvas is `fill` (see-through when null), holding `objects` above it. */
+export function createLayer(name: string, width: number, height: number, fill: string | null = null, objects: readonly SketchObject[] = []): Layer {
   const canvas = newCanvas(width, height);
   if (fill) {
     const ctx = ctxOf(canvas);
     ctx.fillStyle = fill;
     ctx.fillRect(0, 0, width, height);
   }
-  return { id: nextLayerId++, kind: 'pixel', name, canvas, visible: true, locked: false, opacity: 1 };
-}
-
-export function createObjectLayer(name: string, objects: readonly SketchObject[] = []): ObjectLayer {
-  return { id: nextLayerId++, kind: 'objects', name, objects, visible: true, locked: false, opacity: 1 };
+  return { id: nextLayerId++, name, canvas, objects, visible: true, locked: false, opacity: 1 };
 }
 
 /**
- * Where a new object goes: the current object layer, or the one just above the current layer.
- * Null means make a new one. Locked and hidden layers are passed over.
+ * Why a layer can't be painted on or given anything new now (it's locked or hidden), or null when it
+ * can. Nothing is ever moved to another layer instead: the person says which layer things go on.
  */
-export function objectLayerForNew(doc: PaintDocument): ObjectLayer | null {
-  const usable = (l: Layer | undefined): l is ObjectLayer => l?.kind === 'objects' && l.visible && !l.locked;
-  const here = doc.layers[doc.active];
-  if (here.kind === 'objects') return usable(here) ? here : null;
-  const above = doc.layers[doc.active + 1];
-  return usable(above) ? above : null;
+export function blockedReason(layer: Layer): string | null {
+  if (layer.locked) return `${layer.name} is locked. Unlock it in the Layers panel to change it.`;
+  if (!layer.visible) return `${layer.name} is hidden. Show it in the Layers panel to change it.`;
+  return null;
 }
 
 /** "Layer 2", "Layer 3" and so on: the first number not used by a layer of that name. */
@@ -88,6 +72,10 @@ export const NO_EDGES: Edges = { left: 0, top: 0, right: 0, bottom: 0 };
 
 export class PaintDocument {
   layers: Layer[];
+  /**
+   * The current layer. Everything goes on it: pixel tools paint its canvas, and new shapes, text and
+   * mark-up join its objects. Only the person adds layers (New Layer, Duplicate, Paste onto New Layer).
+   */
   active = 0;
   /**
    * A whiteboard: no edges, so the canvas grows wherever pixels are drawn, and shapes and text can go
@@ -116,18 +104,6 @@ export class PaintDocument {
     return this.layers[this.active];
   }
 
-  /**
-   * The layer pixel tools work on: the current layer when it holds pixels, otherwise the
-   * nearest pixel layer below it (or above, if there's none below).
-   */
-  get paintLayer(): PixelLayer {
-    for (let i = this.active; i >= 0; i--) {
-      const l = this.layers[i];
-      if (l.kind === 'pixel') return l;
-    }
-    return this.layers.find((l): l is PixelLayer => l.kind === 'pixel')!;
-  }
-
   /** Grown canvas area is white, unless the image has see-through pixels of its own. */
   static fromImage(image: CanvasImageSource & { width: number; height: number }, name = 'Background'): PaintDocument {
     const layer = createLayer(name, image.width, image.height);
@@ -143,6 +119,13 @@ export function fillFor(canvas: OffscreenCanvas): string | null {
   return '#ffffff';
 }
 
+/** Whether a canvas has no painted pixel at all. Reads every pixel back, so it's only for one-off actions. */
+export function isBlank(canvas: OffscreenCanvas): boolean {
+  const data = ctxOf(canvas).getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return false;
+  return true;
+}
+
 export function checkSize(width: number, height: number): string | null {
   if (width > MAX_SIZE || height > MAX_SIZE) {
     return `Pictures can be at most ${MAX_SIZE} × ${MAX_SIZE} pixels (this one is ${width} × ${height}).`;
@@ -153,14 +136,18 @@ export function checkSize(width: number, height: number): string | null {
 type Ctx = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
 /**
- * Draws one layer at its opacity. Blur and pixelate marks take their pixels from what's already on
- * `ctx`, or from `backdrop` when it's given (they're drawn on both, so later ones see them).
+ * Draws one layer at its opacity: its pixels, then its objects over them. Blur and pixelate marks take
+ * their pixels from what's already on `ctx`, or from `backdrop` when it's given (what's under the layer:
+ * the layer's pixels and objects are drawn on it too, so the marks and anything drawn later see them).
  */
 export function drawLayer(ctx: Ctx, layer: Layer, alpha = 1, backdrop?: Ctx): void {
   ctx.globalAlpha = layer.opacity * alpha;
-  if (backdrop) backdrop.globalAlpha = ctx.globalAlpha;
-  if (layer.kind === 'pixel') ctx.drawImage(layer.canvas, 0, 0);
-  else drawObjects(ctx, layer.objects, backdrop);
+  ctx.drawImage(layer.canvas, 0, 0);
+  if (backdrop) {
+    backdrop.globalAlpha = ctx.globalAlpha;
+    backdrop.drawImage(layer.canvas, 0, 0);
+  }
+  if (layer.objects.length) drawObjects(ctx, layer.objects, backdrop);
   ctx.globalAlpha = 1;
   if (backdrop) backdrop.globalAlpha = 1;
 }

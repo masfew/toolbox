@@ -288,7 +288,7 @@ function AdjustDialog(props: { adjust: 'brightness' | 'hue'; preview: (a: Adjust
           <Slider label="Saturation" min={-100} max={100} value={b} onInput={setB} />
         </>
       )}
-      <p class="hint">{app.selection ? 'Changes the selection.' : `Changes ${app.doc.paintLayer.name}.`}</p>
+      <p class="hint">{app.selection ? 'Changes the selection.' : `Changes ${app.doc.activeLayer.name}.`}</p>
       <div class="actions">
         <button
           type="button"
@@ -329,13 +329,18 @@ export function Modals() {
           </div>
         </Dialog>
       );
-    case 'keep-layers':
+    case 'keep-layers': {
+      // One layer with shapes or text: they're what a flat picture would lose.
+      const oneLayer = app.doc.layers.length === 1;
+      const format = FORMATS[app.file.format ?? 'png'].label;
       return (
-        <Dialog title={app.doc.board ? 'Keep your whiteboard?' : 'Keep your layers?'} onCancel={() => m.resolve('cancel')}>
+        <Dialog title={app.doc.board ? 'Keep your whiteboard?' : oneLayer ? 'Keep your shapes and text?' : 'Keep your layers?'} onCancel={() => m.resolve('cancel')}>
           <p>
             {app.doc.board
-              ? `${FORMATS[app.file.format ?? 'png'].label} files can't hold a whiteboard. Save a Sketch file to keep it endless and editable, or save a picture of what's on it.`
-              : `${FORMATS[app.file.format ?? 'png'].label} files can't hold layers. Save a Sketch file to keep them, or merge them into one picture.`}
+              ? `${format} files can't hold a whiteboard. Save a Sketch file to keep it endless and editable, or save a picture of what's on it.`
+              : oneLayer
+                ? `${format} files can't keep shapes and text editable. Save a Sketch file to keep them, or merge them into the picture.`
+                : `${format} files can't hold layers. Save a Sketch file to keep them, or merge them into one picture.`}
           </p>
           <div class="actions">
             <button type="button" onClick={() => m.resolve('cancel')}>
@@ -350,6 +355,7 @@ export function Modals() {
           </div>
         </Dialog>
       );
+    }
     case 'save-as':
       return <SaveAsDialog initial={m.initial} resolve={m.resolve} />;
     case 'resize':
