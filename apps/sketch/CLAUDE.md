@@ -6,7 +6,7 @@ Design decisions for each phase, and why, are in [docs/decisions.md](docs/decisi
 
 ## Checks
 
-The local checks of the real app are `check:native` (100 checks, 97 without `SKETCH_TEST_CUTOUT_FILES`, which the Remove Background ones need; README), `check:speed`, `check:fuzz`, `check:update` (8 checks in `update-check.mjs`, then 12 in `update-remote-check.mjs`; README, Build and Check), `check:uninstall` (7 checks, seconds) and the timings `npm run perf`. A tool or command not built yet goes in `src/tools/registry.ts` or `src/app/commandList.ts` with `planned: '<step>'`, and shows greyed out until its step. Release build: installer 1.8 MB, start-up median under 0.7 s. Building needs what the README's Requirements list; Rust from rustup lives in `%USERPROFILE%\.cargo\bin`, which may need adding to PATH in a new shell.
+The local checks of the real app are `check:native` (101 checks, 98 without `SKETCH_TEST_CUTOUT_FILES`, which the Remove Background ones need; README), `check:speed`, `check:fuzz`, `check:update` (8 checks in `update-check.mjs`, then 12 in `update-remote-check.mjs`; README, Build and Check), `check:uninstall` (7 checks, seconds) and the timings `npm run perf`. A tool or command not built yet goes in `src/tools/registry.ts` or `src/app/commandList.ts` with `planned: '<step>'`, and shows greyed out until its step. Release build: installer 1.8 MB, start-up median under 0.7 s. Building needs what the README's Requirements list; Rust from rustup lives in `%USERPROFILE%\.cargo\bin`, which may need adding to PATH in a new shell.
 
 ## Versions and releases
 

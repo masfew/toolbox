@@ -211,6 +211,8 @@ export const app = {
   primary: '#000000',
   secondary: '#ffffff',
   recentColors: loadPref<string[]>('recentColors', []),
+  /** Set while the colour popover's picker button waits for a press on the picture: the colour that press sets. */
+  pickInto: null as 'primary' | 'secondary' | null,
   showGrid: true,
   /** The side panel with layers and history. */
   showPanel: loadPref('showPanel', true),

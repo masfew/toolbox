@@ -161,22 +161,6 @@ export async function setWindowTheme(theme: 'light' | 'dark' | null): Promise<vo
   if (isTauri) await getCurrentWindow().setTheme(theme);
 }
 
-type EyeDropperCtor = new () => { open(): Promise<{ sRGBHex: string }> };
-const EyeDropperApi = (window as unknown as { EyeDropper?: EyeDropperCtor }).EyeDropper;
-
-/** True where the WebView can pick a colour from anywhere on screen. */
-export const canPickScreenColor = !!EyeDropperApi;
-
-/** Picks a colour from anywhere on screen. Null if cancelled with Esc. */
-export async function pickScreenColor(): Promise<string | null> {
-  if (!EyeDropperApi) throw new Error('Picking colours from the screen needs a newer WebView2.');
-  try {
-    return (await new EyeDropperApi().open()).sRGBHex;
-  } catch {
-    return null;
-  }
-}
-
 export async function fetchUrl(url: string): Promise<Uint8Array> {
   if (isTauri) return new Uint8Array(await invoke<ArrayBuffer>('fetch_url', { url }));
   const res = await fetch(url);

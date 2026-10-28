@@ -1,7 +1,7 @@
 // Drives the built app to check the parts that only work in the real window:
 // clipboard paste (bitmap, Explorer file, image link), copy with transparency, copying and pasting shapes,
 // the native Open and Save dialogs, Ctrl+S, drag and drop, "Open with" and the close prompt, tabs,
-// plus the app shell: Mica, menu Paste, tool shortcuts, the screen colour picker and settings
+// plus the app shell: Mica, menu Paste, tool shortcuts, the colour popover's picker and settings
 // that survive a restart, the pointer over the picture, Clean up rough shapes, Remove Background with its add-on download, the mouse speed slider,
 // screen capture with the capture helper (sketch-capture.exe) that keeps it ready while Sketch is
 // closed, and the Copy button.
@@ -177,12 +177,11 @@ try {
     await press('Escape');
   });
 
-  await check('Tool keys pick tools, and the screen colour picker is available', async () => {
+  await check('Tool keys pick tools', async () => {
     await press('g');
     await waitFor('the Fill tool', (s) => s.tool === 'Fill');
     await press('b');
     await waitFor('the Brush tool', (s) => s.tool === 'Brush');
-    expect(await app.evaluate(`'EyeDropper' in window`), 'WebView2 has no EyeDropper, so the popover hides its screen picker');
   });
 
   await check('Ctrl+Shift+C puts a PNG of the whole picture on the clipboard', async () => {
@@ -677,6 +676,123 @@ try {
     const shown = await app.evaluate(`document.querySelector('[data-setting="pointer"]').value + '/' + document.querySelector('[data-setting="pointerEraserOwn"]').checked`);
     await app.press('Escape');
     expect(shown === 'arrow/false', `Settings after the update shows ${shown}`);
+    await quitApp();
+  });
+
+  // ---------- The colour popover's picker button ----------
+
+  const pickData = join(work, 'data-pickmode');
+  mkdirSync(pickData, { recursive: true });
+  /** A real click on the page element that `selector` finds. */
+  const clickEl = async (selector) => {
+    const r = await app.evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+    await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: r.x, y: r.y, buttons: 0 });
+    await app.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: r.x, y: r.y, button: 'left', buttons: 1, clickCount: 1 });
+    await app.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: r.x, y: r.y, button: 'left', buttons: 0, clickCount: 1 });
+    await sleep(120);
+  };
+  await check("The colour popover's picker button picks from the picture with the Rectangle tool: the picker pointer, into the colour it edits, no shape drawn", async () => {
+    app = await launch(exe, work, [], 'pickmode', { SKETCH_DATA_DIR: pickData });
+    await toolKey('u', 'Rectangle');
+    // A blue block and a red one beside it, written straight into the layer.
+    await app.evaluate(`(() => {
+      const a = window.sketch.app;
+      const ctx = a.doc.paintLayer.canvas.getContext('2d');
+      const w = a.doc.width;
+      const h = a.doc.height;
+      ctx.fillStyle = '#3366cc';
+      ctx.fillRect(w * 0.4, h * 0.4, w * 0.1, h * 0.1);
+      ctx.fillStyle = '#cc3333';
+      ctx.fillRect(w * 0.5, h * 0.4, w * 0.1, h * 0.1);
+      a.requestRender();
+    })()`);
+    const blue = await inPicture(0.45, 0.45);
+    const red = await inPicture(0.55, 0.45);
+    const read = () =>
+      app.evaluate(`(() => {
+        const a = window.sketch.app;
+        const pop = document.querySelector('.color-popover');
+        return {
+          primary: a.primary,
+          secondary: a.secondary,
+          pickInto: a.pickInto,
+          open: !!pop,
+          hex: pop?.querySelector('input.hex')?.value ?? null,
+          pressed: !!pop?.querySelector('.icon-btn.on'),
+          shapes: a.doc.layers.filter((l) => l.kind === 'objects').reduce((n, l) => n + l.objects.length, 0),
+          position: a.history.position,
+          sel: !!a.selection,
+        };
+      })()`);
+    const before = await read();
+    expect(!before.open && before.pickInto === null, `The popover starts closed: ${JSON.stringify(before)}`);
+    const pressAt = async (p) => {
+      await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y, buttons: 0 });
+      await app.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', buttons: 1, clickCount: 1 });
+      await sleep(80);
+      await app.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
+      await sleep(150);
+    };
+
+    // Colour 1: the button, the pointer, the press.
+    await clickEl('.chip.primary');
+    let s = await read();
+    expect(s.open && !s.pressed && s.pickInto === null, `Colour 1's popover: ${JSON.stringify(s)}`);
+    await clickEl('.color-popover .icon-btn');
+    s = await read();
+    expect(s.open && s.pressed && s.pickInto === 'primary', `After the picker button: ${JSON.stringify(s)}`);
+    const over = await pointerAt(blue.x, blue.y);
+    expect(/^url\("data:image\/svg\+xml,/.test(over.cursor) && / 2 22, default$/.test(over.cursor), `The pointer over the picture is "${over.cursor.slice(0, 60)}", not the picker`);
+    if (process.env.SKETCH_PROOF_DIR) {
+      mkdirSync(process.env.SKETCH_PROOF_DIR, { recursive: true });
+      const shot = await app.send('Page.captureScreenshot', { format: 'png' });
+      writeFileSync(join(process.env.SKETCH_PROOF_DIR, 'pick-mode.png'), Buffer.from(shot.data, 'base64'));
+    }
+    await pressAt(blue);
+    s = await read();
+    expect(s.primary.toLowerCase() === '#3366cc' && s.hex?.toLowerCase() === '#3366cc', `Colour 1 and the hex box after the pick: ${JSON.stringify(s)}`);
+    expect(s.open && !s.pressed && s.pickInto === null, `After the pick the popover stays open and picking ends: ${JSON.stringify(s)}`);
+    expect(s.shapes === 0 && !s.sel && s.position === before.position, `The Rectangle tool acted on the pick: ${JSON.stringify(s)}`);
+    const dot = await app.evaluate(`document.querySelector('.color-popover .sv-dot').style.background`);
+    expect(/51,\s*102,\s*204|#3366cc/i.test(dot), `The popover's square didn't follow the pick: ${dot}`);
+
+    // Back to the arrow over the picture once picking is over.
+    expect((await pointerAt(blue.x, blue.y)).cursor === 'default', 'The pointer stayed the picker after the pick');
+
+    // Esc and the button cancel without changing the colour; Esc closes the popover only the second time.
+    await clickEl('.color-popover .icon-btn');
+    expect((await read()).pickInto === 'primary', 'The picker button did not start picking again');
+    await app.press('Escape');
+    await sleep(120);
+    s = await read();
+    expect(s.open && s.pickInto === null && s.primary.toLowerCase() === '#3366cc', `Esc while picking: ${JSON.stringify(s)}`);
+    await clickEl('.color-popover .icon-btn');
+    await clickEl('.color-popover .icon-btn');
+    s = await read();
+    expect(s.open && s.pickInto === null && s.primary.toLowerCase() === '#3366cc', `The button pressed twice: ${JSON.stringify(s)}`);
+    await app.press('Escape');
+    await sleep(120);
+    expect(!(await read()).open, 'Esc did not close the popover');
+
+    // Colour 2's popover sets colour 2 and leaves colour 1.
+    await clickEl('.chip.secondary');
+    await clickEl('.color-popover .icon-btn');
+    expect((await read()).pickInto === 'secondary', 'Colour 2 did not start picking');
+    await pressAt(red);
+    s = await read();
+    expect(s.secondary.toLowerCase() === '#cc3333' && s.hex?.toLowerCase() === '#cc3333' && s.primary.toLowerCase() === '#3366cc', `Colour 2 after the pick: ${JSON.stringify(s)}`);
+    expect(s.shapes === 0 && s.position === before.position, `The Rectangle tool acted on the second pick: ${JSON.stringify(s)}`);
+
+    // Closing the popover while picking ends it, and the picture then takes the tool's press again.
+    await clickEl('.color-popover .icon-btn');
+    expect((await read()).pickInto === 'secondary', 'Colour 2 did not start picking again');
+    await app.press('Escape');
+    await app.press('Escape');
+    s = await read();
+    expect(!s.open && s.pickInto === null, `After closing: ${JSON.stringify(s)}`);
+    await app.drag(blue.x - 40, blue.y + 80, blue.x + 40, blue.y + 140);
+    s = await read();
+    expect(s.shapes === 1, `The Rectangle tool no longer draws after picking: ${JSON.stringify(s)}`);
     await quitApp();
   });
 

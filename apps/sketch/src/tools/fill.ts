@@ -78,10 +78,17 @@ export function colorAt(x: number, y: number, sample: 'layer' | 'picture'): stri
 
 /**
  * Colour picker: sets colour 1 (left) or colour 2 (right) from the picture, following the pointer
- * while it's held. Also Alt+click with any tool that paints.
+ * while it's held. Also Alt+click with any tool that paints. `into` names the colour to set whatever
+ * the button (the colour popover's picker button).
  */
-export function pickDrag(p: Point, button: number, sample: 'layer' | 'picture', remember: (c: string) => void): ToolDrag {
-  const which = button === 2 ? 'secondary' : 'primary';
+export function pickDrag(
+  p: Point,
+  button: number,
+  sample: 'layer' | 'picture',
+  remember: (c: string) => void,
+  into?: 'primary' | 'secondary',
+): ToolDrag {
+  const which = into ?? (button === 2 ? 'secondary' : 'primary');
   const pick = (q: Point) => {
     const c = colorAt(q.x, q.y, sample);
     if (c && c !== app[which]) {
