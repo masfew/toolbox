@@ -126,6 +126,19 @@ export class CanvasController {
     }
     if (e.button !== 0 && e.button !== 2) return;
 
+    // The colour popover's picker button is waiting for this press: it sets that colour and nothing else happens.
+    if (app.pickInto) {
+      const drag = pickDrag(p, e.button, settingsOf('picker').sample as 'layer' | 'picture', rememberColor, app.pickInto);
+      return this.startTool({
+        ...drag,
+        up: (q, ev) => {
+          drag.up(q, ev);
+          app.pickInto = null;
+          changed();
+        },
+      });
+    }
+
     // A callout's round handle moves the point it points at, even while it's being typed in.
     if (e.button === 0) {
       const d = tailDrag(s.x, s.y);
@@ -427,6 +440,7 @@ export class CanvasController {
     if (d?.kind === 'resize') return CURSORS[d.edge];
     if (d?.kind === 'tool' && d.tool.cursor) return this.dragCursor(d.tool.cursor);
     if (this.spaceDown) return 'grab';
+    if (app.pickInto) return PICKER_CURSOR;
     const tool = currentTool();
     const at = this.last;
     if (!at) return 'default';

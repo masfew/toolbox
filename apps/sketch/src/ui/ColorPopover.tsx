@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import * as actions from '../app/actions';
 import { hsvToRgb, opaqueHex, parseHex, rgbToHsv, SWATCHES, toHex, type HSV } from '../app/color';
-import { app, toast } from '../app/store';
-import * as platform from '../platform';
+import { app, changed, toast } from '../app/store';
 import { Icon } from './icons';
 
 /** Calls `onMove` with the pointer's position inside `el` (0 to 1 each way) while dragging. */
@@ -50,7 +49,16 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
     return true;
   };
 
+  /** Starts or ends waiting for a press on the picture, which sets this popover's colour. */
+  const setPicking = (on: boolean) => {
+    const into = on ? props.which : null;
+    if (app.pickInto === into) return;
+    app.pickInto = into;
+    changed();
+  };
+
   const close = () => {
+    setPicking(false);
     const now = app[props.which];
     if (now.toLowerCase() !== initial.current.toLowerCase()) actions.rememberColor(now);
     props.onClose();
@@ -68,6 +76,8 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
 
   useEffect(() => {
     const outside = (e: PointerEvent) => {
+      // The picker button waits for a press on the picture, which the picture takes as the pick.
+      if (app.pickInto && (e.target as HTMLElement).closest?.('canvas.view')) return;
       // A click on the colour chip itself also lands here, so it closes and the chip's own click finds it closed.
       if (!ref.current?.contains(e.target as Node)) close();
     };
@@ -75,7 +85,9 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        close();
+        // Esc ends picking first, and the next one closes the popover.
+        if (app.pickInto) setPicking(false);
+        else close();
       }
     };
     window.addEventListener('pointerdown', outside, true);
@@ -87,17 +99,30 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
   });
 
   const color = app[props.which];
+  const picking = app.pickInto === props.which;
   const solid = opaqueHex(color);
   const hueColor = toHex(hsvToRgb({ h: hsv.h, s: 1, v: 1 }));
 
-  const pickFromScreen = async () => {
-    try {
-      const picked = await platform.pickScreenColor();
-      if (picked) applyHex(picked);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), 5000);
-    }
-  };
+  // The popover can go without close() (a tool with no colours takes its place), so picking ends with it.
+  useEffect(
+    () => () => {
+      if (app.pickInto) {
+        app.pickInto = null;
+        changed();
+      }
+    },
+    [],
+  );
+
+  // A colour picked from the picture sets the app's colour; the square, hue and opacity follow it.
+  useEffect(() => {
+    if (color.toLowerCase() === toHex(hsvToRgb(hsv, alpha)).toLowerCase()) return;
+    const c = parseHex(color);
+    if (!c) return;
+    const next = rgbToHsv(c);
+    setHsv(c.r === c.g && c.g === c.b ? { ...next, h: hsv.h } : next);
+    setAlpha(c.a);
+  }, [color]);
 
   const swatch = (c: string, label: string) => (
     <button
@@ -145,11 +170,16 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
           }}
         />
         <span class="alpha-pct">{Math.round(alpha * 100)}%</span>
-        {platform.canPickScreenColor && (
-          <button type="button" class="icon-btn" data-tip="Pick a colour from the screen" aria-label="Pick a colour from the screen" onClick={() => void pickFromScreen()}>
-            <Icon name="picker" size={16} />
-          </button>
-        )}
+        <button
+          type="button"
+          class={`icon-btn${picking ? ' on' : ''}`}
+          data-tip="Pick a colour from the picture"
+          aria-label="Pick a colour from the picture"
+          aria-pressed={picking}
+          onClick={() => setPicking(!picking)}
+        >
+          <Icon name="picker" size={16} />
+        </button>
       </div>
       {app.recentColors.length > 0 && (
         <>
