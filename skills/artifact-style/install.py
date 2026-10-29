@@ -84,7 +84,8 @@ NEEDS_REAL_APPDATA = False
 # Example: "- Before writing any plan, load the example-tool skill."
 INSTRUCTIONS = (
     "- Before writing any HTML Artifact page by hand that isn't a plan made with better-plans,\n"
-    "  load the artifact-style skill along with artifact-design, and follow it for every colour and font."
+    "  load the artifact-style skill along with artifact-design, and follow it for every colour and font.\n"
+    "  A strategy, proposal or draft is one of these pages unless the user asked for it as a plan."
 )
 
 # Steps only the person can do, listed after "Setup complete": accounts,

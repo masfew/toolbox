@@ -18,5 +18,7 @@
   {"query": "fix the build error in training_helper.verse, it says unknown identifier", "should_trigger": false},
   {"query": "move the sniper tracking script into a subfolder without breaking the level's devices", "should_trigger": false},
   {"query": "update the hub leaderboard from the new xlsx export", "should_trigger": false},
-  {"query": "make a ui style guide for the shop popup and recreate it from this screenshot", "should_trigger": false}
+  {"query": "make a ui style guide for the shop popup and recreate it from this screenshot", "should_trigger": false},
+  {"query": "can you come up with a strategy for moving my racing game's saved best times from per sector to per checkpoint, including how to backfill old times? write up the draft, it'd be easier to view on a page than here, then i'll review it", "should_trigger": false},
+  {"query": "put together a proposal page for switching our image hosting from s3 to cloudflare r2, with rough costs and a migration approach, so i can review it before deciding", "should_trigger": false}
 ]

@@ -40,6 +40,10 @@
   "should_trigger": true
  },
  {
+  "query": "can you come up with a strategy for moving my racing game's saved best times from per sector to per checkpoint, including how to backfill old times? write up the draft, it'd be easier to view on a page than here, then i'll review it",
+  "should_trigger": true
+ },
+ {
   "query": "make a plan for adding dark mode to quill notes",
   "should_trigger": false
  },

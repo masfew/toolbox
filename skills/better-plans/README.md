@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.0.0. See the [changes](#changes) at the end.
+Version 2.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -59,13 +59,14 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
    - shows these lines and asks whether to add them to `~/.claude/CLAUDE.md`, between two marker lines:
 
      ```markdown
-     - Whenever you make a plan (in chat or in plan mode), publish the finished plan as an Artifact page
-       with the better-plans skill, and give the link. Load better-plans first, before making, revising,
-       marking progress on or reading any plan, plan mode included. In plan mode, publish once the plan
-       is approved. When the plan changes, update the same page so it keeps one URL.
+     - When the user asks for a plan or roadmap by name, or in plan mode, publish the finished plan as an
+       Artifact page with the better-plans skill, and give the link (in plan mode, once it's approved). Load
+       better-plans first, before making, revising, marking progress on or reading any plan. A page the user
+       asks for without calling it a plan, such as a strategy, proposal or draft to review, isn't a plan:
+       build it as an ordinary page. When the plan changes, update the same page so it keeps one URL.
      ```
 
-     They make the skill apply every time, plan mode included, rather than only when its description happens to match what you asked. `--instructions` or `--no-instructions` answers ahead of time. With no terminal to ask in (as when Claude Code runs the install without either), it leaves them out and says how to add them.
+     They make the skill apply to every plan you ask for, plan mode included, rather than only when its description happens to match what you asked. A page you ask for without calling it a plan (a strategy, proposal or draft to review) stays an ordinary page. `--instructions` or `--no-instructions` answers ahead of time. With no terminal to ask in (as when Claude Code runs the install without either), it leaves them out and says how to add them.
    - saves what it installed to `~/.claude/tools/better-plans.install.json`
    - asks whether to install [artifact-style](https://github.com/masfew/toolbox#artifact-style) too, if it's in the same clone and not installed yet. Yes runs artifact-style's own `install.py`, which asks about its own `CLAUDE.md` lines. `--with-artifact-style` or `--no-artifact-style` answers ahead of time; with no terminal and neither flag, it leaves artifact-style out and says how to add it.
 3. Start a new Claude Code session.
@@ -163,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.1.0: Plan pages are only for plans you ask for. Asking for a strategy, proposal or draft on a page, without calling it a plan, now gets an ordinary page instead of the plan template; a plan or roadmap asked for by name, or made in plan mode, is a plan page as before. **Rerun `python install.py` after updating** to refresh the lines in `~/.claude/CLAUDE.md`, which said to use the template for every plan Claude makes.
 - 2.0.0: Light plans are gone: the skill no longer keeps a session's own Markdown plan and saved state, and the install no longer adds the `SessionStart` hook that pasted it back in after `/clear`. They only worked in the Claude desktop app and went unused. **Rerun `python install.py` after updating**, so it takes the old hook out of `~/.claude/settings.json`; until then every session start reports that `session_resume.py` is missing. You can delete `~/.claude/better-plans-session-resume.log` and any `session-plan.md` files left in the desktop app's `side-session-notes` folder. Plan pages work as before.
 - 1.6.0: A Future Ideas button under the plan's summary, on the right of the Save Snapshot line, jumps straight down to the Future Ideas board, so long plans need no scrolling to reach it. Published plans get it the next time their look is refreshed.
 - 1.5.0: Batches group whole phases into as few sessions as the plan allows. A batch now ends only where the work waits on something outside the plan or the session would run too long; approvals, hands-on checks and decisions are pauses inside a batch, and the Batches table says why each batch ends. Plans already split into batches keep their batches until you ask to regroup them.

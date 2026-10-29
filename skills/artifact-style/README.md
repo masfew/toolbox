@@ -1,6 +1,6 @@
 # artifact-style
 
-Version 1.0.1. See the [changes](#changes) at the end.
+Version 1.1.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -40,7 +40,7 @@ cd skills/artifact-style
 python install.py
 ```
 
-It asks whether to add two lines to `~/.claude/CLAUDE.md` (say yes, see [Install](#install)) and ends with **Setup complete**. Start a new Claude Code session.
+It asks whether to add three lines to `~/.claude/CLAUDE.md` (say yes, see [Install](#install)) and ends with **Setup complete**. Start a new Claude Code session.
 
 ## Install with Claude Code
 
@@ -49,7 +49,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install artifa
 **Claude does:**
 
 1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
-2. Shows you the two lines the install adds to `~/.claude/CLAUDE.md` (in [Install](#install) step 2), which make every session load the skill before writing an Artifact page, and asks whether you want them.
+2. Shows you the three lines the install adds to `~/.claude/CLAUDE.md` (in [Install](#install) step 2), which make every session load the skill before writing an Artifact page, and asks whether you want them.
 3. Runs `python install.py --instructions` from `skills/artifact-style` if you said yes, or `python install.py --no-instructions` if you said no (`python3` on macOS and Linux), and checks it ends with **Setup complete** and that `~/.claude/skills/artifact-style/SKILL.md` now exists.
 
 **You do:**
@@ -67,6 +67,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install artifa
      ```markdown
      - Before writing any HTML Artifact page by hand that isn't a plan made with better-plans,
        load the artifact-style skill along with artifact-design, and follow it for every colour and font.
+       A strategy, proposal or draft is one of these pages unless the user asked for it as a plan.
      ```
 
      They make the skill apply every time, rather than only when its description happens to match what you asked. `--instructions` or `--no-instructions` answers ahead of time. With no terminal to ask in (as when Claude Code runs the install without either), it leaves them out and says how to add them.
@@ -161,5 +162,6 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.1.0: A strategy, proposal or draft you ask to see on a page gets this look, unless you asked for it as a plan, so it no longer ends up in the better-plans template. **Rerun `python install.py` after updating** to add the new line to `~/.claude/CLAUDE.md`.
 - 1.0.1: The install no longer crashes when Claude Code runs it without --instructions or --no-instructions. Windows reports the empty input Claude Code's tools give a command as a terminal, so the install asked whether to add its CLAUDE.md lines and then stopped with an EOFError. It now sees there's no one to answer, leaves the lines out and prints the command that adds them.
 - 1.0.0: First public version.

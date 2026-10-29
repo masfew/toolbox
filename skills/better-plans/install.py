@@ -92,10 +92,11 @@ NEEDS_REAL_APPDATA = False
 # between marker lines. Keep it to a few lines that say when to use the tool.
 # Example: "- Before writing any plan, load the example-tool skill."
 INSTRUCTIONS = (
-    "- Whenever you make a plan (in chat or in plan mode), publish the finished plan as an Artifact page\n"
-    "  with the better-plans skill, and give the link. Load better-plans first, before making, revising,\n"
-    "  marking progress on or reading any plan, plan mode included. In plan mode, publish once the plan\n"
-    "  is approved. When the plan changes, update the same page so it keeps one URL."
+    "- When the user asks for a plan or roadmap by name, or in plan mode, publish the finished plan as an\n"
+    "  Artifact page with the better-plans skill, and give the link (in plan mode, once it's approved). Load\n"
+    "  better-plans first, before making, revising, marking progress on or reading any plan. A page the user\n"
+    "  asks for without calling it a plan, such as a strategy, proposal or draft to review, isn't a plan:\n"
+    "  build it as an ordinary page. When the plan changes, update the same page so it keeps one URL."
 )
 
 # Steps only the person can do, listed after "Setup complete": accounts,
