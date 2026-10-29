@@ -15,7 +15,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { attach, captureTarget, clipboard, fillFileDialog, helper, holdHotkey, keys, launch, notesInCentre, overlay, png, pngSize, postClose, ps, screen, sleep } from './native-driver.mjs';
+import { attach, captureTarget, clipboard, fillFileDialog, helper, holdHotkey, keys, launch, listenHotkey, notesInCentre, overlay, png, pngSize, postClose, ps, screen, sleep } from './native-driver.mjs';
 
 const exe = resolve(process.argv[2] ?? join('src-tauri', 'target', 'release', 'sketch.exe'));
 const work = mkdtempSync(join(tmpdir(), 'sketch-native-'));
@@ -2054,7 +2054,7 @@ try {
       }
     });
 
-    await check("With Sketch open, a tap of Left Shift after Sketch's own capture opens it in a new tab, and no hook is left", async () => {
+    await check("With Sketch open, a tap of Left Shift after Sketch's own capture opens it in a new tab, and nothing listens after", async () => {
       const before = await captureTabs();
       const o = await startCapture();
       overlay.dragThenKeys(work, o, target.x + 10, target.y + 10, target.x + 129, target.y + 89, 400, 'a0d,a0u');
@@ -2385,17 +2385,17 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
       const TAP = 'a0d,a0u';
       const settingsFile = join(bg.dir, 'capture.json');
       const setCapture = (change) => writeFileSync(settingsFile, JSON.stringify({ ...JSON.parse(readFileSync(settingsFile, 'utf8')), ...change }));
-      /** After a capture that shouldn't open: nothing shows, and the hook is gone after its second. */
+      /** After a capture that shouldn't open: nothing shows, and nothing listens after its second. */
       const expectNothingOpens = async (what) => {
         await sleep(1300);
         const pid = sketchPids()[0] ?? 0;
         expect(!pid || !shownWindows(pid), `Sketch showed the capture for ${what}`);
-        expect(helper.watching(work, helperWindow) === 0, `A Left Shift hook is still installed after ${what}`);
+        expect(helper.watching(work, helperWindow) === 0, `The Left Shift watch still listens after ${what}`);
         helper.dismiss(work, helperWindow);
         await waitUntil('the hidden Sketch to close', async () => sketchPids().length === 0, 5000);
       };
 
-      await check('With Sketch closed, a tap of Left Shift just after a capture opens it and takes its notification away, and no hook is left', async () => {
+      await check('With Sketch closed, a tap of Left Shift just after a capture opens it and takes its notification away, and nothing listens after', async () => {
         await helperCapture(260, 160, TAP);
         let pid = 0;
         await waitUntil('Sketch to show', async () => (pid = sketchPids().find((p) => shownWindows(p) === 1) ?? 0) !== 0);
@@ -2404,7 +2404,7 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
         expect(notesInCentre(helperPid) === 0, 'The notification is still in the notification centre');
         expect((await quickCapture()) === true, 'The capture is not marked to close without asking');
         await sleep(1000);
-        expect(helper.watching(work, helperWindow) === 0, 'A Left Shift hook is still installed');
+        expect(helper.watching(work, helperWindow) === 0, 'The Left Shift watch still listens');
         postClose(app.pid);
         expect(await app.quit(5000), 'Sketch asked about saving, or stayed open');
       });
@@ -2444,17 +2444,32 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
         await expectNothingOpens('the release of a Shift held from before');
       });
 
-      await check('With the switch off, or After a Capture set to open at once, no Left Shift hook is installed', async () => {
+      await check("Another app's Ctrl+Shift shortcut pressed inside the second reaches that app, and opens nothing", async () => {
+        // Ctrl+Shift+F24 (types nothing), held as a global hotkey by another process. Pressed Ctrl
+        // first, as hands usually do, then Shift first.
+        const other = await listenHotkey(2 | 4, 0x87);
+        try {
+          for (const [n, chord] of ['a2d,a0d,87d,87u,a0u,a2u', 'a0d,a2d,87d,87u,a2u,a0u'].entries()) {
+            await helperCapture(260, 160, chord);
+            await waitUntil('the other app to get its shortcut', async () => other.fired() === n + 1, 3000);
+            await expectNothingOpens(`Ctrl+Shift+F24 (${chord})`);
+          }
+        } finally {
+          other.child.kill();
+        }
+      });
+
+      await check('With the switch off, or After a Capture set to open at once, nothing listens for Left Shift', async () => {
         try {
           setCapture({ shift_open: false });
           await helperCapture(260, 160, TAP);
-          expect(helper.watching(work, helperWindow) === 0, 'A hook was installed with the switch off');
+          expect(helper.watching(work, helperWindow) === 0, 'The watch listened with the switch off');
           await expectNothingOpens('a tap with the switch off');
           setCapture({ shift_open: true, after: 'open' });
           await helperCapture(260, 160);
           let pid = 0;
           await waitUntil('Sketch to open the capture', async () => (pid = sketchPids().find((p) => shownWindows(p) === 1) ?? 0) !== 0);
-          expect(helper.watching(work, helperWindow) === 0, 'A hook was installed for a capture that opens at once');
+          expect(helper.watching(work, helperWindow) === 0, 'The watch listened for a capture that opens at once');
           app = await attach(port, pid);
           await app.waitFor('the capture', (s) => s.size === '260 × 160 px');
           await app.quit();

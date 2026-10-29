@@ -1,6 +1,6 @@
 [package]
 name = "sketch"
-version = "1.6.0"
+version = "1.6.1"
 description = "A fast, simple paint app"
 edition = "2021"
 # Three programs: Sketch itself, sketch-capture (src/bin), the capture helper, and sketch-launcher
@@ -32,7 +32,7 @@ ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "
 [target.'cfg(windows)'.dependencies]
 clipboard-win = "5"
 window-vibrancy = "0.8"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_StationsAndDesktops", "Win32_System_SystemInformation", "Win32_System_Variant", "Data_Xml_Dom", "Foundation", "UI_Notifications"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_UI_WindowsAndMessaging", "Win32_Storage_EnhancedStorage", "Win32_System_Com_StructuredStorage", "Win32_System_StationsAndDesktops", "Win32_System_SystemInformation", "Win32_System_Variant", "Data_Xml_Dom", "Foundation", "UI_Notifications"] }
 
 [profile.release]
 lto = true

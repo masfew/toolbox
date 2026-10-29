@@ -487,7 +487,7 @@ static HELPER: OnceLock<Helper> = OnceLock::new();
 pub const WM_TEST_KEYS: u32 = 0x8000 + 3;
 pub const WM_TEST_CLICK: u32 = 0x8000 + 4;
 pub const WM_TEST_DISMISS: u32 = 0x8000 + 5;
-/// Answers how many Left Shift hooks (F16) are installed.
+/// Answers how many Left Shift watches (F16) are listening.
 pub const WM_TEST_WATCHING: u32 = 0x8000 + 6;
 /// From a Sketch of another version (not test-only): make way for that version's helper. Answers 1
 /// when the helper will once its notifications have gone, 0 when Sketch should stop it now. Helpers

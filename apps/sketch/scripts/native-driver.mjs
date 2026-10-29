@@ -242,7 +242,7 @@ public static class SketchScreen {
   [DllImport("user32.dll")] static extern uint SendInput(uint n, INPUT[] inputs, int size);
   /**
    * Presses keys as the keyboard would, through SendInput: a list like "a0d,a0u" of virtual-key codes
-   * in hex, each followed by d (down) or u (up). Low-level keyboard hooks see these like real keys.
+   * in hex, each followed by d (down) or u (up). Raw input and low-level keyboard hooks see these like real keys.
    */
   public static void Keys(string spec) {
     var list = new List<INPUT>();
@@ -406,7 +406,7 @@ export function helperTag(dir) {
 
 // The helper's test messages (test hooks only): WM_TEST_KEYS acts as if the keys were pressed,
 // WM_TEST_CLICK as if its newest notification was clicked, WM_TEST_DISMISS as if it was dismissed,
-// and WM_TEST_WATCHING answers how many Left Shift hooks (F16) it has installed.
+// and WM_TEST_WATCHING answers how many Left Shift watches (F16) are listening.
 const HELPER_WM = { KEYS: 0x8003, CLICK: 0x8004, DISMISS: 0x8005, WATCHING: 0x8006 };
 
 /** Drives the capture helper (sketch-capture.exe) of a data folder through its hidden window. */
@@ -497,6 +497,45 @@ Start-Sleep -Seconds 120`,
     throw new Error(`Couldn't hold the hotkey for the check (${answer})`);
   }
   return child;
+}
+
+/**
+ * Another app's shortcut: holds a global hotkey from a PowerShell process of its own, as `holdHotkey`
+ * does, and counts each time it fires. `fired()` gives the count so far; kill `child` when done.
+ */
+export async function listenHotkey(mods, vk) {
+  const child = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `Add-Type -TypeDefinition '
+using System; using System.Runtime.InteropServices;
+public static class HotkeyListen {
+  [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr h; public uint m; public IntPtr w, l; public uint t; public int x, y; }
+  [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint m, uint vk);
+  [DllImport("user32.dll")] static extern int GetMessage(out MSG m, IntPtr h, uint a, uint b);
+  public static void Run(uint mods, uint vk) {
+    Console.WriteLine(RegisterHotKey(IntPtr.Zero, 1, mods, vk) ? "held" : "taken");
+    MSG m;
+    while (GetMessage(out m, IntPtr.Zero, 0, 0) > 0) if (m.m == 0x0312) Console.WriteLine("fired");
+  }
+}
+'
+[HotkeyListen]::Run(${mods}, ${vk})`,
+    ],
+    { stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  let out = '';
+  child.stdout.on('data', (d) => (out += String(d)));
+  const end = Date.now() + 15000;
+  while (!/held|taken/.test(out) && Date.now() < end) await sleep(50);
+  if (!out.includes('held')) {
+    child.kill();
+    throw new Error(`Couldn't hold the hotkey for the check (${out.trim() || 'no answer'})`);
+  }
+  return { child, fired: () => (out.match(/fired/g) ?? []).length };
 }
 
 // ---------- Driving the page ----------

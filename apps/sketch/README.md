@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.6.0. See the [changes](#changes) at the end.
+Version 1.6.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -209,7 +209,7 @@ The capture keys (below), File > Capture Screen or the command palette freeze th
 
 F or Enter captures the screen under the pointer in any mode. The toolbar hides while an area you're dragging comes near it, and stays in view in Window and Full screen modes. It's never in the capture either way, since the screen was frozen before it showed. The blue outline sits just outside a dragged area, and just inside a highlighted window or screen, so it never spills onto the next monitor; it's never in the capture either. Sketch stays on screen and can be captured like any other window; turn on **Hide Sketch when capturing** in Settings to have it hide first instead.
 
-The capture goes on the clipboard, and a Windows notification says so, with a small picture of it. Nothing else opens, so you can paste it straight into another app. Clicking the notification opens the capture in Sketch on a canvas its own size with the Brush in red ready, and brings it to the front. Tapping **Left Shift** within a second of the capture does the same, so there's no waiting for the notification or reaching for the mouse; a Shift pressed later, held, or as part of typing works as normal. **Press Left Shift to open the capture** in Settings turns that off.
+The capture goes on the clipboard, and a Windows notification says so, with a small picture of it. Nothing else opens, so you can paste it straight into another app. Clicking the notification opens the capture in Sketch on a canvas its own size with the Brush in red ready, and brings it to the front. Tapping **Left Shift** within a second of the capture does the same, so there's no waiting for the notification or reaching for the mouse; a Shift pressed later, held, or as part of typing or a shortcut such as Ctrl+Shift+X works as normal. Sketch only listens: every key, the tap included, still reaches the app you're in. **Press Left Shift to open the capture** in Settings turns that off.
 
 A capture's edges are open, as in the Snipping Tool: arrows, writing, circles and brush strokes can run past it onto the grey space around it without being cut off. Copying it (Ctrl+Shift+C or the Copy button), or saving it as PNG, JPEG, WebP or BMP, gives the capture with everything drawn round it, see-through past the capture's edges (white in JPEG and BMP); with nothing drawn outside, that's the capture exactly. The status bar shows the capture's own size, and pointer positions count from its top-left corner. A capture has no size handles; Crop starts from the capture itself, and Resize and Canvas Size first make everything drawn round it part of the picture. This is only for captures: other pictures keep their edges, as in Paint.
 
@@ -408,6 +408,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.6.1: Other apps' shortcuts with Shift, such as Ctrl+Shift+X, work in the second after a capture. Sketch now only listens for its Left Shift tap from the side, so it's never in the way of any key going to another app; until now it sat in the path of every key on the PC during that second.
 - 1.6.0: Everything stays on one layer unless you add another. Shapes, lines, arrows, text, mark-up and cleaned-up rough shapes go on the current layer instead of making Shapes, Text and Mark-up layers, and a picture dropped on the picture is pasted there, as Ctrl+V does, instead of becoming a layer. Painting on a layer goes under its shapes and text, which stay editable on top; **Rasterize Layer** turns them into pixels so you can paint over them. A locked or hidden layer now refuses new shapes, text and pastes, saying why, instead of putting them on a new layer. Pictures saved with shapes or text now need Sketch 1.6.0 or newer to open; older files open as before.
 - 1.5.4: The picker button in the colour popover works now. Click it and the pointer becomes the colour picker over the picture, with any tool; the next click on the picture puts that colour into the colour you're editing (colour 2's popover changes colour 2) and the popover shows it. Esc or the button again cancels. Until now the button used a browser feature the app's window doesn't support, so nothing happened.
 - 1.5.3: The mouse speed button no longer shows a yellow notice icon when the speed isn't normal, since the slower speed only applies while you hold Left Ctrl. The button still stays blue.
