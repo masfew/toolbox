@@ -1,6 +1,6 @@
 ---
 name: artifact-style
-description: "A house look for every Artifact page Claude writes by hand: one shared stylesheet with neutral greys, a single blue accent, status colours and IBM Plex fonts, in light and dark mode. Use it whenever publishing or rewriting an HTML Artifact page that isn't a plan - a write-up, handoff, report, findings or audit page, a strategy, proposal or draft to review, explainer, comparison, reference, runbook, status page or small tool - right after artifact-design and before choosing any colour or font, even if the user doesn't mention style, colours or a theme. Not for plans the user asked for by name, made with better-plans (which has this look built in), Artifact types such as Slides, Docs, Dashboard or Design that bring their own look, or game UI and promo art."
+description: "A house look for every Artifact page Claude writes by hand: one shared stylesheet with neutral greys, a single blue accent, status colours and IBM Plex fonts, in light and dark mode. Use it whenever publishing or rewriting an HTML Artifact page that isn't a plan - a write-up, handoff, report, findings or audit page, a strategy, proposal or draft to review, explainer, comparison, reference, runbook, status page or small tool - right after the Artifact tool's quickstart (or artifact-design) and before choosing any colour or font, even if the user doesn't mention style, colours or a theme. Not for plans the user asked for by name, made with better-plans (which has this look built in), Artifact types such as Slides, Docs, Dashboard or Design that bring their own look, or game UI and promo art."
 ---
 
 # Artifact style
@@ -9,7 +9,7 @@ Every Artifact page should look like it came from the same place. Left alone, ea
 
 ## Where the other rules live
 
-- **`artifact-design`** still applies to everything except colours and fonts: the page contract (title, description, script and font origins, size), layout, phone width and the rest. Where it asks you to choose a palette or typeface, use this skill instead. `house.css` already meets its theming rules: tokens on `:root`, dark mode under both selectors, and an explicit `body` background.
+- **`artifact-design`** (whose text the Artifact tool's quickstart result carries for a plain page) still applies to everything except colours and fonts: the page contract (title, description, script and font origins, size), layout, phone width and the rest. Where it asks you to choose a palette or typeface, use this skill instead. `house.css` already meets its theming rules: tokens on `:root`, dark mode under both selectors, and an explicit `body` background.
 - **Plans** made with `better-plans` use its `plan.css`, which carries the same colours plus the plan-only parts. Without `better-plans`, a plan page is a page like any other and uses this skill.
 - **Charts** follow the `dataviz` skill, if it's installed, for chart form and series colours. Keep the page around a chart in the house look, and use `--accent` for a single series and the status colours for good and bad.
 

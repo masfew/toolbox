@@ -39,9 +39,12 @@ How the runs work, and why this replaces skill-creator's run_eval.py:
   - Hooks are off (a notification hook would fire once per prompt), MCP servers are off and
     editing tools are refused, because a run that gets past choosing a skill starts working
     for real.
-  - Instructions can tell sessions to load some skills first, so a run counts as triggered
-    when the tested skill is loaded at any point before the first tool call that isn't a
-    skill load.
+  - Instructions can tell sessions to load some skills first, and sessions often look things
+    up before they load the skill the work needs (the Artifact tool tells them to call its
+    quickstart before loading any skill for a new page). So a run counts as triggered when
+    the tested skill is loaded at any point before the first tool call that does work:
+    skill loads and read-only lookups (Read, Glob, Grep, ToolSearch, and the Artifact
+    tool's quickstart, list and read) don't end the run.
 
 A prompt stops as soon as its remaining runs can't change its pass or fail (except in the
 full tier): with 3 runs, two that agree settle it and a third runs only when they split.
@@ -76,7 +79,9 @@ from pathlib import Path
 
 HOME = Path.home() / ".claude"
 SKILLS_DIR = HOME / "skills"
-NEUTRAL_TOOLS = {"Skill", "ToolSearch"}  # tool calls that don't end the "choosing a skill" phase
+# Tool calls that don't end a run: skill loads and read-only lookups.
+NEUTRAL_TOOLS = {"Skill", "ToolSearch", "Read", "Glob", "Grep"}
+NEUTRAL_ACTIONS = {"Artifact": {"quickstart", "list", "read"}}  # read-only actions of other tools
 
 # Tier -> model (None: the CLI's default), most runs per prompt, early stop, and the
 # rough wall-clock seconds one round of parallel sessions takes, for estimates before a
@@ -182,7 +187,7 @@ def build_project(skill_name, description):
 
 
 def run_one(claude, project, query, skill_name, timeout, model):
-    """True when the session loads skill_name before doing other work."""
+    """True when the session loads skill_name before a tool call that does work."""
     cmd = [claude, "-p", query, "--output-format", "stream-json", "--verbose",
            "--setting-sources", "project,local",
            "--settings", json.dumps({"disableAllHooks": True}),
@@ -228,7 +233,7 @@ def run_one(claude, project, query, skill_name, timeout, model):
                             return True, loaded
                     elif tool == "Read" and f"/{skill_name}/SKILL.md" in str(inp.get("file_path", "")).replace("\\", "/"):
                         return True, loaded
-                    elif tool not in NEUTRAL_TOOLS:
+                    elif tool not in NEUTRAL_TOOLS and inp.get("action") not in NEUTRAL_ACTIONS.get(tool, ()):
                         return False, loaded + [f"({tool})"]
             elif event.get("type") == "result":
                 return False, loaded
