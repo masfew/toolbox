@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { app, changed } from '../app/store';
 import { setOption } from '../app/tools';
 import type { OptionSpec } from '../tools/registry';
 import { Icon } from './icons';
@@ -26,7 +27,7 @@ function ChoiceMenu(props: { o: ChoiceOption; spec: PreviewSpec; value: string; 
   useEffect(() => {
     const outside = (e: PointerEvent) => {
       const t = e.target as Node;
-      // A press on the square itself is its own click, which closes the menu.
+      // A press on the square or its name is its own click, which closes the menu.
       if (!ref.current?.contains(t) && !props.anchorEl?.contains(t)) props.onClose(false);
     };
     const key = (e: KeyboardEvent) => {
@@ -44,6 +45,10 @@ function ChoiceMenu(props: { o: ChoiceOption; spec: PreviewSpec; value: string; 
       else if (e.key === 'Tab') {
         props.onClose(true);
         handled = false;
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        // A letter jumps to the first choice starting with it, as a list does, rather than reaching the tool shortcuts.
+        const i = o.choices.findIndex((c) => c.label.toLowerCase().startsWith(e.key.toLowerCase()));
+        if (i >= 0) go(i);
       } else handled = false;
       if (handled) {
         e.preventDefault();
@@ -63,7 +68,9 @@ function ChoiceMenu(props: { o: ChoiceOption; spec: PreviewSpec; value: string; 
       {o.choices.map((c) => (
         <button type="button" key={c.value} class="item" role="menuitemradio" aria-checked={c.value === props.value} tabIndex={-1} data-value={c.value} onClick={() => props.onPick(c.value)}>
           <span class="box">{spec.draw(c.value, 16)}</span>
-          <span class="grow">{c.label}</span>
+          <span class="grow" style={spec.font ? { fontFamily: c.value } : undefined}>
+            {c.label}
+          </span>
           {c.value === props.value && <Icon name="check" size={14} class="tick" />}
         </button>
       ))}
@@ -72,35 +79,53 @@ function ChoiceMenu(props: { o: ChoiceOption; spec: PreviewSpec; value: string; 
 }
 
 /**
- * A square that shows the chosen value and opens a short menu of the choices (line style, arrowheads).
- * The menu opens under the square: Up and Down move, Enter or Space picks, Escape closes.
+ * A square that shows the chosen value and opens a short menu of the choices, with the option's icon and name
+ * before it (a click there opens the menu too). The menu opens under the square: Up and Down move, a letter jumps,
+ * Enter or Space picks, Escape closes.
  */
 export function PreviewOption(props: { toolId: string; o: ChoiceOption; value: string }) {
   const { o, toolId } = props;
   const spec = PREVIEWS[o.key];
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const root = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const current = o.choices.find((c) => c.value === props.value) ?? o.choices[0];
   // The menu can go without closing (a tool change takes the bar away); nothing else is left to clean up.
   const close = (refocus: boolean) => {
     setAnchor(null);
     if (refocus) btn.current?.focus();
+    // Text being typed takes the focus back when it next draws, and closing a menu changes nothing else to draw it.
+    if (app.textEdit) changed();
   };
   return (
-    <div class="opt preview" data-preview={o.key}>
-      {spec.label && <span class="opt-label">{o.label}</span>}
+    <div ref={root} class="opt preview" data-preview={o.key}>
+      {spec.label && (
+        <span class="opt-name" role="presentation" onClick={() => btn.current?.click()}>
+          {o.icon && <Icon name={o.icon} size={16} />}
+          {o.label}
+        </span>
+      )}
       <button
         ref={btn}
         type="button"
-        class={`sw${anchor ? ' open' : ''}`}
-        data-tip={o.planned ? `Comes in step ${o.planned}.` : spec.name}
+        class={`sw${spec.font ? ' pick' : ''}${anchor ? ' open' : ''}`}
+        data-tip={o.planned ? `Comes in step ${o.planned}.` : (o.hint ?? spec.name)}
         aria-label={`${spec.name}, ${current.label.toLowerCase()}`}
         aria-haspopup="menu"
         aria-expanded={!!anchor}
         disabled={!!o.planned}
-        onClick={(e) => setAnchor(anchor ? null : (e.currentTarget as HTMLElement).getBoundingClientRect())}
+        onClick={(e) => (anchor ? close(false) : setAnchor((e.currentTarget as HTMLElement).getBoundingClientRect()))}
       >
-        {spec.draw(current.value, 18)}
+        {spec.font ? (
+          <>
+            <span class="name" style={{ fontFamily: current.value }}>
+              {current.label}
+            </span>
+            <Icon name="chevron-down" size={14} />
+          </>
+        ) : (
+          spec.draw(current.value, 18)
+        )}
       </button>
       {anchor && (
         <ChoiceMenu
@@ -108,7 +133,7 @@ export function PreviewOption(props: { toolId: string; o: ChoiceOption; value: s
           spec={spec}
           value={props.value}
           anchor={anchor}
-          anchorEl={btn.current}
+          anchorEl={root.current}
           onPick={(v) => {
             setOption(toolId, o.key, v);
             close(true);

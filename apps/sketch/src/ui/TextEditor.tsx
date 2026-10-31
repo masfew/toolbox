@@ -29,9 +29,9 @@ export function TextEditor() {
     // The box grows after each letter, so it mustn't stay scrolled from before it grew.
     el.scrollLeft = 0;
     el.scrollTop = 0;
-    // Keep typing here after a click on the options bar, unless a box there is being typed in.
+    // Keep typing here after a click on the options bar, unless a box there is being typed in or a menu is open.
     const a = document.activeElement as HTMLElement | null;
-    if (!a || a === document.body || a.tagName === 'BUTTON') el.focus();
+    if (!a || a === document.body || (a.tagName === 'BUTTON' && !a.closest('[role="menu"]'))) el.focus();
   });
 
   if (!te) return null;

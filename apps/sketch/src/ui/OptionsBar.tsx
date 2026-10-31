@@ -12,7 +12,6 @@ import { optionsToolId, pickedCount } from '../tools/shapes';
 import { ColorPopover } from './ColorPopover';
 import { Icon } from './icons';
 import { PreviewOption } from './PreviewOption';
-import { PREVIEWS } from './previews';
 import { DRAG_START_PX, scrubMove, scrubStart, type Scrub } from './scrub';
 
 export const FONTS = ['Segoe UI', 'Arial', 'Calibri', 'Cambria', 'Comic Sans MS', 'Consolas', 'Georgia', 'Impact', 'Segoe Print', 'Times New Roman', 'Verdana'];
@@ -102,8 +101,8 @@ function ColorButtons(props: { kind: 'colors' | 'shapeColors' | 'lineColor' }) {
 type RangeSpec = Extract<OptionSpec, { kind: 'range' }>;
 
 /**
- * The box of a number option, shared by the slider and the drag label. Typed numbers apply at once (clicking the
- * canvas starts a stroke before the box loses focus); arrows change it by 1, Shift by 10; Enter or Escape finishes.
+ * The box of a drag label. Typed numbers apply at once (clicking the canvas starts a stroke before the box loses
+ * focus); arrows change it by 1, Shift by 10; Enter or Escape finishes.
  */
 function NumberBox(props: { toolId: string; o: RangeSpec; value: number; inputRef?: Ref<HTMLInputElement> }) {
   const { o, toolId } = props;
@@ -140,28 +139,8 @@ function NumberBox(props: { toolId: string; o: RangeSpec; value: number; inputRe
   );
 }
 
-function RangeOption(props: { toolId: string; o: RangeSpec; value: number }) {
-  const { o, toolId } = props;
-  return (
-    <label class="opt range" data-tip={plannedTip(o)}>
-      <span class="opt-label">{o.label}</span>
-      <input
-        type="range"
-        min={o.min}
-        max={o.max}
-        value={props.value}
-        disabled={!!o.planned}
-        aria-label={o.label}
-        onInput={(e) => setOption(toolId, o.key, Number((e.target as HTMLInputElement).value))}
-      />
-      <NumberBox toolId={toolId} o={o} value={props.value} />
-      {o.unit && <span class="unit">{o.unit}</span>}
-    </label>
-  );
-}
-
 /**
- * A number with no slider: an icon and name you drag left or right (1 per 2 px, Shift ten times as fast),
+ * A number: an icon and name you drag left or right (1 per 2 px, Shift ten times as fast),
  * and a box you can type in. A press that doesn't move puts the cursor in the box. The drag locks the pointer so
  * it never stops at the screen edge; where the window can't lock it, the drag follows the pointer (captured) instead.
  * `data-lock` on the label says which: pending, locked or fallback.
@@ -251,7 +230,7 @@ function ScrubOption(props: { toolId: string; o: RangeSpec; value: number }) {
   return (
     <div class={`opt range drag${dragging ? ' dragging' : ''}${o.planned ? ' planned' : ''}`} data-tip={plannedTip(o)}>
       <span class="scrub" role="presentation" onPointerDown={down}>
-        <Icon name={o.icon ?? ''} size={16} />
+        <Icon name={o.icon} size={16} />
         {o.label}
       </span>
       <label class="val">
@@ -271,77 +250,37 @@ function Option(props: { toolId: string; o: OptionSpec; settings: ToolSettings }
     case 'lineColor':
       return <ColorButtons kind={o.kind} />;
     case 'range':
-      return o.control === 'drag' ? <ScrubOption toolId={toolId} o={o} value={value as number} /> : <RangeOption toolId={toolId} o={o} value={value as number} />;
+      return <ScrubOption toolId={toolId} o={o} value={value as number} />;
     case 'toggle':
       return (
         <button
           type="button"
-          class={`opt toggle${value ? ' on' : ''}`}
+          class={`opt toggle${o.iconOnly ? ' bare' : ''}${value ? ' on' : ''}`}
           aria-pressed={!!value}
+          aria-label={o.label}
           disabled={!!o.planned}
-          data-tip={plannedTip(o)}
+          data-tip={plannedTip(o) ?? (o.iconOnly ? o.label : undefined)}
           onClick={() => setOption(toolId, o.key, !value)}
         >
-          {o.label}
+          <Icon name={o.icon} size={16} />
+          {!o.iconOnly && o.label}
         </button>
       );
     case 'choice':
-      if (o.display === 'preview' && PREVIEWS[o.key]) return <PreviewOption toolId={toolId} o={o} value={value as string} />;
-      if (o.choices.length <= 2) {
-        return (
-          <div class="opt choice" role="radiogroup" aria-label={o.label} data-tip={plannedTip(o)}>
-            <span class="opt-label">{o.label}</span>
-            <div class="segmented">
-              {o.choices.map((c) => (
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={value === c.value}
-                  key={c.value}
-                  class={value === c.value ? 'on' : ''}
-                  disabled={!!o.planned}
-                  onClick={() => setOption(toolId, o.key, c.value)}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      }
-      return (
-        <label class="opt select" data-tip={plannedTip(o)}>
-          <span class="opt-label">{o.label}</span>
-          <select value={value as string} disabled={!!o.planned} onChange={(e) => setOption(toolId, o.key, (e.target as HTMLSelectElement).value)}>
-            {o.choices.map((c) => (
-              <option value={c.value} key={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
+      return <PreviewOption toolId={toolId} o={o} value={value as string} />;
     case 'action': {
       const c = commandById.get(o.command);
       return (
         <button type="button" class="opt action" disabled={!c || !isEnabled(c)} data-tip={o.hint} onClick={() => runCommand(o.command)}>
+          <Icon name={o.icon ?? ''} size={16} />
           {o.label}
         </button>
       );
     }
-    case 'font':
-      return (
-        <label class="opt select" data-tip={plannedTip(o)}>
-          <span class="opt-label">{o.label}</span>
-          <select value={value as string} disabled={!!o.planned} onChange={(e) => setOption(toolId, o.key, (e.target as HTMLSelectElement).value)}>
-            {(FONTS.includes(value as string) ? FONTS : [value as string, ...FONTS]).map((f) => (
-              <option value={f} key={f} style={{ fontFamily: f }}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
+    case 'font': {
+      const fonts = FONTS.includes(value as string) ? FONTS : [value as string, ...FONTS];
+      return <PreviewOption toolId={toolId} o={{ ...o, kind: 'choice', choices: fonts.map((f) => ({ value: f, label: f })) }} value={value as string} />;
+    }
   }
 }
 

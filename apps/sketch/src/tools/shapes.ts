@@ -12,7 +12,7 @@ import { bendToward, lineMiddle, rectAround, type Dash, type Head, type LineObje
 import { EDGE_HANDLES, HANDLE_SIDES, handleCursor, handlePoint, resizeBox, rotateBox, type Box, type EdgeHandle, type Point } from './box';
 import type { ToolDrag } from './drag';
 import { colorAt } from './fill';
-import { getTool, mergeSettings, type OptionValue } from './registry';
+import { getTool, mergeSettings, TINTS, type OptionValue } from './registry';
 import { ROTATE_GAP } from './selection';
 import { alignMoves, distributeMoves, snapAngle, snapPoint, snapRect, type AlignMode, type SnapResult, type SnapTargets } from './snap';
 
@@ -87,8 +87,6 @@ export function shapeColorsShowing(): boolean {
   return getTool(optionsToolId(currentTool().id)).options.some((o) => o.kind === 'shapeColors');
 }
 
-/** The highlighter's colours, by option value. */
-export const TINTS: Record<string, string> = { yellow: '#ffe94d', green: '#8ef07a', blue: '#7fd4ff', pink: '#ff9ecf', orange: '#ffb35c' };
 
 /** A shape's, line's or mark's settings as its tool's options. */
 function styleOf(o: Drawn): Record<string, OptionValue> {

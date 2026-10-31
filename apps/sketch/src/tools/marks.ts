@@ -5,7 +5,8 @@ import { newObjectId } from '../engine/objects';
 import type { Point } from './box';
 import type { ToolDrag } from './drag';
 import { snapAngle } from './snap';
-import { addObjects, dragged, guided, onMarkersChanged, snapTargets, snapThePoint, TINTS } from './shapes';
+import { addObjects, dragged, guided, onMarkersChanged, snapTargets, snapThePoint } from './shapes';
+import { TINTS } from './registry';
 
 /**
  * The Mark-Up tools (step 5.2): highlighter, blur, pixelate, numbered markers and the spotlight.

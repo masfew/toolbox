@@ -434,11 +434,6 @@ kbd {
   color: var(--muted);
 }
 
-.opt.range input[type='range'] {
-  width: 96px;
-  accent-color: var(--accent);
-}
-
 .dialog progress.download {
   width: 100%;
   accent-color: var(--accent);
@@ -463,21 +458,26 @@ kbd {
 
 /*
  * Drag labels: an icon and name you drag left or right (cursor ew-resize), then a 66 x 28 box with the value
- * right-aligned and its unit in muted text. The box is the keyboard way in.
+ * right-aligned and its unit in muted text. The box is the keyboard way in. `.opt-name` is the same icon and
+ * name beside a preview square, where a click opens the square's menu.
  */
 .opt.drag {
   gap: 6px;
 }
 
-.scrub {
+.scrub,
+.opt-name {
   display: flex;
   align-items: center;
   gap: 6px;
   height: 28px;
   padding: 0 2px;
   color: var(--muted);
-  cursor: ew-resize;
   user-select: none;
+}
+
+.scrub {
+  cursor: ew-resize;
   touch-action: none;
 }
 
@@ -528,13 +528,16 @@ kbd {
   margin-left: 0;
 }
 
-/* Preview squares (line style, arrowheads) open a short menu: each choice with its drawing and name. */
+/* Preview squares (every choice on the bar) open a short menu: each choice with its drawing and name. */
 .choice-menu {
   position: fixed;
   display: grid;
   gap: 2px;
   box-sizing: border-box;
-  width: 150px;
+  width: max-content;
+  min-width: 150px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
 
 .choice-menu .item {
@@ -576,25 +579,59 @@ kbd {
   color: var(--accent);
 }
 
+/* The font's square: wide enough for its name, the height of a drag label's box. */
+.sw.pick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 136px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border-radius: 4px;
+}
+
+.sw.pick .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
 .opt input:disabled,
-.opt select:disabled,
 .segmented button:disabled {
   opacity: 0.45;
 }
 
 .opt:has(:disabled) .opt-label,
+.opt:has(:disabled) .opt-name,
 .opt:has(:disabled) .unit {
   opacity: 0.6;
 }
 
+/* On and off settings: the same icon and name as a drag label, in a button the height of its box. */
 .opt.toggle {
+  height: 28px;
+  padding: 0 8px;
+  color: var(--muted);
   border-color: var(--border-strong);
 }
 
+.opt.toggle.bare {
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  padding: 0;
+}
+
 .opt.toggle.on {
-  background: var(--accent);
-  color: var(--accent-text);
-  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.opt.toggle.on svg {
+  color: var(--accent);
 }
 
 .segmented {
@@ -1548,8 +1585,6 @@ canvas.view {
 .opt.arrange {
   display: flex;
   gap: 2px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
 }
 
 @keyframes toast-in {
@@ -1602,9 +1637,10 @@ canvas.view {
 }
 
 .opt.action {
+  height: 28px;
   background: var(--accent);
   color: var(--accent-text);
-  padding: 3px 14px;
+  padding: 0 12px;
 }
 
 .num-row {

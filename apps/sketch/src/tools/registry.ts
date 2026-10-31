@@ -14,6 +14,8 @@ export interface OptionBase {
   hint?: string;
   /** A thin divider goes before this option, between groups of controls. */
   group?: boolean;
+  /** Shown before the name; a name in `ui/icons.tsx`. */
+  icon?: string;
 }
 
 export type OptionSpec =
@@ -23,11 +25,12 @@ export type OptionSpec =
   | (OptionBase & { kind: 'shapeColors' })
   /** The one outline colour button of lines and arrows (the same stored colour as a shape's outline). */
   | (OptionBase & { kind: 'lineColor' })
-  /** A number: a slider with a box, or with `control: 'drag'` an `icon` and name you drag left or right, and a box. */
-  | (OptionBase & { kind: 'range'; min: number; max: number; default: number; unit?: string; control?: 'drag'; icon?: string })
-  /** A choice: buttons, a list, or with `display: 'preview'` a square showing the choice that opens a menu of them. */
-  | (OptionBase & { kind: 'choice'; choices: { value: string; label: string }[]; default: string; display?: 'preview' })
-  | (OptionBase & { kind: 'toggle'; default: boolean })
+  /** A number: an `icon` and name you drag left or right, and a box. */
+  | (OptionBase & { kind: 'range'; min: number; max: number; default: number; unit?: string; icon: string })
+  /** A choice: a square showing the current one, which opens a menu of them. Its drawings are in `ui/previews.tsx`, under the option's key. */
+  | (OptionBase & { kind: 'choice'; choices: { value: string; label: string }[]; default: string })
+  /** A button with an icon and name, or with `iconOnly` just the icon (Bold, Italic). */
+  | (OptionBase & { kind: 'toggle'; default: boolean; icon: string; iconOnly?: boolean })
   | (OptionBase & { kind: 'font'; default: string })
   /** A button that runs a command from the command list. */
   | (OptionBase & { kind: 'action'; command: string });
@@ -55,6 +58,9 @@ export interface SlotSpec {
   tools: string[];
 }
 
+/** The highlighter's colours, by option value. */
+export const TINTS: Record<string, string> = { yellow: '#ffe94d', green: '#8ef07a', blue: '#7fd4ff', pink: '#ff9ecf', orange: '#ffb35c' };
+
 const colors: OptionSpec = { kind: 'colors', key: 'colors', label: 'Colours', hint: 'Left click paints with the first colour, right click with the second. X swaps them.' };
 const shapeColors: OptionSpec = {
   kind: 'shapeColors',
@@ -72,7 +78,6 @@ const drag = (key: string, label: string, icon: string, min: number, max: number
   max,
   default: def,
   unit,
-  control: 'drag',
   icon,
   ...extra,
 });
@@ -82,7 +87,6 @@ const dash: OptionSpec = {
   key: 'dash',
   label: 'Line',
   default: 'solid',
-  display: 'preview',
   choices: [
     { value: 'solid', label: 'Solid' },
     { value: 'dashed', label: 'Dashed' },
@@ -93,6 +97,7 @@ const sample: OptionSpec = {
   kind: 'choice',
   key: 'sample',
   label: 'Sample',
+  icon: 'layers',
   default: 'layer',
   choices: [
     { value: 'layer', label: 'Current layer' },
@@ -103,6 +108,7 @@ const transparentSel: OptionSpec = {
   kind: 'toggle',
   key: 'transparent',
   label: 'Transparent',
+  icon: 'transparent',
   default: false,
   hint: 'Leave out the second colour when moving the selection, as Paint does',
 };
@@ -111,6 +117,7 @@ const removeBackground: OptionSpec = {
   kind: 'action',
   key: 'removeBackground',
   label: 'Remove Background',
+  icon: 'remove-background',
   command: 'adjust.removeBackground',
   group: true,
   hint: 'Cut out the person or object in front, onto a new layer',
@@ -151,8 +158,8 @@ function line(id: string, name: string, icon: string, startHead: string, endHead
       lineColor,
       drag('width', 'Width', 'outline', 1, 50, 4, 'px'),
       dash,
-      { kind: 'choice', key: 'start', label: 'Start', default: startHead, choices: heads, display: 'preview', group: true },
-      { kind: 'choice', key: 'end', label: 'End', default: endHead, choices: heads, display: 'preview' },
+      { kind: 'choice', key: 'start', label: 'Start', icon: 'head-start', default: startHead, choices: heads, group: true },
+      { kind: 'choice', key: 'end', label: 'End', icon: 'head-end', default: endHead, choices: heads },
       opacity(),
     ],
   };
@@ -178,6 +185,7 @@ export const TOOLS: ToolSpec[] = [
         kind: 'choice',
         key: 'ratio',
         label: 'Ratio',
+        icon: 'ratio',
         default: 'free',
         choices: [
           { value: 'free', label: 'Free' },
@@ -187,7 +195,7 @@ export const TOOLS: ToolSpec[] = [
           { value: '16:9', label: '16:9' },
         ],
       },
-      { kind: 'action', key: 'apply', label: 'Crop', command: 'image.applyCrop', hint: 'Keep what is in the box (Enter)', group: true },
+      { kind: 'action', key: 'apply', label: 'Crop', icon: 'crop', command: 'image.applyCrop', hint: 'Keep what is in the box (Enter)', group: true },
     ],
   },
   {
@@ -196,7 +204,7 @@ export const TOOLS: ToolSpec[] = [
     icon: 'pencil',
     slot: 'pencil',
     sizeKey: 'size',
-    options: [colors, { kind: 'range', key: 'size', label: 'Size', min: 1, max: 16, default: 1, unit: 'px' }],
+    options: [colors, drag('size', 'Size', 'size', 1, 16, 1, 'px')],
   },
   {
     id: 'brush',
@@ -206,12 +214,13 @@ export const TOOLS: ToolSpec[] = [
     sizeKey: 'size',
     options: [
       colors,
-      { kind: 'range', key: 'size', label: 'Size', min: 1, max: 200, default: 4, unit: 'px' },
+      drag('size', 'Size', 'size', 1, 200, 4, 'px'),
       opacity(),
       {
         kind: 'choice',
         key: 'type',
         label: 'Type',
+        icon: 'brush-type',
         group: true,
         default: 'round',
         choices: [
@@ -220,11 +229,12 @@ export const TOOLS: ToolSpec[] = [
           { value: 'highlighter', label: 'Highlighter' },
         ],
       },
-      { kind: 'toggle', key: 'smoothing', label: 'Smoothing', default: true },
+      { kind: 'toggle', key: 'smoothing', label: 'Smoothing', icon: 'smoothing', default: true },
       {
         kind: 'choice',
         key: 'pressure',
         label: 'Pen pressure',
+        icon: 'pressure',
         default: 'size',
         choices: [
           { value: 'size', label: 'Size' },
@@ -241,11 +251,12 @@ export const TOOLS: ToolSpec[] = [
     slot: 'eraser',
     sizeKey: 'size',
     options: [
-      { kind: 'range', key: 'size', label: 'Size', min: 1, max: 200, default: 16, unit: 'px' },
+      drag('size', 'Size', 'size', 1, 200, 16, 'px'),
       {
         kind: 'choice',
         key: 'mode',
         label: 'Erase to',
+        icon: 'erase-to',
         group: true,
         default: 'transparent',
         choices: [
@@ -263,7 +274,7 @@ export const TOOLS: ToolSpec[] = [
     options: [
       colors,
       drag('tolerance', 'Tolerance', 'tolerance', 0, 100, 16, '%'),
-      { kind: 'toggle', key: 'global', label: 'All matching', default: false, group: true, hint: 'Fill every pixel of the clicked colour, not just the connected area' },
+      { kind: 'toggle', key: 'global', label: 'All matching', icon: 'all-matching', default: false, group: true, hint: 'Fill every pixel of the clicked colour, not just the connected area' },
       sample,
     ],
   },
@@ -276,10 +287,10 @@ export const TOOLS: ToolSpec[] = [
     sizeKey: 'size',
     options: [
       colors,
-      { kind: 'font', key: 'font', label: 'Font', default: 'Segoe UI', group: true },
+      { kind: 'font', key: 'font', label: 'Font', icon: 'text', default: 'Segoe UI', group: true },
       drag('size', 'Size', 'text-size', 6, 200, 24, 'px'),
-      { kind: 'toggle', key: 'bold', label: 'Bold', default: false, group: true },
-      { kind: 'toggle', key: 'italic', label: 'Italic', default: false },
+      { kind: 'toggle', key: 'bold', label: 'Bold', icon: 'bold', iconOnly: true, default: false, group: true },
+      { kind: 'toggle', key: 'italic', label: 'Italic', icon: 'italic', iconOnly: true, default: false },
       {
         kind: 'choice',
         key: 'align',
@@ -291,8 +302,8 @@ export const TOOLS: ToolSpec[] = [
           { value: 'right', label: 'Right' },
         ],
       },
-      { kind: 'toggle', key: 'outline', label: 'Outline', default: false, group: true },
-      { kind: 'toggle', key: 'box', label: 'Background', default: false, hint: 'A box behind the text, for labels on busy screenshots' },
+      { kind: 'toggle', key: 'outline', label: 'Outline', icon: 'text-outline', default: false, group: true },
+      { kind: 'toggle', key: 'box', label: 'Background', icon: 'text-box', default: false, hint: 'A box behind the text, for labels on busy screenshots' },
     ],
   },
   shape('rectangle', 'Rectangle', 'rectangle', [drag('radius', 'Corners', 'corners', 0, 200, 0, 'px')]),
@@ -312,6 +323,7 @@ export const TOOLS: ToolSpec[] = [
         kind: 'choice',
         key: 'tint',
         label: 'Colour',
+        icon: 'tint',
         default: 'yellow',
         hint: 'Highlighter colours darken what is under them, so text stays readable',
         choices: [
@@ -322,7 +334,7 @@ export const TOOLS: ToolSpec[] = [
           { value: 'orange', label: 'Orange' },
         ],
       },
-      { kind: 'range', key: 'size', label: 'Size', min: 4, max: 100, default: 20, unit: 'px' },
+      drag('size', 'Size', 'size', 4, 100, 20, 'px'),
       opacity(),
     ],
   },
@@ -371,6 +383,7 @@ export const TOOLS: ToolSpec[] = [
         kind: 'choice',
         key: 'shape',
         label: 'Shape',
+        icon: 'shapes',
         group: true,
         default: 'rect',
         choices: [

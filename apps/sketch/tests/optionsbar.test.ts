@@ -1,30 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { PREVIEWS } from '../src/ui/previews';
 import { hasIcon } from '../src/ui/icons';
-import { getTool, TOOLS, type OptionSpec } from '../src/tools/registry';
+import { getTool, TOOLS } from '../src/tools/registry';
 
 /** What a tool's bar lists, with a bar for each group break: `Fill | Outline px Line | Corners px | Opacity %`. */
 function layout(id: string): string {
   const out: string[] = [];
   getTool(id).options.forEach((o, i) => {
     if (i === 0 || o.group) out.push('|');
-    out.push(o.kind === 'range' ? `${o.label}${o.control === 'drag' ? '~' : '='}` : o.label);
+    out.push(o.kind === 'range' ? `${o.label}~` : o.label);
   });
   return out.join(' ');
 }
 
-const ranges = (id: string) => getTool(id).options.filter((o): o is Extract<OptionSpec, { kind: 'range' }> => o.kind === 'range');
-
 describe('options bar parts', () => {
-  it('makes every range option a drag label, except the four Size sliders', () => {
-    const sliders: string[] = [];
+  it('gives every number, labelled choice, toggle and button an icon', () => {
     for (const t of TOOLS) {
-      for (const o of ranges(t.id)) {
-        if (o.control !== 'drag') sliders.push(`${t.id}.${o.key}`);
-        else expect(hasIcon(o.icon ?? ''), `${t.id}.${o.key} icon ${o.icon}`).toBe(true);
+      for (const o of t.options) {
+        const shown = o.kind === 'range' || o.kind === 'toggle' || o.kind === 'action' || o.kind === 'font' || (o.kind === 'choice' && PREVIEWS[o.key]?.label);
+        if (shown) expect(hasIcon(o.icon ?? ''), `${t.id}.${o.key} icon ${o.icon}`).toBe(true);
       }
     }
-    expect(sliders.sort()).toEqual(['brush.size', 'eraser.size', 'highlight.size', 'pencil.size']);
   });
 
   it('gives each shape and line tool the planned order', () => {
@@ -36,22 +32,23 @@ describe('options bar parts', () => {
     expect(layout('line')).toBe('| Colour Width~ Line | Start End | Opacity~');
   });
 
-  it('draws line style and the arrowheads as preview squares, with a drawing for every choice', () => {
+  it('draws every choice on a preview square, with a drawing for each value', () => {
     for (const id of ['rectangle', 'ellipse', 'polygon', 'star', 'arrow', 'line']) {
-      const previews = getTool(id).options.filter((o) => o.kind === 'choice' && o.display === 'preview');
+      const previews = getTool(id).options.filter((o) => o.kind === 'choice');
       expect(previews.map((o) => o.key)).toEqual(id === 'arrow' || id === 'line' ? ['dash', 'start', 'end'] : ['dash']);
     }
     for (const t of TOOLS) {
       for (const o of t.options) {
-        if (o.kind !== 'choice' || o.display !== 'preview') continue;
+        if (o.kind !== 'choice') continue;
         const spec = PREVIEWS[o.key];
         expect(spec, `${t.id}.${o.key}`).toBeTruthy();
         for (const c of o.choices) expect(spec.draw(c.value, 16)).toBeTruthy();
       }
     }
+    expect(PREVIEWS.font.font).toBe(true);
   });
 
-  it('keeps the Size sliders for sizeKey and the keys that change them', () => {
+  it('keeps a number for sizeKey and the keys that change it', () => {
     for (const t of TOOLS) if (t.sizeKey) expect(t.options.find((o) => o.key === t.sizeKey)?.kind).toBe('range');
   });
 
@@ -67,11 +64,13 @@ describe('options bar parts', () => {
   });
 
   it('puts group breaks where the plan says for the other tools', () => {
-    expect(layout('brush')).toBe('| Colours Size= | Opacity~ | Type Smoothing Pen pressure');
-    expect(layout('pencil')).toBe('| Colours Size=');
+    expect(layout('brush')).toBe('| Colours Size~ | Opacity~ | Type Smoothing Pen pressure');
+    expect(layout('pencil')).toBe('| Colours Size~');
     expect(layout('text')).toBe('| Colours | Font Size~ | Bold Italic Align | Outline Background');
     expect(layout('fill')).toBe('| Colours Tolerance~ | All matching Sample');
     expect(layout('marker')).toBe('| Colours Size~ | Number~');
+    expect(layout('eraser')).toBe('| Size~ | Erase to');
+    expect(layout('highlight')).toBe('| Colour Size~ | Opacity~');
     expect(layout('picker')).toBe('| Colours | Sample');
     expect(layout('blur')).toBe('| Strength~');
     expect(layout('pixelate')).toBe('| Block size~');

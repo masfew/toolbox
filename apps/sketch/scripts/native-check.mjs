@@ -1682,6 +1682,71 @@ try {
     expect(arrow.start === 'filled' && arrow.end === 'dot', `The next arrow: start ${arrow.start}, end ${arrow.end}`);
   });
 
+  await barCheck("The Brush's Size is a drag label, every other choice is a preview square, switches are icon buttons, and the Font menu leaves the text being typed open", async () => {
+    await toolKey('b', 'Brush');
+    const p = await startLabelDrag('Size');
+    await bMouse('mouseMoved', p.x + 40, p.y, { buttons: 1 });
+    await sleep(100);
+    const sized = await labelState('Size');
+    await bMouse('mouseReleased', p.x + 40, p.y, { buttons: 0 });
+    await sleep(150);
+    expect(sized.value === '24' && !(await stillLocked()), `Dragging Size 40 px from 4: ${JSON.stringify(sized)}, locked afterwards ${await stillLocked()}`);
+    const square = (key) => `.opt.preview[data-preview="${key}"] .sw`;
+    const label = (key) => app.evaluate(`document.querySelector('${square(key)}').getAttribute('aria-label')`);
+    const values = () => app.evaluate(`[...document.querySelectorAll('.popover.choice-menu button.item')].map((i) => i.dataset.value).join()`);
+    await clickEl(square('type'));
+    expect((await values()) === 'round,marker,highlighter', `The Type menu: ${await values()}`);
+    await clickEl('.popover.choice-menu button.item[data-value="marker"]');
+    await sleep(120);
+    expect((await label('type')) === 'Brush type, marker', `After picking Marker: ${await label('type')}`);
+    await clickEl('.opt.preview[data-preview="pressure"] .opt-name');
+    expect((await values()) === 'size,opacity,off', `A click on the name opens the Pen pressure menu: ${await values()}`);
+    await clickEl('.opt.preview[data-preview="pressure"] .opt-name');
+    await sleep(120);
+    expect((await values()) === '', 'A second click on the name did not close the menu');
+    const smoothing = '.opt.toggle[aria-label="Smoothing"]';
+    const pressed = () => app.evaluate(`document.querySelector('${smoothing}').getAttribute('aria-pressed')`);
+    expect((await pressed()) === 'true', 'Smoothing does not start on');
+    await clickEl(smoothing);
+    await sleep(120);
+    expect((await pressed()) === 'false', 'Clicking Smoothing did not turn it off');
+    await toolKey('e', 'Eraser');
+    await clickEl(square('mode'));
+    expect((await values()) === 'transparent,secondary', `The Erase to menu: ${await values()}`);
+    await app.press('Escape');
+    await sleep(120);
+    // Typing goes on after the Font menu changes the font.
+    await toolKey('t', 'Text');
+    const at = await inPicture(0.3, 0.3);
+    await bMouse('mouseMoved', at.x, at.y);
+    await bMouse('mousePressed', at.x, at.y, { buttons: 1 });
+    await bMouse('mouseReleased', at.x, at.y, { buttons: 0 });
+    await sleep(200);
+    await app.send('Input.insertText', { text: 'Hi' });
+    await sleep(120);
+    await clickEl(square('font'));
+    await bKey('ArrowDown', DOWN);
+    expect((await app.evaluate(`document.activeElement.dataset.value`)) === 'Arial', 'Down in the Font menu lost the focus to the text');
+    await app.press('Enter');
+    await sleep(200);
+    const typing = await app.evaluate(`({ font: window.sketch.app.textEdit?.obj.font, text: window.sketch.app.textEdit?.obj.text, focus: document.activeElement.tagName, shown: document.querySelector('${square('font')} .name').textContent })`);
+    expect(typing.font === 'Arial' && typing.text === 'Hi' && typing.focus === 'TEXTAREA' && typing.shown === 'Arial', `After picking Arial: ${JSON.stringify(typing)}`);
+    // A letter in the menu jumps to a font and never reaches the tool shortcuts; Escape goes back to the text.
+    await clickEl(square('font'));
+    await app.press('g');
+    await sleep(120);
+    expect((await app.evaluate(`document.activeElement.dataset.value`)) === 'Georgia', `G in the Font menu is on ${await app.evaluate(`document.activeElement.dataset.value`)}`);
+    await app.press('b');
+    await sleep(120);
+    expect((await app.state()).tool === 'Text' && (await values()) !== '', 'B in the Font menu reached the tool shortcuts');
+    await app.press('Escape');
+    await sleep(200);
+    await app.send('Input.insertText', { text: '!' });
+    await sleep(120);
+    const after = await app.evaluate(`({ text: window.sketch.app.textEdit?.obj.text, font: window.sketch.app.textEdit?.obj.font, focus: document.activeElement.tagName })`);
+    expect(after.text === 'Hi!' && after.font === 'Arial' && after.focus === 'TEXTAREA', `After Escape in the Font menu: ${JSON.stringify(after)}`);
+  });
+
   await check('An old .sktch (version 3, shapes with filled false and true) opens unchanged, and saving keeps the filled flag right', async () => {
     const old = { id: 1, type: 'shape', kind: 'rectangle', x: 20, y: 20, w: 60, h: 60, angle: 0, stroke: '#0000ff', width: 6, fill: '#ff0000', dash: 'solid', opacity: 1, radius: 0, sides: 5, points: 5 };
     const oldFile = join(work, 'old-shapes.sktch');
@@ -1739,7 +1804,8 @@ try {
         const kids = [...bar.children].map((k) => ({ name: (k.className || k.tagName) + '', r: k.getBoundingClientRect() }));
         const outside = kids.filter((k) => k.r.width > 0 && (k.r.left < b.left - 0.5 || k.r.right > b.right + 0.5 || k.r.top < b.top - 0.5 || k.r.bottom > b.bottom + 0.5)).map((k) => k.name);
         const mids = kids.filter((k) => k.r.height > 0).map((k) => k.r.top + k.r.height / 2);
-        return { label: bar.getAttribute('aria-label'), width: window.innerWidth, scroll: bar.scrollWidth, client: bar.clientWidth, outside, rowSpread: Math.max(...mids) - Math.min(...mids) };
+        const old = bar.querySelectorAll('select, input[type="range"], .segmented').length;
+        return { label: bar.getAttribute('aria-label'), width: window.innerWidth, scroll: bar.scrollWidth, client: bar.clientWidth, outside, rowSpread: Math.max(...mids) - Math.min(...mids), old };
       })()`);
     const single = ['pencil', 'brush', 'eraser', 'fill', 'picker', 'text', 'crop']; // tools alone in their rail slot are commands of the slot
     const seen = new Set();
@@ -1748,7 +1814,7 @@ try {
       await sleep(80);
       const r = await inside();
       seen.add(r.label);
-      expect(r.width >= 1200 && r.scroll <= r.client && r.outside.length === 0 && r.rowSpread < 26, `${r.label} at ${r.width} px wide: scrollWidth ${r.scroll}, clientWidth ${r.client}, outside the bar: ${r.outside.join(', ')}, rows spread ${r.rowSpread}`);
+      expect(r.width >= 1200 && r.scroll <= r.client && r.outside.length === 0 && r.rowSpread < 26 && r.old === 0, `${r.label} at ${r.width} px wide: scrollWidth ${r.scroll}, clientWidth ${r.client}, outside the bar: ${r.outside.join(', ')}, rows spread ${r.rowSpread}, old controls ${r.old}`);
     }
     expect(seen.size === ids.length, `Only ${seen.size} different bars showed: ${[...seen].join(', ')}`);
     // Two shapes picked on the Rectangle's bar.
