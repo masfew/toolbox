@@ -1,6 +1,6 @@
 [package]
 name = "sketch"
-version = "1.6.1"
+version = "1.7.0"
 description = "A fast, simple paint app"
 edition = "2021"
 # Three programs: Sketch itself, sketch-capture (src/bin), the capture helper, and sketch-launcher

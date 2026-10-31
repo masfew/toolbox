@@ -1,4 +1,5 @@
 import { rasterizeCurrentLayer, rememberColor, settle } from '../app/actions';
+import { COLOR_TARGETS } from '../app/colorTargets';
 import { clampView, growBoardForPointer } from '../app/board';
 import { paintBlocked } from '../app/layers';
 import { pointerCss, pointerShapeOf } from '../app/pointer';
@@ -31,7 +32,7 @@ const CURSORS: Record<HandleEdge, string> = { r: 'ew-resize', b: 'ns-resize', rb
 
 /** Tools that paint with the colours, where Alt+click picks a colour. */
 function usesColors(): boolean {
-  return currentTool().options.some((o) => o.kind === 'colors');
+  return currentTool().options.some((o) => o.kind === 'colors' || o.kind === 'shapeColors' || o.kind === 'lineColor');
 }
 
 /** Handles mouse, pen and wheel input on the view canvas. */
@@ -128,7 +129,7 @@ export class CanvasController {
 
     // The colour popover's picker button is waiting for this press: it sets that colour and nothing else happens.
     if (app.pickInto) {
-      const drag = pickDrag(p, e.button, settingsOf('picker').sample as 'layer' | 'picture', rememberColor, app.pickInto);
+      const drag = pickDrag(p, e.button, settingsOf('picker').sample as 'layer' | 'picture', rememberColor, COLOR_TARGETS[app.pickInto]);
       return this.startTool({
         ...drag,
         up: (q, ev) => {
@@ -191,9 +192,11 @@ export class CanvasController {
       return;
     }
 
-    // Alt + click picks a colour with any tool that paints. The Shapes tool picks on a click, as Alt + drag draws from the centre.
+    // Alt + click picks a colour with any tool that paints: colour 1, or the outline colour for shapes and lines.
+    // The Shapes tool picks on a click, as Alt + drag draws from the centre.
     if (e.altKey && e.button === 0 && usesColors() && !SHAPE_TOOLS.includes(tool.id)) {
-      return this.startTool(pickDrag(p, e.button, settingsOf('picker').sample as 'layer' | 'picture', rememberColor));
+      const into = LINE_TOOLS.includes(tool.id) ? COLOR_TARGETS.outline : undefined;
+      return this.startTool(pickDrag(p, e.button, settingsOf('picker').sample as 'layer' | 'picture', rememberColor, into));
     }
 
     if (tool.planned) {

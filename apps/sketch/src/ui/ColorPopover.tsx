@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import * as actions from '../app/actions';
+import type { ColorTarget } from '../app/colorTargets';
 import { hsvToRgb, opaqueHex, parseHex, rgbToHsv, SWATCHES, toHex, type HSV } from '../app/color';
 import { app, changed, toast } from '../app/store';
 import { Icon } from './icons';
@@ -24,11 +25,14 @@ function dragIn(e: PointerEvent, onMove: (x: number, y: number) => void): void {
   el.addEventListener('pointercancel', up);
 }
 
-/** A small colour picker that opens under a colour chip: a colour square, hue and opacity, hex, recent colours and swatches. */
-export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DOMRect; onClose: () => void }) {
+/**
+ * A small colour picker that opens under a colour button: a colour square, hue and opacity, hex, recent
+ * colours and swatches. It edits `target`; `noColour` adds a No Colour button (opacity 0%) before the picker button.
+ */
+export function ColorPopover(props: { target: ColorTarget; noColour?: boolean; anchor: DOMRect; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const initial = useRef(app[props.which]);
-  const start = parseHex(app[props.which]) ?? { r: 0, g: 0, b: 0, a: 1 };
+  const initial = useRef(props.target.read());
+  const start = parseHex(props.target.read()) ?? { r: 0, g: 0, b: 0, a: 1 };
   // Hue is kept here, so it doesn't jump when the colour turns grey or black.
   const [hsv, setHsv] = useState<HSV>(rgbToHsv(start));
   const [alpha, setAlpha] = useState(start.a);
@@ -38,7 +42,7 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
   const apply = (next: HSV, a: number) => {
     setHsv(next);
     setAlpha(a);
-    actions.setColor(props.which, toHex(hsvToRgb(next, a)));
+    props.target.write(toHex(hsvToRgb(next, a)));
   };
 
   const applyHex = (hex: string) => {
@@ -51,7 +55,7 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
 
   /** Starts or ends waiting for a press on the picture, which sets this popover's colour. */
   const setPicking = (on: boolean) => {
-    const into = on ? props.which : null;
+    const into = on ? props.target.id : null;
     if (app.pickInto === into) return;
     app.pickInto = into;
     changed();
@@ -59,7 +63,7 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
 
   const close = () => {
     setPicking(false);
-    const now = app[props.which];
+    const now = props.target.read();
     if (now.toLowerCase() !== initial.current.toLowerCase()) actions.rememberColor(now);
     props.onClose();
   };
@@ -78,7 +82,7 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
     const outside = (e: PointerEvent) => {
       // The picker button waits for a press on the picture, which the picture takes as the pick.
       if (app.pickInto && (e.target as HTMLElement).closest?.('canvas.view')) return;
-      // A click on the colour chip itself also lands here, so it closes and the chip's own click finds it closed.
+      // A click on the colour button itself also lands here, so it closes and the button's own click finds it closed.
       if (!ref.current?.contains(e.target as Node)) close();
     };
     const key = (e: KeyboardEvent) => {
@@ -98,8 +102,8 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
     };
   });
 
-  const color = app[props.which];
-  const picking = app.pickInto === props.which;
+  const color = props.target.read();
+  const picking = app.pickInto === props.target.id;
   const solid = opaqueHex(color);
   const hueColor = toHex(hsvToRgb({ h: hsv.h, s: 1, v: 1 }));
 
@@ -137,7 +141,7 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
   );
 
   return (
-    <div class="popover color-popover" ref={ref} style={{ left: `${pos.left}px`, top: `${pos.top}px` }} role="dialog" aria-label={props.which === 'primary' ? 'Colour 1' : 'Colour 2'}>
+    <div class="popover color-popover" ref={ref} style={{ left: `${pos.left}px`, top: `${pos.top}px` }} role="dialog" aria-label={props.target.label}>
       <div class="sv" style={{ background: hueColor }} onPointerDown={(e) => dragIn(e, (x, y) => apply({ h: hsv.h, s: x, v: 1 - y }, alpha))}>
         <div class="sv-white" />
         <div class="sv-black" />
@@ -149,7 +153,7 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
       <div class="slider alpha" style={{ '--c': solid }} onPointerDown={(e) => dragIn(e, (x) => apply(hsv, Math.round(x * 100) / 100))} aria-label="Opacity">
         <span class="thumb" style={{ left: `${alpha * 100}%` }} />
       </div>
-      <div class="color-row">
+      <div class={`color-row${props.noColour ? ' has-none' : ''}`}>
         <span class="preview" style={{ '--c': color }} />
         <input
           type="text"
@@ -170,6 +174,18 @@ export function ColorPopover(props: { which: 'primary' | 'secondary'; anchor: DO
           }}
         />
         <span class="alpha-pct">{Math.round(alpha * 100)}%</span>
+        {props.noColour && (
+          <button
+            type="button"
+            class="icon-btn small no-colour"
+            data-tip="No Colour"
+            aria-label="No Colour"
+            data-no-colour
+            onClick={() => apply(hsv, 0)}
+          >
+            <span />
+          </button>
+        )}
         <button
           type="button"
           class={`icon-btn${picking ? ' on' : ''}`}

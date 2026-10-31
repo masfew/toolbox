@@ -15,6 +15,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { attach, captureTarget, clipboard, fillFileDialog, helper, holdHotkey, keys, launch, listenHotkey, notesInCentre, overlay, png, pngSize, postClose, ps, screen, sleep } from './native-driver.mjs';
 
 const exe = resolve(process.argv[2] ?? join('src-tauri', 'target', 'release', 'sketch.exe'));
@@ -727,6 +728,8 @@ try {
         return {
           primary: a.primary,
           secondary: a.secondary,
+          fill: a.fillColor,
+          outline: a.outlineColor,
           pickInto: a.pickInto,
           open: !!pop,
           hex: pop?.querySelector('input.hex')?.value ?? null,
@@ -746,13 +749,13 @@ try {
       await sleep(150);
     };
 
-    // Colour 1: the button, the pointer, the press.
-    await clickEl('.chip.primary');
+    // The fill: the button, the pointer, the press.
+    await clickEl('[data-color="fill"]');
     let s = await read();
-    expect(s.open && !s.pressed && s.pickInto === null, `Colour 1's popover: ${JSON.stringify(s)}`);
-    await clickEl('.color-popover .icon-btn');
+    expect(s.open && !s.pressed && s.pickInto === null, `The fill's popover: ${JSON.stringify(s)}`);
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
     s = await read();
-    expect(s.open && s.pressed && s.pickInto === 'primary', `After the picker button: ${JSON.stringify(s)}`);
+    expect(s.open && s.pressed && s.pickInto === 'fill', `After the picker button: ${JSON.stringify(s)}`);
     const over = await pointerAt(blue.x, blue.y);
     expect(/^url\("data:image\/svg\+xml,/.test(over.cursor) && / 2 22, default$/.test(over.cursor), `The pointer over the picture is "${over.cursor.slice(0, 60)}", not the picker`);
     if (process.env.SKETCH_PROOF_DIR) {
@@ -762,7 +765,7 @@ try {
     }
     await pressAt(blue);
     s = await read();
-    expect(s.primary.toLowerCase() === '#3366cc' && s.hex?.toLowerCase() === '#3366cc', `Colour 1 and the hex box after the pick: ${JSON.stringify(s)}`);
+    expect(s.fill.toLowerCase() === '#3366cc' && s.hex?.toLowerCase() === '#3366cc', `The fill and the hex box after the pick: ${JSON.stringify(s)}`);
     expect(s.open && !s.pressed && s.pickInto === null, `After the pick the popover stays open and picking ends: ${JSON.stringify(s)}`);
     expect(s.shapes === 0 && !s.sel && s.position === before.position, `The Rectangle tool acted on the pick: ${JSON.stringify(s)}`);
     const dot = await app.evaluate(`document.querySelector('.color-popover .sv-dot').style.background`);
@@ -772,32 +775,32 @@ try {
     expect((await pointerAt(blue.x, blue.y)).cursor === 'default', 'The pointer stayed the picker after the pick');
 
     // Esc and the button cancel without changing the colour; Esc closes the popover only the second time.
-    await clickEl('.color-popover .icon-btn');
-    expect((await read()).pickInto === 'primary', 'The picker button did not start picking again');
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
+    expect((await read()).pickInto === 'fill', 'The picker button did not start picking again');
     await app.press('Escape');
     await sleep(120);
     s = await read();
-    expect(s.open && s.pickInto === null && s.primary.toLowerCase() === '#3366cc', `Esc while picking: ${JSON.stringify(s)}`);
-    await clickEl('.color-popover .icon-btn');
-    await clickEl('.color-popover .icon-btn');
+    expect(s.open && s.pickInto === null && s.fill.toLowerCase() === '#3366cc', `Esc while picking: ${JSON.stringify(s)}`);
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
     s = await read();
-    expect(s.open && s.pickInto === null && s.primary.toLowerCase() === '#3366cc', `The button pressed twice: ${JSON.stringify(s)}`);
+    expect(s.open && s.pickInto === null && s.fill.toLowerCase() === '#3366cc', `The button pressed twice: ${JSON.stringify(s)}`);
     await app.press('Escape');
     await sleep(120);
     expect(!(await read()).open, 'Esc did not close the popover');
 
-    // Colour 2's popover sets colour 2 and leaves colour 1.
-    await clickEl('.chip.secondary');
-    await clickEl('.color-popover .icon-btn');
-    expect((await read()).pickInto === 'secondary', 'Colour 2 did not start picking');
+    // The outline's popover sets the outline and leaves the fill (and colours 1 and 2).
+    await clickEl('[data-color="outline"]');
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
+    expect((await read()).pickInto === 'outline', 'The outline did not start picking');
     await pressAt(red);
     s = await read();
-    expect(s.secondary.toLowerCase() === '#cc3333' && s.hex?.toLowerCase() === '#cc3333' && s.primary.toLowerCase() === '#3366cc', `Colour 2 after the pick: ${JSON.stringify(s)}`);
+    expect(s.outline.toLowerCase() === '#cc3333' && s.hex?.toLowerCase() === '#cc3333' && s.fill.toLowerCase() === '#3366cc' && s.primary === '#000000' && s.secondary === '#ffffff', `The outline after the pick: ${JSON.stringify(s)}`);
     expect(s.shapes === 0 && s.position === before.position, `The Rectangle tool acted on the second pick: ${JSON.stringify(s)}`);
 
     // Closing the popover while picking ends it, and the picture then takes the tool's press again.
-    await clickEl('.color-popover .icon-btn');
-    expect((await read()).pickInto === 'secondary', 'Colour 2 did not start picking again');
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
+    expect((await read()).pickInto === 'outline', 'The outline did not start picking again');
     await app.press('Escape');
     await app.press('Escape');
     s = await read();
@@ -805,6 +808,13 @@ try {
     await app.drag(blue.x - 40, blue.y + 80, blue.x + 40, blue.y + 140);
     s = await read();
     expect(s.shapes === 1, `The Rectangle tool no longer draws after picking: ${JSON.stringify(s)}`);
+    // The Brush's colour 1 takes a pick the same way, and leaves the shapes' colours.
+    await toolKey('b', 'Brush');
+    await clickEl('[data-color="primary"]');
+    await clickEl('.color-popover button[aria-label="Pick a colour from the picture"]');
+    await pressAt(red);
+    s = await read();
+    expect(s.primary.toLowerCase() === '#cc3333' && s.fill.toLowerCase() === '#3366cc' && s.outline.toLowerCase() === '#cc3333', `Colour 1 after a pick with the Brush: ${JSON.stringify(s)}`);
     await quitApp();
   });
 
@@ -962,7 +972,7 @@ try {
     expect(w.objects.length === 1 && w.objects[0].kind === 'rectangle', `Shapes after: ${JSON.stringify(w.objects.map((o) => o.kind))}`);
     const r = w.objects[0];
     expect(near(r.x, 100, 8) && near(r.y, 100, 8) && near(r.w, 200, 12) && near(r.h, 120, 12), `Rectangle at ${r.x}, ${r.y}, ${r.w} x ${r.h}`);
-    expect(r.stroke === '#d11a1a' && r.width === 6 && r.opacity === 1 && !r.filled && r.angle === 0, `Rectangle look: ${r.stroke}, ${r.width}, ${r.opacity}`);
+    expect(r.stroke === '#d11a1a' && r.width === 6 && r.opacity === 1 && /^#[0-9a-f]{6}00$/i.test(r.fill) && r.angle === 0, `Rectangle look: ${r.stroke}, ${r.width}, ${r.opacity}`);
     expect(w.ink === 0, `The rough stroke's ${w.ink} pixels were still committed`);
     expect(w.layers === 1 && w.picked === 1 && w.draft === null, `Layers ${w.layers}, picked ${w.picked}, draft ${w.draft}`);
     expect(w.undo === 'Clean up rectangle' && w.position === before.position + 2, `Undo says "${w.undo}", ${w.position - before.position} steps made`);
@@ -1239,8 +1249,6 @@ try {
     await quitApp();
   });
 
-  // ---------- Autosave, recovery and more than one window ----------
-
   // Each part gets its own data folder, so leftovers from one never reopen in another.
   const dataFor = (name) => {
     const dir = join(work, `data-${name}`);
@@ -1265,6 +1273,500 @@ try {
     }
     throw new Error(`Timed out waiting for ${what}`);
   };
+
+  // ---------- The options bar (1.7.0): drag labels, No Colour, the shapes' own colours, line style menus ----------
+
+  // Each check starts its own app (its own data folder and WebView2 profile), so every one begins from the defaults
+  // and the checks don't depend on each other. The app is killed afterwards: nothing here needs a graceful close.
+  let barLaunches = 0;
+  const barCheck = (name, fn, args = []) =>
+    check(name, async () => {
+      barLaunches++;
+      app = await launch(exe, work, args, `bar-${barLaunches}`, dataFor(`bar-${barLaunches}`).env);
+      try {
+        await fn();
+      } finally {
+        await app.quit().catch(() => {});
+      }
+    });
+  /** A mouse event on the page; `o`: button ('left' or 'right'), buttons (held, as a bit set) and mods (1 Alt, 2 Ctrl, 8 Shift). */
+  const bMouse = (type, x, y, o = {}) =>
+    app.send('Input.dispatchMouseEvent', { type, x, y, button: o.button ?? 'left', buttons: o.buttons ?? 0, clickCount: type === 'mouseMoved' ? 0 : 1, modifiers: o.mods ?? 0 });
+  const bDrag = async (x1, y1, x2, y2, o = {}) => {
+    const down = o.button === 'right' ? 2 : 1;
+    await bMouse('mouseMoved', x1, y1, { mods: o.mods });
+    await bMouse('mousePressed', x1, y1, { ...o, buttons: down });
+    for (let i = 1; i <= 8; i++) await bMouse('mouseMoved', x1 + ((x2 - x1) * i) / 8, y1 + ((y2 - y1) * i) / 8, { ...o, buttons: down });
+    await bMouse('mouseReleased', x2, y2, { ...o, buttons: 0 });
+    await sleep(150);
+  };
+  /** A key with a position, which `press` doesn't know (arrows). */
+  const bKey = async (key, vk, mods = 0) => {
+    await app.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code: key, windowsVirtualKeyCode: vk, modifiers: mods });
+    await app.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: vk, modifiers: mods });
+    await sleep(60);
+  };
+  const UP = 38;
+  const DOWN = 40;
+  /** Where a drag label's name is on the page. */
+  const labelAt = (name) =>
+    app.evaluate(`(() => {
+      const s = [...document.querySelectorAll('.opt.drag .scrub')].find((e) => e.textContent.trim() === ${JSON.stringify(name)});
+      if (!s) throw new Error('No ${name} drag label on the bar');
+      const r = s.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    })()`);
+  /** A drag label's lock state (its data-lock), whether the pointer is locked, and what its box says. */
+  const labelState = (name) =>
+    app.evaluate(`(() => {
+      const s = [...document.querySelectorAll('.opt.drag .scrub')].find((e) => e.textContent.trim() === ${JSON.stringify(name)});
+      return {
+        lock: s?.dataset.lock ?? null,
+        locked: !!document.pointerLockElement,
+        value: s?.parentElement.querySelector('input.num').value ?? null,
+        dragging: !!s?.closest('.opt.drag.dragging'),
+      };
+    })()`);
+  /** Presses on a drag label, moves 10 px (which starts the drag) and waits for the pointer to lock. Returns where the pointer is. */
+  const startLabelDrag = async (name, mods = 0) => {
+    const at = await labelAt(name);
+    await bMouse('mouseMoved', at.x, at.y);
+    await bMouse('mousePressed', at.x, at.y, { buttons: 1, mods });
+    await bMouse('mouseMoved', at.x + 10, at.y, { buttons: 1, mods });
+    await waitUntil(`the pointer to lock for ${name}`, async () => (await labelState(name)).lock === 'locked', 5000);
+    return { x: at.x + 10, y: at.y };
+  };
+  const stillLocked = () => app.evaluate('!!document.pointerLockElement');
+  const shapesNow = () => app.evaluate(`window.sketch.app.doc.layers.flatMap((l) => l.objects.map((o) => JSON.parse(JSON.stringify(o))))`);
+  const barState = () =>
+    app.evaluate(`(() => {
+      const a = window.sketch.app;
+      return { primary: a.primary, secondary: a.secondary, fill: a.fillColor, outline: a.outlineColor, picked: a.objectSel ? a.objectSel.ids.length : 0, position: a.history.position, undo: a.history.undoLabel };
+    })()`);
+  const dropPick = () => app.evaluate(`(() => { window.sketch.app.objectSel = null; window.sketch.app.requestRender(); })()`);
+  /** Drags out from (fx0, fy0) to (fx1, fy1), as shares of the picture's size. */
+  const drawBox = async (fx0, fy0, fx1, fy1, o = {}) => {
+    const a = await inPicture(fx0, fy0);
+    const b = await inPicture(fx1, fy1);
+    await bDrag(a.x, a.y, b.x, b.y, o);
+  };
+  /** The flattened picture's pixel at a place in the picture (rounded). */
+  const pixelAt = (x, y) =>
+    app.evaluate(`(() => { const s = window.sketch; const c = s.flatten(s.app.doc); return Array.from(c.getContext('2d').getImageData(${Math.round(x)}, ${Math.round(y)}, 1, 1).data); })()`);
+  const near3 = (p, q, tol = 3) => p.every((v, i) => Math.abs(v - q[i]) <= tol);
+  const hexClear = (c) => /^#[0-9a-f]{6}00$/i.test(c);
+  /** Opens a colour button's popover with a real click, picks one of its swatches by name, and closes it. */
+  const pickSwatch = async (target, hex) => {
+    await clickEl(`[data-color="${target}"]`);
+    await clickEl(`.color-popover .swatch-btn[aria-label="${hex.toUpperCase()}"]`);
+    await app.press('Escape');
+    await sleep(600); // The button ignores a click within half a second of its popover closing.
+  };
+  const noColour = async (target) => {
+    await clickEl(`[data-color="${target}"]`);
+    await clickEl('.color-popover .no-colour');
+    await app.press('Escape');
+    await sleep(600);
+  };
+
+  await barCheck('Dragging a label locks the pointer in the real window: 1 per 2 px, Shift ten times as fast, the pointer stays put past the screen edge, and it is free after', async () => {
+    await toolKey('u', 'Rectangle');
+    await app.evaluate(`(() => { window.__moves = []; window.addEventListener('pointermove', (e) => window.__moves.push([e.movementX, e.clientX]), true); })()`);
+    let s = await labelState('Corners');
+    expect(s.value === '0' && !s.locked && s.lock === null, `Before the press: ${JSON.stringify(s)}`);
+    const start = await startLabelDrag('Corners');
+    s = await labelState('Corners');
+    expect(s.locked && s.lock === 'locked' && s.dragging, `After 10 px: ${JSON.stringify(s)}`);
+    const lockedFrom = await app.evaluate('window.__moves.length');
+    // 20 px in four steps of 5: ten values.
+    let x = start.x;
+    for (let i = 0; i < 4; i++) await bMouse('mouseMoved', (x += 5), start.y, { buttons: 1 });
+    expect((await labelState('Corners')).value === '10', `After 20 px the value is ${(await labelState('Corners')).value}, not 10`);
+    // Shift: 2 px is ten values.
+    await bMouse('mouseMoved', (x += 2), start.y, { buttons: 1, mods: 8 });
+    expect((await labelState('Corners')).value === '20', `Shift and 2 px gave ${(await labelState('Corners')).value}, not 20`);
+    // Back to normal speed straight away (letting go of Shift mid-drag doesn't jump): 4 px is 2.
+    await bMouse('mouseMoved', (x += 4), start.y, { buttons: 1 });
+    expect((await labelState('Corners')).value === '22', `Then 4 px without Shift gave ${(await labelState('Corners')).value}, not 22`);
+    // Far past the right edge of the window, and the pointer is still locked: 1800 px is the end of the range (200).
+    const width = await app.evaluate('innerWidth');
+    await bMouse('mouseMoved', width + 600, start.y, { buttons: 1 });
+    s = await labelState('Corners');
+    expect(s.locked && s.value === '200', `Past the right edge: ${JSON.stringify(s)}`);
+    // Coming back from the end starts at once.
+    await bMouse('mouseMoved', width + 600 - 100, start.y, { buttons: 1 });
+    expect((await labelState('Corners')).value === '150', `Coming back 100 px from the end gave ${(await labelState('Corners')).value}, not 150`);
+    await bMouse('mouseMoved', -400, start.y, { buttons: 1 });
+    s = await labelState('Corners');
+    expect(s.locked && s.value === '0', `Past the left edge: ${JSON.stringify(s)}`);
+    // The pointer itself never moved while locked: every locked move reports the same position, though the driver sent positions on both sides of the window.
+    const moves = await app.evaluate(`window.__moves.slice(${lockedFrom})`);
+    expect(new Set(moves.map((m) => m[1])).size === 1 && moves.some((m) => Math.abs(m[0]) > 500), `Locked moves: ${JSON.stringify(moves.slice(0, 12))}`);
+    await bMouse('mouseReleased', -400, start.y, { buttons: 0 });
+    await waitUntil('the lock to end', async () => !(await stillLocked()), 3000);
+    s = await labelState('Corners');
+    expect(s.lock === null && !s.dragging && s.value === '0', `After letting go: ${JSON.stringify(s)}`);
+    // Moving on after letting go changes nothing.
+    await bMouse('mouseMoved', start.x + 200, start.y);
+    await sleep(100);
+    expect((await labelState('Corners')).value === '0', 'The value moved with the button up');
+  });
+
+  await barCheck('Changing tool during a drag, and Escape in the lock, end the drag and free the pointer', async () => {
+    await toolKey('u', 'Rectangle');
+    // A tool change in the middle of a drag takes the bar away; the pointer is freed with it.
+    let start = await startLabelDrag('Corners');
+    await bMouse('mouseMoved', start.x + 20, start.y, { buttons: 1 });
+    expect((await labelState('Corners')).value === '10', 'The drag did not move before the tool change');
+    await app.press('e');
+    await waitUntil('the pointer to be freed by the tool change', async () => !(await stillLocked()), 3000);
+    await bMouse('mouseReleased', start.x, start.y, { buttons: 0 });
+    expect((await app.state()).tool === 'Eraser', 'The tool key did not change the tool');
+    await toolKey('u', 'Rectangle');
+    // Escape: the real key (SendInput) when Sketch is the window in front, which keeps it from reaching another app; else the page's own exit.
+    start = await startLabelDrag('Corners');
+    await bMouse('mouseMoved', start.x + 20, start.y, { buttons: 1 });
+    expect((await labelState('Corners')).value === '20', `The drag did not move before Escape: ${(await labelState('Corners')).value}`);
+    const handle = Number(screen(work, `[SketchScreen]::Windows(${app.pid})`).split(',')[0].split(':')[0]);
+    const front = Number(screen(work, '[SketchScreen]::Foreground()'));
+    const real = front === handle;
+    if (real) keys(work, '1bd,1bu');
+    else await app.evaluate('document.exitPointerLock()');
+    console.log(`      (${real ? 'a real Escape key press' : "the page's exitPointerLock, as Sketch was not the window in front"})`);
+    await waitUntil('Escape to end the lock', async () => !(await stillLocked()), 3000);
+    const s = await labelState('Corners');
+    expect(s.lock === null && !s.dragging, `After Escape: ${JSON.stringify(s)}`);
+    await bMouse('mouseMoved', start.x + 100, start.y, { buttons: 1 });
+    await bMouse('mouseReleased', start.x + 100, start.y, { buttons: 0 });
+    expect((await labelState('Corners')).value === '20', `The value went on to ${(await labelState('Corners')).value} after Escape`);
+  });
+
+  await barCheck('A click on a label puts the cursor in its box; typing applies at once, arrows change it by 1 (Shift 10), and Enter and Escape finish', async () => {
+    await toolKey('u', 'Rectangle');
+    const at = await labelAt('Outline');
+    await bMouse('mouseMoved', at.x, at.y);
+    await bMouse('mousePressed', at.x, at.y, { buttons: 1 });
+    await bMouse('mouseReleased', at.x, at.y, { buttons: 0 });
+    await sleep(120);
+    const focus = () => app.evaluate(`(() => { const e = document.activeElement; return { box: e.classList.contains('num') && !!e.closest('.opt.drag'), label: e.getAttribute('aria-label'), value: e.value, selected: e.selectionStart === 0 && e.selectionEnd === e.value.length }; })()`);
+    let f = await focus();
+    expect(f.box && f.label === 'Outline value' && f.selected && f.value === '3', `After a click: ${JSON.stringify(f)}`);
+    expect(!(await stillLocked()) && (await labelState('Outline')).lock === null, 'A click without a drag locked the pointer');
+    await app.send('Input.insertText', { text: '12' });
+    await sleep(80);
+    // Applied before the box loses focus: a shape drawn now (the press blurs it) already has the width.
+    await drawBox(0.2, 0.2, 0.5, 0.6);
+    expect((await shapesNow())[0]?.width === 12, `A shape drawn after typing 12 has width ${(await shapesNow())[0]?.width}`);
+    const box = () => app.evaluate(`document.querySelector('.opt.drag input.num[aria-label="Outline value"]').value`);
+    expect((await box()) === '12', `The box shows ${await box()} after drawing`);
+    // Arrows, with the box focused again.
+    await dropPick();
+    await app.evaluate(`document.querySelector('.opt.drag input.num[aria-label="Outline value"]').focus()`);
+    await bKey('ArrowUp', UP);
+    expect((await box()) === '13', `Up gave ${await box()}`);
+    await bKey('ArrowUp', UP, 8);
+    expect((await box()) === '23', `Shift+Up gave ${await box()}`);
+    await bKey('ArrowDown', DOWN);
+    expect((await box()) === '22', `Down gave ${await box()}`);
+    await bKey('ArrowDown', DOWN, 8);
+    expect((await box()) === '12', `Shift+Down gave ${await box()}`);
+    await app.evaluate(`document.querySelector('.opt.drag input.num[aria-label="Outline value"]').select()`);
+    await app.send('Input.insertText', { text: '99' });
+    await sleep(60);
+    await app.press('Enter');
+    f = await app.evaluate(`document.activeElement.tagName`);
+    expect(f !== 'INPUT', `Enter left the cursor in ${f}`);
+    expect((await box()) === '50', `99 typed gave ${await box()}, not the largest, 50`);
+    await app.evaluate(`document.querySelector('.opt.drag input.num[aria-label="Outline value"]').focus()`);
+    await app.press('Escape');
+    expect((await app.evaluate(`document.activeElement.tagName`)) !== 'INPUT', 'Escape left the cursor in the box');
+  });
+
+  await barCheck('Dragging a label with a shape picked restyles it as one undo step', async () => {
+    await toolKey('u', 'Rectangle');
+    await drawBox(0.2, 0.2, 0.5, 0.6);
+    const before = await barState();
+    expect(before.picked === 1 && (await shapesNow())[0].width === 3, `The drawn rectangle: ${JSON.stringify(before)}`);
+    const start = await startLabelDrag('Outline');
+    let x = start.x;
+    for (let i = 0; i < 10; i++) await bMouse('mouseMoved', (x += 4), start.y, { buttons: 1 });
+    await bMouse('mouseReleased', x, start.y, { buttons: 0 });
+    await waitUntil('the lock to end', async () => !(await stillLocked()), 3000);
+    const after = await barState();
+    expect((await shapesNow())[0].width === 23, `The rectangle's outline is ${(await shapesNow())[0].width}, not 23`);
+    expect(after.position === before.position + 1, `The drag made ${after.position - before.position} history steps`);
+    await app.press('z', ctrl);
+    await sleep(150);
+    expect((await shapesNow())[0].width === 3 && (await barState()).position === before.position, 'One undo did not put the outline back');
+  });
+
+  await barCheck('No Colour: the fill and outline buttons offer it and show a see-through colour as clear; colours 1 and 2 do not; a hollow shape is picked by its edge only', async () => {
+    await toolKey('b', 'Brush');
+    await clickEl('[data-color="primary"]');
+    expect((await app.evaluate(`!!document.querySelector('.color-popover .no-colour[data-no-colour]')`)) === false, "The Brush's colour 1 popover offers No Colour");
+    await app.press('Escape');
+    await sleep(150);
+    await clickEl('[data-color="secondary"]');
+    expect((await app.evaluate(`!!document.querySelector('.color-popover .no-colour')`)) === false, "Colour 2's popover offers No Colour");
+    await app.press('Escape');
+    await sleep(150);
+    await toolKey('u', 'Rectangle');
+    expect((await app.evaluate(`!!document.querySelector('[data-color="fill"] .clear')`)) === true, 'The default (hollow) fill button is not shown as clear');
+    // A blue fill, then No Colour on it.
+    await pickSwatch('fill', '#00a2e8');
+    expect((await app.evaluate(`!!document.querySelector('[data-color="fill"] .clear')`)) === false, 'A blue fill is shown as clear');
+    await clickEl('[data-color="fill"]');
+    expect((await app.evaluate(`!!document.querySelector('.color-popover .no-colour[data-no-colour]')`)) === true, "The fill's popover has no No Colour button");
+    await clickEl('.color-popover .no-colour');
+    const st = await barState();
+    expect(hexClear(st.fill) && st.fill.toLowerCase().startsWith('#00a2e8'), `Fill after No Colour: ${st.fill}`);
+    await app.press('Escape');
+    await sleep(150);
+    expect((await app.evaluate(`!!document.querySelector('[data-color="fill"] .clear')`)) === true, 'The fill button does not show clear after No Colour');
+    // A shape drawn now is hollow: its middle isn't hit, its edge is.
+    await drawBox(0.2, 0.2, 0.5, 0.6);
+    const hollow = (await shapesNow())[0];
+    expect(hexClear(hollow.fill), `The new shape's fill is ${hollow.fill}`);
+    await dropPick();
+    const middle = await inPicture(0.35, 0.4);
+    await bDrag(middle.x, middle.y, middle.x, middle.y);
+    expect((await barState()).picked === 0, 'Clicking the middle of a hollow shape picked it');
+    const edge = await inPicture(0.2, 0.4);
+    await bDrag(edge.x, edge.y, edge.x, edge.y);
+    expect((await barState()).picked === 1, 'Clicking the edge of a hollow shape did not pick it');
+    // A filled one is picked from its middle.
+    await pickSwatch('fill', '#22b14c');
+    await drawBox(0.6, 0.2, 0.9, 0.6);
+    await dropPick();
+    const middle2 = await inPicture(0.75, 0.4);
+    await bDrag(middle2.x, middle2.y, middle2.x, middle2.y);
+    expect((await barState()).picked === 1, 'Clicking the middle of a filled shape did not pick it');
+    expect((await shapesNow()).length === 2, `There are ${(await shapesNow()).length} shapes, not 2: a click drew one`);
+  });
+
+  await barCheck('No Colour on the outline of a filled shape draws no outline, and the brush still paints after it', async () => {
+    await toolKey('u', 'Rectangle');
+    await pickSwatch('fill', '#00a2e8');
+    await noColour('outline');
+    expect((await app.evaluate(`!!document.querySelector('[data-color="outline"] .clear')`)) === true, 'The outline button does not show clear');
+    const bg = await pixelAt(5, 5);
+    await drawBox(0.2, 0.2, 0.5, 0.6);
+    const o = (await shapesNow())[0];
+    expect(hexClear(o.stroke) && o.width === 3 && o.fill.toLowerCase() === '#00a2e8', `The shape: stroke ${o.stroke}, width ${o.width}, fill ${o.fill}`);
+    // The outline would be 3 px wide, centred on the edge: black at the first pixel inside and the last outside.
+    const inside = await pixelAt(o.x + 1, o.y + o.h / 2);
+    const outside = await pixelAt(o.x - 2, o.y + o.h / 2);
+    expect(near3(inside, [0, 162, 232, 255]), `Just inside the left edge the pixel is ${inside}, not the blue fill`);
+    expect(near3(outside, bg), `Just outside the left edge the pixel is ${outside}, not the background ${bg}`);
+    // The brush paints in colour 1 (black) as ever: a transparent outline doesn't touch it.
+    await toolKey('b', 'Brush');
+    const st = await barState();
+    expect(st.primary === '#000000', `Colour 1 is ${st.primary} after No Colour on the outline`);
+    const a = await inPicture(0.1, 0.85);
+    const b = await inPicture(0.4, 0.85);
+    await bDrag(a.x, a.y, b.x, b.y);
+    const mid = await app.evaluate(`[Math.round(window.sketch.app.doc.width * 0.25), Math.round(window.sketch.app.doc.height * 0.85)]`);
+    const ink = await pixelAt(mid[0], mid[1]);
+    expect(near3(ink, [0, 0, 0, 255], 10), `The brush stroke's pixel is ${ink}`);
+  });
+
+  await barCheck("Shapes and lines have their own colours: colours 1 and 2 don't touch them, the fill restyles a picked shape, right-drag swaps, and X swaps the pair in view", async () => {
+    // Colour 1 red and colour 2 green on the Brush.
+    await toolKey('b', 'Brush');
+    await pickSwatch('primary', '#ed1c24');
+    await pickSwatch('secondary', '#22b14c');
+    let st = await barState();
+    expect(st.primary.toLowerCase() === '#ed1c24' && st.secondary.toLowerCase() === '#22b14c', `Colours 1 and 2: ${st.primary}, ${st.secondary}`);
+    await toolKey('u', 'Rectangle');
+    st = await barState();
+    expect(st.outline === '#000000' && hexClear(st.fill), `The shapes' colours at the start: ${st.outline}, ${st.fill}`);
+    await drawBox(0.2, 0.2, 0.5, 0.6);
+    let shape = (await shapesNow())[0];
+    expect(shape.stroke === '#000000' && hexClear(shape.fill), `A new shape: stroke ${shape.stroke}, fill ${shape.fill} (colours 1 and 2 are red and green)`);
+    // Changing the fill changes the picked shape (one recolour step), and the outline too.
+    const before = await barState();
+    await pickSwatch('fill', '#3f48cc');
+    shape = (await shapesNow())[0];
+    st = await barState();
+    expect(shape.fill.toLowerCase() === '#3f48cc' && st.position === before.position + 1, `After a blue fill: shape fill ${shape.fill}, ${st.position - before.position} steps`);
+    await pickSwatch('outline', '#ff7f27');
+    shape = (await shapesNow())[0];
+    expect(shape.stroke.toLowerCase() === '#ff7f27' && shape.fill.toLowerCase() === '#3f48cc', `After an orange outline: stroke ${shape.stroke}, fill ${shape.fill}`);
+    st = await barState();
+    expect(st.primary.toLowerCase() === '#ed1c24' && st.secondary.toLowerCase() === '#22b14c', `Colours 1 and 2 changed to ${st.primary}, ${st.secondary}`);
+    // Right-drag draws with the two swapped, and loads nothing into the bar.
+    await dropPick();
+    await drawBox(0.6, 0.2, 0.9, 0.6, { button: 'right' });
+    const swapped = (await shapesNow())[1];
+    st = await barState();
+    expect(swapped.stroke.toLowerCase() === '#3f48cc' && swapped.fill.toLowerCase() === '#ff7f27', `A right-drag shape: stroke ${swapped.stroke}, fill ${swapped.fill}`);
+    expect(st.fill.toLowerCase() === '#3f48cc' && st.outline.toLowerCase() === '#ff7f27', `The bar changed to fill ${st.fill}, outline ${st.outline} after a right-drag`);
+    // Right-drag on a line: the fill colour when it has one, the outline when it is clear.
+    await toolKey('a', 'Arrow');
+    await drawBox(0.1, 0.8, 0.4, 0.9, { button: 'right' });
+    let line = (await shapesNow()).find((s) => s.type === 'line');
+    expect(line.color.toLowerCase() === '#3f48cc', `A right-drag arrow with a blue fill is ${line.color}`);
+    await toolKey('u', 'Rectangle');
+    await noColour('fill');
+    await toolKey('a', 'Arrow');
+    await drawBox(0.5, 0.8, 0.8, 0.9, { button: 'right' });
+    line = (await shapesNow()).filter((s) => s.type === 'line')[1];
+    expect(line.color.toLowerCase() === '#ff7f27', `A right-drag arrow with a clear fill is ${line.color}, not the outline's #ff7f27`);
+    // X on a shape tool swaps fill and outline; on the Brush it swaps colours 1 and 2.
+    await toolKey('u', 'Rectangle');
+    await dropPick();
+    await pickSwatch('fill', '#a349a4');
+    await app.press('x');
+    await sleep(120);
+    st = await barState();
+    expect(st.fill.toLowerCase() === '#ff7f27' && st.outline.toLowerCase() === '#a349a4' && st.primary.toLowerCase() === '#ed1c24' && st.secondary.toLowerCase() === '#22b14c', `After X on the Rectangle: ${JSON.stringify(st)}`);
+    await toolKey('b', 'Brush');
+    await app.press('x');
+    await sleep(120);
+    st = await barState();
+    expect(st.primary.toLowerCase() === '#22b14c' && st.secondary.toLowerCase() === '#ed1c24' && st.fill.toLowerCase() === '#ff7f27' && st.outline.toLowerCase() === '#a349a4', `After X on the Brush: ${JSON.stringify(st)}`);
+  });
+
+  await barCheck('The line style menu opens, ticks the current choice, picks with the arrows and Enter, and the next shape uses it; Arrow has start and end menus', async () => {
+    await toolKey('u', 'Rectangle');
+    const menu = () =>
+      app.evaluate(`(() => {
+        const m = document.querySelector('.popover.choice-menu[role="menu"]');
+        if (!m) return null;
+        const items = [...m.querySelectorAll('button.item[role="menuitemradio"]')];
+        return { values: items.map((i) => i.dataset.value), checked: items.filter((i) => i.getAttribute('aria-checked') === 'true').map((i) => i.dataset.value), ticks: m.querySelectorAll('.tick').length, focused: items.findIndex((i) => i === document.activeElement) };
+      })()`);
+    const square = (key) => `.opt.preview[data-preview="${key}"] .sw`;
+    await clickEl(square('dash'));
+    let m = await menu();
+    expect(m && m.values.join() === 'solid,dashed,dotted' && m.checked.join() === 'solid' && m.ticks === 1 && m.focused === 0, `The line menu: ${JSON.stringify(m)}`);
+    await app.press('Escape');
+    await sleep(120);
+    expect((await menu()) === null, 'Escape did not close the menu');
+    expect((await shapesNow()).length === 0 && (await app.evaluate(`document.activeElement === document.querySelector('${square('dash')}')`)), 'Escape changed something or lost the focus');
+    await clickEl(square('dash'));
+    await bKey('ArrowDown', DOWN);
+    expect((await menu()).focused === 1, 'Down did not move to Dashed');
+    await app.press('Enter');
+    await sleep(150);
+    expect((await menu()) === null, 'Enter did not close the menu');
+    await clickEl(square('dash'));
+    m = await menu();
+    expect(m.checked.join() === 'dashed', `After picking Dashed the menu ticks ${m.checked}`);
+    await app.press('Escape');
+    await sleep(120);
+    await drawBox(0.2, 0.2, 0.5, 0.6);
+    expect((await shapesNow())[0].dash === 'dashed', `The next rectangle is ${(await shapesNow())[0].dash}`);
+    // A click on an item picks it too, and restyles the picked rectangle.
+    await clickEl(square('dash'));
+    await clickEl('.popover.choice-menu button.item[data-value="dotted"]');
+    await sleep(120);
+    expect((await shapesNow())[0].dash === 'dotted', `A picked rectangle is restyled to ${(await shapesNow())[0].dash}, not dotted`);
+    // The arrow's heads.
+    await toolKey('a', 'Arrow');
+    await clickEl(square('end'));
+    m = await menu();
+    expect(m.values.join() === 'none,open,filled,dot' && m.checked.join() === 'filled', `The end menu: ${JSON.stringify(m)}`);
+    await bKey('ArrowDown', DOWN);
+    await app.press('Enter');
+    await sleep(150);
+    await clickEl(square('start'));
+    m = await menu();
+    expect(m.checked.join() === 'none', `The start menu ticks ${m.checked}`);
+    await bKey('ArrowDown', DOWN);
+    await bKey('ArrowDown', DOWN);
+    await app.press('Enter');
+    await sleep(150);
+    await drawBox(0.1, 0.8, 0.4, 0.9);
+    const arrow = (await shapesNow()).find((s) => s.type === 'line');
+    expect(arrow.start === 'filled' && arrow.end === 'dot', `The next arrow: start ${arrow.start}, end ${arrow.end}`);
+  });
+
+  await check('An old .sktch (version 3, shapes with filled false and true) opens unchanged, and saving keeps the filled flag right', async () => {
+    const old = { id: 1, type: 'shape', kind: 'rectangle', x: 20, y: 20, w: 60, h: 60, angle: 0, stroke: '#0000ff', width: 6, fill: '#ff0000', dash: 'solid', opacity: 1, radius: 0, sides: 5, points: 5 };
+    const oldFile = join(work, 'old-shapes.sktch');
+    writeFileSync(
+      oldFile,
+      zipSync({
+        'document.json': strToU8(
+          JSON.stringify({
+            format: 'sketch',
+            version: 3,
+            width: 200,
+            height: 120,
+            fill: '#ffffff',
+            active: 0,
+            layers: [{ name: 'Shapes', kind: 'objects', visible: true, opacity: 1, objects: [{ ...old, filled: false }, { ...old, id: 2, x: 110, filled: true }] }],
+          }),
+        ),
+      }),
+    );
+    barLaunches++;
+    app = await launch(exe, work, [oldFile], `bar-${barLaunches}`, dataFor(`bar-${barLaunches}`).env);
+    try {
+      const s = await app.waitFor('the old file', (s) => s.title === 'old-shapes.sktch - Sketch' && s.size === '200 × 120 px');
+      const pixel = async (x, y) => (await pixelAt(x, y)).join();
+      // The hollow shape's middle is what the picture shows anywhere there is no shape.
+      const bg = await pixel(5, 5);
+      expect(bg !== '255,0,0,255' && (await pixel(50, 50)) === bg, `The hollow shape's middle is ${await pixel(50, 50)}, the background ${bg}`);
+      expect((await pixel(140, 50)) === '255,0,0,255', `The filled shape's middle is ${await pixel(140, 50)}, not red`);
+      expect((await pixel(20, 50)) === '0,0,255,255' && (await pixel(110, 50)) === '0,0,255,255', `The outlines are ${await pixel(20, 50)} and ${await pixel(110, 50)}, not blue`);
+      const objects = await shapesNow();
+      expect(objects.length === 2 && hexClear(objects[0].fill) && objects[1].fill === '#ff0000' && !('filled' in objects[0]), `Read as: ${JSON.stringify(objects.map((o) => o.fill))}`);
+      expect(!s.title.includes('*'), `Opening marked the picture changed: ${s.title}`);
+      // Save As keeps it a .sktch with the filled flags set by the fill's opacity.
+      const out = join(work, 'old-shapes-resaved.sktch');
+      await app.press('s', ctrl | shift);
+      await app.waitFor('the Save As box', (s) => s.dialog === 'Save As');
+      await sleep(400);
+      await app.press('Enter');
+      fillFileDialog(app.pid, out);
+      await app.waitFor('the save', (s) => s.title === 'old-shapes-resaved.sktch - Sketch');
+      const meta = JSON.parse(strFromU8(unzipSync(readFileSync(out))['document.json']));
+      expect(meta.version === 6 && meta.layers[0].objects.map((o) => o.filled).join() === 'false,true', `Saved: version ${meta.version}, filled ${meta.layers[0].objects.map((o) => o.filled)}`);
+      expect(meta.layers[0].objects[0].fill === '#ff000000' && meta.layers[0].objects[1].fill === '#ff0000', `Saved fills: ${meta.layers[0].objects.map((o) => o.fill)}`);
+    } finally {
+      await app.quit().catch(() => {});
+    }
+  });
+
+  await barCheck("Every tool's bar stays on one line at the window's width, and two picked shapes show every arrange button", async () => {
+    const ids = ['pencil', 'brush', 'eraser', 'highlight', 'blur', 'pixelate', 'rectangle', 'ellipse', 'polygon', 'star', 'line', 'arrow', 'callout', 'spotlight', 'select-rect', 'select-free', 'crop', 'fill', 'magic-wand', 'picker', 'marker', 'text'];
+    const inside = () =>
+      app.evaluate(`(() => {
+        const bar = document.querySelector('.options');
+        const b = bar.getBoundingClientRect();
+        const kids = [...bar.children].map((k) => ({ name: (k.className || k.tagName) + '', r: k.getBoundingClientRect() }));
+        const outside = kids.filter((k) => k.r.width > 0 && (k.r.left < b.left - 0.5 || k.r.right > b.right + 0.5 || k.r.top < b.top - 0.5 || k.r.bottom > b.bottom + 0.5)).map((k) => k.name);
+        const mids = kids.filter((k) => k.r.height > 0).map((k) => k.r.top + k.r.height / 2);
+        return { label: bar.getAttribute('aria-label'), width: window.innerWidth, scroll: bar.scrollWidth, client: bar.clientWidth, outside, rowSpread: Math.max(...mids) - Math.min(...mids) };
+      })()`);
+    const single = ['pencil', 'brush', 'eraser', 'fill', 'picker', 'text', 'crop']; // tools alone in their rail slot are commands of the slot
+    const seen = new Set();
+    for (const id of ids) {
+      await app.evaluate(`window.sketch.run('${single.includes(id) ? 'slot' : 'tool'}.${id}')`);
+      await sleep(80);
+      const r = await inside();
+      seen.add(r.label);
+      expect(r.width >= 1200 && r.scroll <= r.client && r.outside.length === 0 && r.rowSpread < 26, `${r.label} at ${r.width} px wide: scrollWidth ${r.scroll}, clientWidth ${r.client}, outside the bar: ${r.outside.join(', ')}, rows spread ${r.rowSpread}`);
+    }
+    expect(seen.size === ids.length, `Only ${seen.size} different bars showed: ${[...seen].join(', ')}`);
+    // Two shapes picked on the Rectangle's bar.
+    await app.evaluate(`window.sketch.run('tool.rectangle')`);
+    await drawBox(0.1, 0.1, 0.3, 0.4);
+    await drawBox(0.5, 0.1, 0.7, 0.4);
+    const edge = await inPicture(0.1, 0.25);
+    await bMouse('mouseMoved', edge.x, edge.y);
+    await bMouse('mousePressed', edge.x, edge.y, { buttons: 1, mods: 8 });
+    await bMouse('mouseReleased', edge.x, edge.y, { buttons: 0, mods: 8 });
+    await sleep(200);
+    expect((await barState()).picked === 2, `${(await barState()).picked} shapes picked, not 2`);
+    const r = await inside();
+    const buttons = await app.evaluate(`document.querySelectorAll('.options .arrange button').length`);
+    expect(buttons === 6 && r.scroll <= r.client && r.outside.length === 0, `Two shapes: ${buttons} arrange buttons, scrollWidth ${r.scroll}, clientWidth ${r.client}, outside: ${r.outside.join(', ')}`);
+  });
+
+  // ---------- Autosave, recovery and more than one window ----------
 
   const crash = dataFor('crash');
   await check('Autosave keeps an unsaved picture, and it comes back after a crash', async () => {
@@ -1881,7 +2383,8 @@ try {
         for (let i = 8; i < raw.length; i += 4) if (raw[i] !== 255 || raw[i + 1] !== 0 || raw[i + 2] !== 255) n++;
         return n / ((raw.length - 8) / 4);
       })()`);
-      expect(shown > 0.9, `Only ${(shown * 100).toFixed(0)}% of the capture is Sketch rather than the magenta window behind it`);
+      // Sketch is showing the last capture, a magenta picture, so part of its window is magenta too (a quarter or more, by window size); with Sketch hidden none of the area would be anything else.
+      expect(shown > 0.5, `Only ${(shown * 100).toFixed(0)}% of the capture is Sketch rather than the magenta window behind it`);
       await setHide(true);
     });
 
@@ -1921,6 +2424,15 @@ try {
       await app.press('a');
       await app.waitFor('the Arrow tool', (s) => s.tool === 'Arrow');
       await app.drag(...(await onPicture(-60, -40)), ...(await onPicture(60, 20)));
+      // Lines and shapes drawn on a capture start in the capture's red too (the outline colour, not colour 1), and a rectangle is hollow.
+      const drawn = () => app.evaluate(`window.sketch.app.doc.layers.flatMap((l) => l.objects.map((o) => JSON.parse(JSON.stringify(o))))`);
+      expect((await drawn())[0].color === '#ed1c24', `The arrow drawn on the capture is ${(await drawn())[0].color}, not the capture red`);
+      await app.press('u');
+      await app.waitFor('the Rectangle tool', (s) => s.tool === 'Rectangle');
+      await app.drag(...(await onPicture(-150, -70)), ...(await onPicture(-100, -30)));
+      const box = (await drawn()).find((o) => o.type === 'shape');
+      expect(box?.stroke === '#ed1c24' && /^#[0-9a-f]{6}00$/i.test(box.fill), `The rectangle drawn on the capture: stroke ${box?.stroke}, fill ${box?.fill}`);
+      await app.press('z', ctrl);
       await app.press('t');
       await app.waitFor('the Text tool', (s) => s.tool === 'Text');
       const [tx, ty] = await onPicture(-40, 50);

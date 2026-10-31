@@ -16,6 +16,7 @@ import {
   paintedBounds,
   readShape,
   rectAround,
+  writeShape,
   type LineObject,
   type Pt,
   type Rect,
@@ -381,6 +382,11 @@ function changeText(o: TextObject, change: PictureChange, size?: { w: number; h:
       return { ...o, angle, x: ncx - ((w / 2) * nc - (h / 2) * ns), y: ncy - ((w / 2) * ns + (h / 2) * nc) };
     }
   }
+}
+
+/** An object as it is written to a file: shapes also carry the `filled` flag older Sketches read. */
+export function writeObject(o: SketchObject): object {
+  return o.type === 'shape' ? writeShape(o) : o;
 }
 
 /** Reads an object saved in a file, filling in anything missing. Unknown kinds are dropped. */

@@ -32,7 +32,7 @@ afterAll(() => vi.unstubAllGlobals());
 
 let nextId = 1000;
 function rect(x: number, y: number, w: number, h: number, stroke: string): ShapeObject {
-  return { id: nextId++, type: 'shape', kind: 'rectangle', x, y, w, h, angle: 0, stroke, width: 2, fill: '#ffffff', filled: false, dash: 'solid', opacity: 1, radius: 0, sides: 5, points: 5 };
+  return { id: nextId++, type: 'shape', kind: 'rectangle', x, y, w, h, angle: 0, stroke, width: 2, fill: '#ffffff00', dash: 'solid', opacity: 1, radius: 0, sides: 5, points: 5 };
 }
 
 function paint(layer: Layer, x: number, y: number, w: number, h: number, color: string): void {
@@ -156,6 +156,43 @@ describe('saving .sktch version 6', () => {
     expect(back.layers[0].objects).toEqual([shape]);
     expect(look(back)).toEqual(look(doc));
     expect(pixel(back.layers[0].canvas, 6, 6)).toEqual([255, 255, 255, 255]);
+  });
+
+  it('writes each shape’s filled flag by its fill’s opacity, so older Sketches read it, and reads it back unchanged', async () => {
+    const doc = new PaintDocument(8, 8, '#ffffff');
+    const hollow = rect(0, 0, 3, 3, '#0000ff');
+    const solid = { ...rect(2, 2, 3, 3, '#0000ff'), fill: '#ff0000' };
+    const tint = { ...rect(4, 4, 3, 3, '#0000ff'), fill: '#ff000080' };
+    doc.layers[0].objects = [hollow, solid, tint];
+    const { files } = await sketchFiles(doc, fakePng);
+    const meta = JSON.parse(new TextDecoder().decode(files['document.json'] as Uint8Array));
+    expect(meta.version).toBe(6);
+    expect(meta.layers[0].objects.map((o: { filled: boolean }) => o.filled)).toEqual([false, true, true]);
+    expect(meta.layers[0].objects[0].fill).toBe('#ffffff00');
+    const back = await readDocument(zipSync(files));
+    expect(back.layers[0].objects).toEqual([hollow, solid, tint]);
+  });
+
+  it('opens an unfilled shape from before fills had an opacity as a see-through fill, and keeps a filled one', async () => {
+    const old = { id: 1, type: 'shape', kind: 'rectangle', x: 1, y: 1, w: 4, h: 4, angle: 0, stroke: '#000000', width: 2, fill: '#ff0000', dash: 'solid', opacity: 1, radius: 0, sides: 5, points: 5 };
+    const bytes = await oldFile(
+      {
+        format: 'sketch',
+        version: 3,
+        width: 8,
+        height: 8,
+        fill: null,
+        active: 0,
+        layers: [{ name: 'Shapes', kind: 'objects', visible: true, opacity: 1, objects: [{ ...old, filled: false }, { ...old, id: 2, filled: true }] }],
+      },
+      {},
+    );
+    const doc = await readDocument(bytes);
+    expect(doc.layers[0].objects).toMatchObject([{ id: 1, fill: '#ff000000' }, { id: 2, fill: '#ff0000' }]);
+    // Saving it again writes the flag the same way.
+    const { files } = await sketchFiles(doc, fakePng);
+    const meta = JSON.parse(new TextDecoder().decode(files['document.json'] as Uint8Array));
+    expect(meta.layers[0].objects.map((o: { filled: boolean }) => o.filled)).toEqual([false, true]);
   });
 
   it('saves a picture with no objects as version 1, so older Sketches still open it', async () => {

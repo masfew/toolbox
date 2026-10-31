@@ -1,5 +1,7 @@
-import { app, changed, colorSignal, toast } from '../app/store';
-import { loadOptions, onOptionChange, onToolChange, settingsOf } from '../app/tools';
+import { isClear } from '../app/color';
+import { saveShapeColors } from '../app/shapeColors';
+import { app, changed, colorSignal, shapeColorSignal, toast } from '../app/store';
+import { currentTool, loadOptions, onOptionChange, onToolChange, settingsOf } from '../app/tools';
 import { frameOf, inkBounds, isOpen } from '../engine/board';
 import { ObjectsCommand } from '../engine/commands';
 import type { Command } from '../engine/history';
@@ -80,6 +82,11 @@ export function optionsToolId(current: string): string {
   return first ? toolForObject(first) : current;
 }
 
+/** True while the options bar shows the shape fill and outline buttons: a shape tool is current, or a shape is picked. */
+export function shapeColorsShowing(): boolean {
+  return getTool(optionsToolId(currentTool().id)).options.some((o) => o.kind === 'shapeColors');
+}
+
 /** The highlighter's colours, by option value. */
 export const TINTS: Record<string, string> = { yellow: '#ffe94d', green: '#8ef07a', blue: '#7fd4ff', pink: '#ff9ecf', orange: '#ffb35c' };
 
@@ -101,16 +108,24 @@ function styleOf(o: Drawn): Record<string, OptionValue> {
     }
   }
   if (o.type === 'line') return { width: o.width, start: o.start, end: o.end, dash: o.dash, opacity };
-  return { width: o.width, fill: o.filled, dash: o.dash, opacity, radius: o.radius, sides: o.sides, points: o.points };
+  return { width: o.width, dash: o.dash, opacity, radius: o.radius, sides: o.sides, points: o.points };
 }
 
-/** Picks objects in a layer, and shows the first one's settings on the options bar. */
-export function pickObjects(layer: Layer, ids: number[]): void {
+/**
+ * Picks objects in a layer, and shows the first one's settings on the options bar, its fill and outline
+ * colours included unless `loadColors` is false (a shape just drawn already has the bar's colours, but a
+ * right-drag's are swapped, and those mustn't become the bar's).
+ */
+export function pickObjects(layer: Layer, ids: number[], loadColors = true): void {
   app.objectSel = ids.length ? { layer, ids } : null;
   const first = layer.objects.find((o): o is Drawn => isDrawn(o) && o.id === ids[0]);
   if (!first) return changed();
   const toolId = toolForObject(first);
   loadOptions(toolId, mergeSettings(getTool(toolId), styleOf(first)));
+  // A shape's or line's colours go into the bar's fill and outline as well, without restyling anything.
+  if (!loadColors) return;
+  if (first.type === 'shape') loadShapeColors({ fill: first.fill, outline: first.stroke });
+  else if (first.type === 'line') loadShapeColors({ outline: first.color });
 }
 
 export function clearPicked(): void {
@@ -199,12 +214,12 @@ function changePicked(label: string, fn: (o: Drawn) => Drawn | null, join?: stri
  * picture and can be changed (the copied shapes' own layer, a duplicate's), else the current layer.
  * Never a new layer: when the current layer is locked or hidden, a toast says so and nothing is added.
  */
-export function addObjects(objects: Drawn[], label: string, prefer?: Layer): void {
+export function addObjects(objects: Drawn[], label: string, prefer?: Layer, loadColors = true): void {
   const step = addObjectsStep(objects, label, prefer);
   if (!step) return changed();
   joinable = null;
   app.history.record(step.cmd);
-  pickObjects(step.layer, objects.map((o) => o.id));
+  pickObjects(step.layer, objects.map((o) => o.id), loadColors);
 }
 
 /**
@@ -263,10 +278,9 @@ function newShape(toolId: string, id: number, b: Box, swap: boolean): ShapeObjec
     type: 'shape',
     kind: toolId as ShapeKind,
     ...b,
-    stroke: swap ? app.secondary : app.primary,
-    fill: swap ? app.primary : app.secondary,
+    stroke: swap ? app.fillColor : app.outlineColor,
+    fill: swap ? app.outlineColor : app.fillColor,
     width: st.width as number,
-    filled: st.fill as boolean,
     dash: st.dash as Dash,
     opacity: (st.opacity as number) / 100,
     radius: settingsOf('rectangle').radius as number,
@@ -285,7 +299,8 @@ function newLine(toolId: string, id: number, a: Point, b: Point, swap: boolean):
     x2: b.x,
     y2: b.y,
     bend: 0,
-    color: swap ? app.secondary : app.primary,
+    // Right-drag draws in the fill colour, unless that is see-through (the default), which would draw nothing.
+    color: swap && !isClear(app.fillColor) ? app.fillColor : app.outlineColor,
     width: st.width as number,
     dash: st.dash as Dash,
     opacity: (st.opacity as number) / 100,
@@ -299,7 +314,7 @@ export const dragged = (p: Point, q: Point) => Math.hypot(q.x - p.x, q.y - p.y) 
 
 /**
  * Shapes tool: drag out a shape (Shift keeps it square or round, Alt draws from the centre).
- * Alt+click without dragging picks a colour, as with the other tools that paint.
+ * Alt+click without dragging picks the outline colour, as the other tools that paint pick colour 1.
  */
 export function shapeDrag(toolId: string, p: Point, e: PointerEvent, remember: (c: string) => void): ToolDrag {
   const targets = snapTargets(new Set());
@@ -340,7 +355,7 @@ export function shapeDrag(toolId: string, p: Point, e: PointerEvent, remember: (
         return changed();
       }
       if (draft.w < 1 || draft.h < 1) return changed();
-      addObjects([draft], `Add ${nameOf(draft)}`);
+      addObjects([draft], `Add ${nameOf(draft)}`, undefined, false);
     },
   };
 }
@@ -348,8 +363,7 @@ export function shapeDrag(toolId: string, p: Point, e: PointerEvent, remember: (
 function pickColor(p: Point, remember: (c: string) => void): void {
   const c = colorAt(p.x, p.y, settingsOf('picker').sample as 'layer' | 'picture');
   if (!c) return;
-  app.primary = c;
-  colorSignal.emit();
+  setShapeColors({ outline: c });
   remember(c);
 }
 
@@ -373,7 +387,7 @@ export function lineDrag(toolId: string, p: Point, e: PointerEvent): ToolDrag {
       const draft = app.draft as LineObject | null;
       app.draft = null;
       if (!draft || Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) * app.viewport.zoom < 3) return changed();
-      addObjects([draft], `Add ${nameOf(draft)}`);
+      addObjects([draft], `Add ${nameOf(draft)}`, undefined, false);
     },
   };
 }
@@ -713,7 +727,6 @@ const RESTYLE: Record<string, Restyle> = {
   dim: (o, v) => (markOf(o, 'spotlight') ? { ...(o as MarkObject), dim: v as number } : null),
   shape: (o, v) => (markOf(o, 'spotlight') ? { ...(o as MarkObject), round: v === 'ellipse' } : null),
   next: (o, v) => (markOf(o, 'marker') ? { ...(o as MarkObject), number: v as number } : null),
-  fill: (o, v) => (o.type === 'shape' ? { ...o, filled: v as boolean, fill: v ? app.secondary : o.fill } : null),
   radius: (o, v) => (o.type === 'shape' && o.kind === 'rectangle' ? { ...o, radius: v as number } : null),
   sides: (o, v) => (o.type === 'shape' && o.kind === 'polygon' ? { ...o, sides: v as number } : null),
   points: (o, v) => (o.type === 'shape' && o.kind === 'star' ? { ...o, points: v as number } : null),
@@ -733,20 +746,47 @@ onOptionChange((toolId, key) => {
   pickObjects(picked.layer, app.objectSel?.ids ?? []);
 });
 
-// Colour 1 is the outline and line colour of the picked objects; colour 2 is a shape's fill.
-let lastColors = { primary: app.primary, secondary: app.secondary };
+// Colour 1 is the colour of picked numbered markers (the other mark-up keeps its own).
+let lastColors = { primary: app.primary };
 colorSignal.on(() => {
   const was = lastColors;
-  lastColors = { primary: app.primary, secondary: app.secondary };
-  if (!pickedObjects()) return;
-  const p1 = app.primary !== was.primary;
-  const p2 = app.secondary !== was.secondary;
+  lastColors = { primary: app.primary };
+  if (!pickedObjects() || app.primary === was.primary) return;
+  changePicked('Recolour', (o) => (o.type === 'mark' && o.kind === 'marker' ? { ...o, color: app.primary } : null), 'colour');
+});
+
+// The fill and outline colours restyle the picked shapes; the outline also recolours picked lines.
+let lastShapeColors = { fill: app.fillColor, outline: app.outlineColor };
+
+/**
+ * Sets the stored fill and/or outline colour and saves them. They restyle the picked shapes and lines
+ * (one history step per drag of the colour picker) unless `restyle` is false, which is for loading
+ * colours into the bar (picking a shape, a capture's red) rather than changing anything.
+ */
+export function setShapeColors(c: { fill?: string; outline?: string }, restyle = true): void {
+  app.fillColor = c.fill ?? app.fillColor;
+  app.outlineColor = c.outline ?? app.outlineColor;
+  saveShapeColors({ fill: app.fillColor, outline: app.outlineColor });
+  if (restyle) shapeColorSignal.emit();
+  else lastShapeColors = { fill: app.fillColor, outline: app.outlineColor };
+  changed();
+}
+
+/** Loads colours into the bar's fill and outline without restyling the picked objects. */
+export const loadShapeColors = (c: { fill?: string; outline?: string }) => setShapeColors(c, false);
+
+shapeColorSignal.on(() => {
+  const was = lastShapeColors;
+  lastShapeColors = { fill: app.fillColor, outline: app.outlineColor };
+  const fill = app.fillColor !== was.fill;
+  const outline = app.outlineColor !== was.outline;
+  if (!pickedObjects() || !(fill || outline)) return;
   changePicked(
     'Recolour',
     (o) => {
-      if (o.type === 'mark') return o.kind === 'marker' && p1 ? { ...o, color: app.primary } : null;
-      if (o.type === 'line') return p1 ? { ...o, color: app.primary } : null;
-      return { ...o, stroke: p1 ? app.primary : o.stroke, fill: p2 ? app.secondary : o.fill };
+      if (o.type === 'mark') return null;
+      if (o.type === 'line') return outline ? { ...o, color: app.outlineColor } : null;
+      return { ...o, stroke: outline ? app.outlineColor : o.stroke, fill: fill ? app.fillColor : o.fill };
     },
     'colour',
   );

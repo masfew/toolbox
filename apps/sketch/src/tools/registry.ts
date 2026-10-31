@@ -12,13 +12,21 @@ export interface OptionBase {
   planned?: string;
   /** Short help shown as the control's tooltip. */
   hint?: string;
+  /** A thin divider goes before this option, between groups of controls. */
+  group?: boolean;
 }
 
 export type OptionSpec =
-  /** The primary and secondary colour chips. The colours are shared by every tool. */
+  /** Colours 1 and 2 as colour buttons with the swap arrows between. The colours are shared by every tool. */
   | (OptionBase & { kind: 'colors' })
-  | (OptionBase & { kind: 'range'; min: number; max: number; default: number; unit?: string })
-  | (OptionBase & { kind: 'choice'; choices: { value: string; label: string }[]; default: string })
+  /** Fill and outline colour buttons with the swap arrows between, for shapes. Shared by every shape and line tool; separate from colours 1 and 2. */
+  | (OptionBase & { kind: 'shapeColors' })
+  /** The one outline colour button of lines and arrows (the same stored colour as a shape's outline). */
+  | (OptionBase & { kind: 'lineColor' })
+  /** A number: a slider with a box, or with `control: 'drag'` an `icon` and name you drag left or right, and a box. */
+  | (OptionBase & { kind: 'range'; min: number; max: number; default: number; unit?: string; control?: 'drag'; icon?: string })
+  /** A choice: buttons, a list, or with `display: 'preview'` a square showing the choice that opens a menu of them. */
+  | (OptionBase & { kind: 'choice'; choices: { value: string; label: string }[]; default: string; display?: 'preview' })
   | (OptionBase & { kind: 'toggle'; default: boolean })
   | (OptionBase & { kind: 'font'; default: string })
   /** A button that runs a command from the command list. */
@@ -48,19 +56,39 @@ export interface SlotSpec {
 }
 
 const colors: OptionSpec = { kind: 'colors', key: 'colors', label: 'Colours', hint: 'Left click paints with the first colour, right click with the second. X swaps them.' };
-const opacity = (planned?: string): OptionSpec => ({ kind: 'range', key: 'opacity', label: 'Opacity', min: 1, max: 100, default: 100, unit: '%', planned });
-const dash = (planned?: string): OptionSpec => ({
+const shapeColors: OptionSpec = {
+  kind: 'shapeColors',
+  key: 'shapeColors',
+  label: 'Fill',
+  hint: 'Fill and outline colours, each with No Colour in its picker. Right-drag draws with the two swapped. X swaps them.',
+};
+const lineColor: OptionSpec = { kind: 'lineColor', key: 'lineColor', label: 'Colour', hint: 'Right-drag draws in the fill colour, when it has one' };
+/** A number you change by dragging its icon and name (`ui/scrub.ts`). */
+const drag = (key: string, label: string, icon: string, min: number, max: number, def: number, unit?: string, extra?: Partial<OptionBase>): OptionSpec => ({
+  kind: 'range',
+  key,
+  label,
+  min,
+  max,
+  default: def,
+  unit,
+  control: 'drag',
+  icon,
+  ...extra,
+});
+const opacity = (group = true): OptionSpec => drag('opacity', 'Opacity', 'opacity', 1, 100, 100, '%', { group });
+const dash: OptionSpec = {
   kind: 'choice',
   key: 'dash',
   label: 'Line',
   default: 'solid',
-  planned,
+  display: 'preview',
   choices: [
     { value: 'solid', label: 'Solid' },
     { value: 'dashed', label: 'Dashed' },
     { value: 'dotted', label: 'Dotted' },
   ],
-});
+};
 const sample: OptionSpec = {
   kind: 'choice',
   key: 'sample',
@@ -84,6 +112,7 @@ const removeBackground: OptionSpec = {
   key: 'removeBackground',
   label: 'Remove Background',
   command: 'adjust.removeBackground',
+  group: true,
   hint: 'Cut out the person or object in front, onto a new layer',
 };
 const heads = [
@@ -93,6 +122,7 @@ const heads = [
   { value: 'dot', label: 'Dot' },
 ];
 
+/** A shape tool's bar: `Fill ⇆ Outline [line style] | the shape's own number | Opacity`. */
 function shape(id: string, name: string, icon: string, extra: OptionSpec[]): ToolSpec {
   return {
     id,
@@ -101,12 +131,11 @@ function shape(id: string, name: string, icon: string, extra: OptionSpec[]): Too
     slot: 'shapes',
     sizeKey: 'width',
     options: [
-      colors,
-      { kind: 'range', key: 'width', label: 'Outline', min: 0, max: 50, default: 3, unit: 'px' },
-      { kind: 'toggle', key: 'fill', label: 'Fill', default: false, hint: 'Fill with the second colour' },
-      dash(),
+      shapeColors,
+      drag('width', 'Outline', 'outline', 0, 50, 3, 'px'),
+      dash,
+      ...extra.map((o, i): OptionSpec => (i === 0 ? { ...o, group: true } : o)),
       opacity(),
-      ...extra,
     ],
   };
 }
@@ -119,11 +148,11 @@ function line(id: string, name: string, icon: string, startHead: string, endHead
     slot: 'lines',
     sizeKey: 'width',
     options: [
-      colors,
-      { kind: 'range', key: 'width', label: 'Width', min: 1, max: 50, default: 4, unit: 'px' },
-      { kind: 'choice', key: 'start', label: 'Start', default: startHead, choices: heads },
-      { kind: 'choice', key: 'end', label: 'End', default: endHead, choices: heads },
-      dash(),
+      lineColor,
+      drag('width', 'Width', 'outline', 1, 50, 4, 'px'),
+      dash,
+      { kind: 'choice', key: 'start', label: 'Start', default: startHead, choices: heads, display: 'preview', group: true },
+      { kind: 'choice', key: 'end', label: 'End', default: endHead, choices: heads, display: 'preview' },
       opacity(),
     ],
   };
@@ -137,7 +166,7 @@ export const TOOLS: ToolSpec[] = [
     name: 'Magic Wand',
     icon: 'magic-wand',
     slot: 'select',
-    options: [{ kind: 'range', key: 'tolerance', label: 'Tolerance', min: 0, max: 100, default: 32, unit: '%' }, transparentSel, removeBackground],
+    options: [drag('tolerance', 'Tolerance', 'tolerance', 0, 100, 32, '%'), { ...transparentSel, group: true }, removeBackground],
   },
   {
     id: 'crop',
@@ -158,7 +187,7 @@ export const TOOLS: ToolSpec[] = [
           { value: '16:9', label: '16:9' },
         ],
       },
-      { kind: 'action', key: 'apply', label: 'Crop', command: 'image.applyCrop', hint: 'Keep what is in the box (Enter)' },
+      { kind: 'action', key: 'apply', label: 'Crop', command: 'image.applyCrop', hint: 'Keep what is in the box (Enter)', group: true },
     ],
   },
   {
@@ -183,6 +212,7 @@ export const TOOLS: ToolSpec[] = [
         kind: 'choice',
         key: 'type',
         label: 'Type',
+        group: true,
         default: 'round',
         choices: [
           { value: 'round', label: 'Round' },
@@ -216,6 +246,7 @@ export const TOOLS: ToolSpec[] = [
         kind: 'choice',
         key: 'mode',
         label: 'Erase to',
+        group: true,
         default: 'transparent',
         choices: [
           { value: 'transparent', label: 'Transparent' },
@@ -231,12 +262,12 @@ export const TOOLS: ToolSpec[] = [
     slot: 'fill',
     options: [
       colors,
-      { kind: 'range', key: 'tolerance', label: 'Tolerance', min: 0, max: 100, default: 16, unit: '%' },
-      { kind: 'toggle', key: 'global', label: 'All matching', default: false, hint: 'Fill every pixel of the clicked colour, not just the connected area' },
+      drag('tolerance', 'Tolerance', 'tolerance', 0, 100, 16, '%'),
+      { kind: 'toggle', key: 'global', label: 'All matching', default: false, group: true, hint: 'Fill every pixel of the clicked colour, not just the connected area' },
       sample,
     ],
   },
-  { id: 'picker', name: 'Colour Picker', icon: 'picker', slot: 'picker', options: [colors, sample] },
+  { id: 'picker', name: 'Colour Picker', icon: 'picker', slot: 'picker', options: [colors, { ...sample, group: true }] },
   {
     id: 'text',
     name: 'Text',
@@ -245,9 +276,9 @@ export const TOOLS: ToolSpec[] = [
     sizeKey: 'size',
     options: [
       colors,
-      { kind: 'font', key: 'font', label: 'Font', default: 'Segoe UI' },
-      { kind: 'range', key: 'size', label: 'Size', min: 6, max: 200, default: 24, unit: 'px' },
-      { kind: 'toggle', key: 'bold', label: 'Bold', default: false },
+      { kind: 'font', key: 'font', label: 'Font', default: 'Segoe UI', group: true },
+      drag('size', 'Size', 'text-size', 6, 200, 24, 'px'),
+      { kind: 'toggle', key: 'bold', label: 'Bold', default: false, group: true },
       { kind: 'toggle', key: 'italic', label: 'Italic', default: false },
       {
         kind: 'choice',
@@ -260,14 +291,14 @@ export const TOOLS: ToolSpec[] = [
           { value: 'right', label: 'Right' },
         ],
       },
-      { kind: 'toggle', key: 'outline', label: 'Outline', default: false },
+      { kind: 'toggle', key: 'outline', label: 'Outline', default: false, group: true },
       { kind: 'toggle', key: 'box', label: 'Background', default: false, hint: 'A box behind the text, for labels on busy screenshots' },
     ],
   },
-  shape('rectangle', 'Rectangle', 'rectangle', [{ kind: 'range', key: 'radius', label: 'Corners', min: 0, max: 200, default: 0, unit: 'px' }]),
+  shape('rectangle', 'Rectangle', 'rectangle', [drag('radius', 'Corners', 'corners', 0, 200, 0, 'px')]),
   shape('ellipse', 'Ellipse', 'ellipse', []),
-  shape('polygon', 'Polygon', 'polygon', [{ kind: 'range', key: 'sides', label: 'Sides', min: 3, max: 12, default: 5 }]),
-  shape('star', 'Star', 'star', [{ kind: 'range', key: 'points', label: 'Points', min: 4, max: 12, default: 5 }]),
+  shape('polygon', 'Polygon', 'polygon', [drag('sides', 'Sides', 'sides', 3, 12, 5)]),
+  shape('star', 'Star', 'star', [drag('points', 'Points', 'points', 4, 12, 5)]),
   line('arrow', 'Arrow', 'arrow', 'none', 'filled'),
   line('line', 'Line', 'line', 'none', 'none'),
   {
@@ -300,14 +331,14 @@ export const TOOLS: ToolSpec[] = [
     name: 'Blur',
     icon: 'blur',
     slot: 'annotate',
-    options: [{ kind: 'range', key: 'strength', label: 'Strength', min: 10, max: 100, default: 70, unit: '%', hint: 'Even the lowest strength hides small text for good' }],
+    options: [drag('strength', 'Strength', 'strength', 10, 100, 70, '%', { hint: 'Even the lowest strength hides small text for good' })],
   },
   {
     id: 'pixelate',
     name: 'Pixelate',
     icon: 'pixelate',
     slot: 'annotate',
-    options: [{ kind: 'range', key: 'block', label: 'Block size', min: 6, max: 64, default: 14, unit: 'px' }],
+    options: [drag('block', 'Block size', 'block', 6, 64, 14, 'px')],
   },
   {
     id: 'marker',
@@ -317,8 +348,8 @@ export const TOOLS: ToolSpec[] = [
     sizeKey: 'size',
     options: [
       colors,
-      { kind: 'range', key: 'size', label: 'Size', min: 16, max: 96, default: 28, unit: 'px' },
-      { kind: 'range', key: 'next', label: 'Number', min: 1, max: 99, default: 1, hint: 'The next marker gets this number. Markers count up by themselves.' },
+      drag('size', 'Size', 'size', 16, 96, 28, 'px'),
+      drag('next', 'Number', 'number', 1, 99, 1, undefined, { group: true, hint: 'The next marker gets this number. Markers count up by themselves.' }),
     ],
   },
   {
@@ -327,7 +358,7 @@ export const TOOLS: ToolSpec[] = [
     icon: 'callout',
     slot: 'annotate',
     sizeKey: 'size',
-    options: [colors, { kind: 'range', key: 'size', label: 'Text size', min: 8, max: 96, default: 18, unit: 'px' }],
+    options: [colors, drag('size', 'Text size', 'text-size', 8, 96, 18, 'px')],
   },
   {
     id: 'spotlight',
@@ -335,11 +366,12 @@ export const TOOLS: ToolSpec[] = [
     icon: 'spotlight',
     slot: 'annotate',
     options: [
-      { kind: 'range', key: 'dim', label: 'Dim', min: 10, max: 90, default: 60, unit: '%' },
+      drag('dim', 'Dim', 'dim', 10, 90, 60, '%'),
       {
         kind: 'choice',
         key: 'shape',
         label: 'Shape',
+        group: true,
         default: 'rect',
         choices: [
           { value: 'rect', label: 'Rectangle' },
@@ -395,7 +427,7 @@ export function hasTool(id: string): boolean {
 export function mergeSettings(tool: ToolSpec, saved: Record<string, unknown> | undefined): ToolSettings {
   const out: ToolSettings = {};
   for (const o of tool.options) {
-    if (o.kind === 'colors' || o.kind === 'action') continue;
+    if (o.kind === 'colors' || o.kind === 'shapeColors' || o.kind === 'lineColor' || o.kind === 'action') continue;
     const v = saved?.[o.key];
     if (o.kind === 'range') {
       out[o.key] = typeof v === 'number' && Number.isFinite(v) ? Math.min(o.max, Math.max(o.min, Math.round(v))) : o.default;

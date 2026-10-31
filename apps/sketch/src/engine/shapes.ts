@@ -4,6 +4,7 @@
  * drawing and hit tests take a canvas context.
  */
 
+import { isClear, parseHex, withAlpha } from '../app/color';
 import { tidyAngle, type PictureChange } from './objects';
 
 export type ShapeKind = 'rectangle' | 'ellipse' | 'polygon' | 'star';
@@ -23,9 +24,8 @@ export interface ShapeObject {
   /** Outline colour and width (0 for no outline). */
   stroke: string;
   width: number;
-  /** Inside colour, shown when `filled`. */
+  /** Inside colour. A fully see-through fill (alpha 0) means the shape is hollow: nothing is drawn inside, and the inside isn't hit. */
   fill: string;
-  filled: boolean;
   dash: Dash;
   /** 0 to 1. */
   opacity: number;
@@ -328,13 +328,16 @@ function drawFaded(ctx: Ctx, bounds: Rect, alpha: number, draw: (c: Ctx) => void
   ctx.restore();
 }
 
+/** True when the shape has an inside colour that shows. Files keep a `filled` flag with this value (`writeShape`). */
+export const hasFill = (o: ShapeObject): boolean => !isClear(o.fill);
+
 function paintShape(ctx: Ctx, o: ShapeObject): void {
   ctx.save();
   const c = boxToWorld(o, 0, 0);
   ctx.translate(c.x, c.y);
   if (o.angle) ctx.rotate(o.angle);
   const path = shapePath(o);
-  if (o.filled) {
+  if (hasFill(o)) {
     ctx.fillStyle = o.fill;
     ctx.fill(path);
   }
@@ -415,12 +418,12 @@ export function drawShape(ctx: Ctx, o: ShapeObject | LineObject): void {
 
 let hitCtx: OffscreenCanvasRenderingContext2D | null = null;
 
-/** True when (x, y) is on the shape: inside it when filled, otherwise on its outline. */
+/** True when (x, y) is on the shape: inside it when it has a fill that shows, otherwise on its outline. */
 export function hitShape(o: ShapeObject, x: number, y: number, slop: number): boolean {
   const ctx = (hitCtx ??= new OffscreenCanvas(1, 1).getContext('2d') as OffscreenCanvasRenderingContext2D);
   const p = boxToLocal(o, x, y);
   const path = shapePath(o);
-  if (o.filled && ctx.isPointInPath(path, p.x, p.y)) return true;
+  if (hasFill(o) && ctx.isPointInPath(path, p.x, p.y)) return true;
   ctx.lineWidth = Math.max(o.width, 1) + slop * 2;
   return ctx.isPointInStroke(path, p.x, p.y);
 }
@@ -480,6 +483,20 @@ const HEADS: Head[] = ['none', 'open', 'filled', 'dot'];
 const DASHES: Dash[] = ['solid', 'dashed', 'dotted'];
 const KINDS: ShapeKind[] = ['rectangle', 'ellipse', 'polygon', 'star'];
 
+/**
+ * A saved shape's fill. The model's truth is the fill's alpha, so a shape saved with `filled: false` (or
+ * no flag) reads as its fill colour with no opacity, and one saved with `filled: true` keeps its fill.
+ */
+function readFill(r: Record<string, unknown>): string {
+  const fill = typeof r.fill === 'string' && parseHex(r.fill) ? r.fill : '#ffffff';
+  return r.filled === true ? fill : withAlpha(fill, 0);
+}
+
+/** A shape as written to a file: the object plus the `filled` flag older Sketches read (true unless the fill is see-through). */
+export function writeShape(o: ShapeObject): ShapeObject & { filled: boolean } {
+  return { ...o, filled: hasFill(o) };
+}
+
 /** Reads a shape or line saved in a file, filling in anything missing. Null when it isn't one. */
 export function readShape(r: Record<string, unknown>, id: number): ShapeObject | LineObject | null {
   const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -499,8 +516,7 @@ export function readShape(r: Record<string, unknown>, id: number): ShapeObject |
       angle: num(r.angle, 0),
       stroke: str(r.stroke, '#000000'),
       width: Math.max(0, num(r.width, 3)),
-      fill: str(r.fill, '#ffffff'),
-      filled: r.filled === true,
+      fill: readFill(r),
       dash: pick(r.dash, DASHES, 'solid'),
       opacity,
       radius: Math.max(0, num(r.radius, 0)),

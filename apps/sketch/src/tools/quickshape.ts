@@ -5,6 +5,7 @@
  * (a line's or arrow's end follows), and letting go keeps it. The clean-up is one undo step, and undoing it
  * brings the rough stroke back as it was drawn (the stroke is a step of its own just before it).
  */
+import { withAlpha } from '../app/color';
 import { app, changed, tabs, type Tab } from '../app/store';
 import { settingsOf } from '../app/tools';
 import type { Layer } from '../engine/document';
@@ -156,8 +157,8 @@ export class QuickShape {
       angle: 0,
       stroke: color,
       width,
-      fill: app.secondary,
-      filled: false,
+      // Hollow, as the Shapes tool's fill starts: the stored fill's colour with no opacity.
+      fill: withAlpha(app.fillColor, 0),
       dash: 'solid',
       opacity,
       radius: settingsOf('rectangle').radius as number,

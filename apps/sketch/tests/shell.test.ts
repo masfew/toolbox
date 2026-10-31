@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { hsvToRgb, parseHex, pushRecent, rgbToHsv, toHex } from '../src/app/color';
+import { hsvToRgb, isClear, parseHex, pushRecent, rgbToHsv, toHex, withAlpha } from '../src/app/color';
+import { DEFAULT_FILL, DEFAULT_OUTLINE, sanitizeShapeColors } from '../src/app/shapeColors';
 import { comboOf, fromWindowsHotkey, isCaptureHotkey, isWindowsHotkey, keyMap, prettyCombo, resolveBindings, type KeyLike } from '../src/app/keys';
 import { matchScore, searchCommands } from '../src/app/search';
 import { getTool, mergeSettings, SLOTS, stepSize, TOOLS } from '../src/tools/registry';
@@ -114,6 +115,23 @@ describe('colours', () => {
     }
   });
 
+  it('tells a see-through colour from one that shows, and changes a colour’s opacity', () => {
+    expect(isClear('#ffffff00')).toBe(true);
+    expect(isClear('#ff000001')).toBe(false);
+    expect(isClear('#ff0000')).toBe(false);
+    expect(isClear('junk')).toBe(true);
+    expect(withAlpha('#ff8800', 0)).toBe('#ff880000');
+    expect(withAlpha('#ff880040', 1)).toBe('#ff8800');
+  });
+
+  it('keeps the shape fill and outline that read as hex, and starts with a black outline and no fill', () => {
+    expect(sanitizeShapeColors(null)).toEqual({ fill: DEFAULT_FILL, outline: DEFAULT_OUTLINE });
+    expect(DEFAULT_FILL).toBe('#ffffff00');
+    expect(sanitizeShapeColors({ fill: '#AABBCC80', outline: 'blue' })).toEqual({ fill: '#aabbcc80', outline: DEFAULT_OUTLINE });
+    expect(sanitizeShapeColors({ fill: 5, outline: '#123456' })).toEqual({ fill: DEFAULT_FILL, outline: '#123456' });
+    expect(sanitizeShapeColors('x')).toEqual({ fill: DEFAULT_FILL, outline: DEFAULT_OUTLINE });
+  });
+
   it('keeps recent colours unique, newest first', () => {
     expect(pushRecent(['#000000', '#ff0000'], '#FF0000')).toEqual(['#ff0000', '#000000']);
     expect(pushRecent(Array.from({ length: 10 }, (_, i) => `#00000${i}`), '#ffffff')).toHaveLength(10);
@@ -146,6 +164,21 @@ describe('tools', () => {
     expect(s.smoothing).toBe(true);
     expect('extra' in s).toBe(false);
     expect(mergeSettings(brush, undefined).size).toBe(4);
+  });
+
+  it('gives shapes the fill and outline buttons and no Fill toggle, and lines their one colour button', () => {
+    for (const id of ['rectangle', 'ellipse', 'polygon', 'star']) {
+      const t = getTool(id);
+      expect(t.options[0].kind).toBe('shapeColors');
+      expect(t.options.some((o) => o.key === 'fill' || o.kind === 'colors')).toBe(false);
+      // The old Fill toggle in saved settings is dropped.
+      expect('fill' in mergeSettings(t, { fill: true, width: 5 })).toBe(false);
+      expect(mergeSettings(t, { fill: true, width: 5 }).width).toBe(5);
+    }
+    for (const id of ['arrow', 'line']) expect(getTool(id).options[0].kind).toBe('lineColor');
+    // Brush, text and the rest still share colours 1 and 2.
+    for (const id of ['brush', 'pencil', 'text', 'fill', 'picker', 'marker', 'callout']) expect(getTool(id).options[0].kind).toBe('colors');
+    for (const t of TOOLS) expect(t.options.filter((o) => o.kind === 'colors' || o.kind === 'shapeColors' || o.kind === 'lineColor').length).toBeLessThanOrEqual(1);
   });
 
   it('steps sizes by about a quarter, at least one pixel, within limits', () => {

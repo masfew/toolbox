@@ -27,7 +27,7 @@ import {
   selectionImage,
 } from '../tools/selection';
 import { commitText } from '../tools/text';
-import { copiedObjectsFor, deletePicked, pasteCopied, pickedImage, pickedObjects, rememberCopy } from '../tools/shapes';
+import { copiedObjectsFor, deletePicked, loadShapeColors, pasteCopied, pickedImage, pickedObjects, rememberCopy, setShapeColors, shapeColorsShowing } from '../tools/shapes';
 import {
   decodeImage,
   encodeDocument,
@@ -40,7 +40,7 @@ import {
   withExtension,
 } from '../io/formats';
 import * as platform from '../platform';
-import { pushRecent } from './color';
+import { isClear, pushRecent } from './color';
 import { fitView, growBoard, growBoardForNext, growBoardForObjects, settleEdges } from './board';
 import { blockedReason, layerPrefs } from './layers';
 import { savePref } from './prefs';
@@ -324,6 +324,8 @@ export async function openCapture(id: number, quick = false): Promise<void> {
   image.close();
   selectTool('brush');
   setColor('primary', CAPTURE_COLOR);
+  // Shapes and lines drawn on the capture start in the same red, and nothing picked is restyled by it.
+  loadShapeColors({ outline: CAPTURE_COLOR });
 }
 
 export function captureScreen(): void {
@@ -709,15 +711,33 @@ export function setColor(which: 'primary' | 'secondary', color: string): void {
   changed();
 }
 
-/** Remembers a colour in the recent list (when the colour picker closes on a new colour). */
+/** Sets the fill or outline colour of shapes and lines; picked shapes and lines take it too (one history step per drag). */
+export function setShapeColor(which: 'fill' | 'outline', color: string): void {
+  setShapeColors({ [which]: color });
+}
+
+/** Remembers a colour in the recent list (when the colour picker closes on a new colour). See-through "No Colour" isn't a colour to remember. */
 export function rememberColor(color: string): void {
+  if (isClear(color)) return;
   app.recentColors = pushRecent(app.recentColors, color);
   savePref('recentColors', app.recentColors);
   changed();
 }
 
-export function swapColors(): void {
+/** Swaps colours 1 and 2. */
+export function swapPrimarySecondary(): void {
   [app.primary, app.secondary] = [app.secondary, app.primary];
   colorSignal.emit();
   changed();
+}
+
+/** Swaps the fill and outline colours of shapes; picked shapes follow, in one history step. */
+export function swapShapeColors(): void {
+  setShapeColors({ fill: app.outlineColor, outline: app.fillColor });
+}
+
+/** X: swaps the fill and outline while the options bar shows them (a shape tool, or a shape picked), else colours 1 and 2. */
+export function swapColors(): void {
+  if (shapeColorsShowing()) swapShapeColors();
+  else swapPrimarySecondary();
 }

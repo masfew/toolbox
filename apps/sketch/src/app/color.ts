@@ -34,6 +34,18 @@ export function toHex(c: RGBA): string {
   return c.a >= 1 ? base : base + hex2(c.a * 255);
 }
 
+/** The same colour at another opacity (0 to 1). A colour that isn't hex becomes black. */
+export function withAlpha(text: string, a: number): string {
+  const c = parseHex(text) ?? { r: 0, g: 0, b: 0, a: 1 };
+  return toHex({ ...c, a });
+}
+
+/** True for a colour with no opacity at all ("No Colour"). Hex that can't be read counts as clear too. */
+export function isClear(text: string): boolean {
+  const c = parseHex(text);
+  return !c || c.a <= 0;
+}
+
 /** The colour without its opacity, for swatches and CSS gradients. */
 export function opaqueHex(text: string): string {
   const c = parseHex(text) ?? { r: 0, g: 0, b: 0, a: 1 };

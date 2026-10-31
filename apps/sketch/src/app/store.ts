@@ -9,6 +9,11 @@ import type { LiveStroke } from '../tools/stroke';
 import type { TextEdit } from '../tools/text';
 import { Viewport } from '../view/viewport';
 import { loadPref } from './prefs';
+import { loadShapeColors } from './shapeColors';
+
+export type ColorTargetId = 'primary' | 'secondary' | 'fill' | 'outline';
+
+const savedShapeColors = loadShapeColors();
 
 export type FileFormat = 'png' | 'jpeg' | 'webp' | 'bmp' | 'gif' | 'sktch';
 
@@ -50,6 +55,8 @@ export const uiSignal = new Signal();
 export const cursorSignal = new Signal();
 /** Fires when colour 1 or 2 changes, so text being typed can follow it. */
 export const colorSignal = new Signal();
+/** Fires when the shape and line fill or outline colour changes, so picked shapes and lines can follow it. */
+export const shapeColorSignal = new Signal();
 /** Fires when a new picture is made or opened. */
 export const docSignal = new Signal();
 
@@ -210,9 +217,12 @@ export const app = {
   liveStroke: null as LiveStroke | null,
   primary: '#000000',
   secondary: '#ffffff',
+  /** The fill and outline of shapes, and the outline (line colour) of lines, kept apart from colours 1 and 2. */
+  fillColor: savedShapeColors.fill,
+  outlineColor: savedShapeColors.outline,
   recentColors: loadPref<string[]>('recentColors', []),
   /** Set while the colour popover's picker button waits for a press on the picture: the colour that press sets. */
-  pickInto: null as 'primary' | 'secondary' | null,
+  pickInto: null as ColorTargetId | null,
   showGrid: true,
   /** The side panel with layers and history. */
   showPanel: loadPref('showPanel', true),

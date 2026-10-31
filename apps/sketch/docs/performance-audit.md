@@ -31,6 +31,7 @@ Times run from the input (the key press or pointer event's own timestamp) to the
 | Change tool | Each tool key (B, P, E, G, I, T, U, A, M, C) to the options bar showing the tool; the slowest key's median | Small | 3 per key | 17 ms (a frame) |
 | Change brush size | `]` and `[` to the new size showing | Small | 5 | 17 ms |
 | Swap colours | X to colour 1 changing | Small | 5 | 17 ms |
+| Drag an options bar label | With a rectangle picked and its Outline label being dragged (the pointer locked), a pointer move of one step to the frame that shows the restyled shape | Small | 10 | 17 ms |
 | Colour popover | Clicking colour 1 to the popover showing | Small | 5 | 50 ms |
 | Pick a swatch | Clicking a swatch to colour 1 changing | Small | 5 | 17 ms |
 | File menu, command palette, Settings | Click or key to it showing | Small | 5 | 50 ms |

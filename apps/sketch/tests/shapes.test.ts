@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { readObject } from '../src/engine/objects';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readObject, writeObject } from '../src/engine/objects';
 import {
   bendToward,
   changeLine,
   changeShape,
   curveAt,
   geometryBounds,
+  hasFill,
+  hitShape,
   lineCurve,
   lineMiddle,
   subCurve,
@@ -15,6 +17,7 @@ import {
   type ShapeObject,
 } from '../src/engine/shapes';
 import { alignMoves, distributeMoves, snapAngle, snapPoint, snapRect, type SnapTargets } from '../src/tools/snap';
+import { installFakeCanvas } from './fakeCanvas';
 
 const shape: ShapeObject = {
   id: 1,
@@ -27,8 +30,7 @@ const shape: ShapeObject = {
   angle: 0,
   stroke: '#000000',
   width: 4,
-  fill: '#ffffff',
-  filled: false,
+  fill: '#ffffff00',
   dash: 'solid',
   opacity: 1,
   radius: 0,
@@ -230,5 +232,232 @@ describe('lining up', () => {
     const moves = distributeMoves(rects, 'x');
     // 230 wide in all, 60 of boxes, so gaps of 85: the middle box starts at 95.
     expect(moves.map((d) => d.x)).toEqual([0, 45, 0]);
+  });
+});
+
+describe('a fill is a colour with an opacity', () => {
+  it('reads a shape saved unfilled as its fill colour with no opacity', () => {
+    expect(readObject({ type: 'shape', kind: 'rectangle', id: 1, fill: '#ff0000', filled: false })).toMatchObject({ fill: '#ff000000' });
+    // Files from before the flag existed, and ones with junk in it, read as unfilled too.
+    expect(readObject({ type: 'shape', kind: 'rectangle', id: 1, fill: '#00ff00' })).toMatchObject({ fill: '#00ff0000' });
+    expect(readObject({ type: 'shape', kind: 'rectangle', id: 1, fill: '#00ff00', filled: 'yes' })).toMatchObject({ fill: '#00ff0000' });
+    expect(readObject({ type: 'shape', kind: 'rectangle', id: 1, filled: false })).toMatchObject({ fill: '#ffffff00' });
+    const hollow = readObject({ type: 'shape', kind: 'rectangle', id: 1, fill: '#ff0000', filled: false }) as ShapeObject;
+    expect(hasFill(hollow)).toBe(false);
+    expect(hollow).not.toHaveProperty('filled');
+  });
+
+  it('keeps the fill of a shape saved filled', () => {
+    const o = readObject({ type: 'shape', kind: 'ellipse', id: 2, fill: '#ff0000', filled: true }) as ShapeObject;
+    expect(o.fill).toBe('#ff0000');
+    expect(hasFill(o)).toBe(true);
+    // A translucent fill still shows.
+    expect(hasFill({ ...o, fill: '#ff000080' })).toBe(true);
+    expect(hasFill({ ...o, fill: '#ff000000' })).toBe(false);
+  });
+
+  it('writes the filled flag older Sketches read: true unless the fill is see-through', () => {
+    expect(writeObject({ ...shape, fill: '#ff0000' })).toMatchObject({ fill: '#ff0000', filled: true });
+    expect(writeObject({ ...shape, fill: '#ff000080' })).toMatchObject({ filled: true });
+    expect(writeObject({ ...shape, fill: '#ff000000' })).toMatchObject({ fill: '#ff000000', filled: false });
+    // Lines and the rest are written as they are.
+    expect(writeObject(line)).toBe(line);
+    const back = readObject(JSON.parse(JSON.stringify(writeObject({ ...shape, fill: '#ff0000' }))));
+    expect(back).toEqual({ ...shape, fill: '#ff0000' });
+  });
+
+  it('hits the inside of a shape only when its fill shows', () => {
+    // A canvas that says every point is inside the path and none is on its stroke, so only the fill rule decides.
+    class Path {
+      [key: string]: unknown;
+      constructor() {
+        return new Proxy(this, { get: (t, k) => (k in t ? t[k as string] : () => {}) });
+      }
+    }
+    vi.stubGlobal('Path2D', Path);
+    vi.stubGlobal(
+      'OffscreenCanvas',
+      class {
+        getContext() {
+          return { lineWidth: 1, isPointInPath: () => true, isPointInStroke: () => false };
+        }
+      },
+    );
+    try {
+      expect(hitShape({ ...shape, fill: '#ffffff00' }, 30, 35, 6)).toBe(false);
+      expect(hitShape({ ...shape, fill: '#ffffff' }, 30, 35, 6)).toBe(true);
+      expect(hitShape({ ...shape, fill: '#ffffff40' }, 30, 35, 6)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('shapes and lines keep their own fill and outline colours', () => {
+  let store: typeof import('../src/app/store');
+  let tools: typeof import('../src/tools/shapes');
+  let actions: typeof import('../src/app/actions');
+  let toolState: typeof import('../src/app/tools');
+  const ev = (button = 0) => ({ button, shiftKey: false, altKey: false, ctrlKey: true }) as PointerEvent;
+
+  beforeAll(async () => {
+    installFakeCanvas();
+    // The page's timers, for the settings the tools save.
+    vi.stubGlobal('window', globalThis);
+    store = await import('../src/app/store');
+    tools = await import('../src/tools/shapes');
+    actions = await import('../src/app/actions');
+    toolState = await import('../src/app/tools');
+  });
+  afterAll(() => vi.unstubAllGlobals());
+
+  beforeEach(() => {
+    const { app } = store;
+    app.doc.activeLayer.objects = [];
+    app.objectSel = null;
+    app.draft = null;
+    app.primary = '#112233';
+    app.secondary = '#445566';
+    tools.loadShapeColors({ fill: '#ffffff00', outline: '#000000' });
+    toolState.selectTool('rectangle');
+  });
+
+  /** Drags a shape or line out with the given button and returns what was added. */
+  function draw(toolId: string, button = 0): ShapeObject {
+    const e = ev(button);
+    const d = tools.SHAPE_TOOLS.includes(toolId) ? tools.shapeDrag(toolId, { x: 100, y: 100 }, e, () => {}) : tools.lineDrag(toolId, { x: 100, y: 100 }, e);
+    d.move({ x: 300, y: 250 }, e, () => ({ x: 0, y: 0 }));
+    d.up({ x: 300, y: 250 }, e);
+    // A line is checked through toMatchObject; only its id is read as a shape's.
+    return store.app.doc.activeLayer.objects.at(-1) as ShapeObject;
+  }
+  const objects = () => store.app.doc.activeLayer.objects;
+
+  it('draws a new shape in the stored outline and fill, not colours 1 and 2', () => {
+    // Out of the box: a black outline, no fill.
+    const first = draw('rectangle');
+    expect(first).toMatchObject({ type: 'shape', stroke: '#000000' });
+    expect(hasFill(first)).toBe(false);
+    tools.loadShapeColors({ fill: '#aabbcc', outline: '#ff0000' });
+    const second = draw('star');
+    expect(second).toMatchObject({ stroke: '#ff0000', fill: '#aabbcc' });
+    expect(second).not.toHaveProperty('filled');
+  });
+
+  it('draws with the two swapped on a right-drag', () => {
+    tools.loadShapeColors({ fill: '#aabbcc', outline: '#ff0000' });
+    expect(draw('ellipse', 2)).toMatchObject({ stroke: '#aabbcc', fill: '#ff0000' });
+    // With the default no fill, the swap fills the shape with the outline colour and leaves it with no outline.
+    tools.loadShapeColors({ fill: '#ffffff00', outline: '#000000' });
+    const s = draw('rectangle', 2);
+    expect(s.fill).toBe('#000000');
+    expect(hasFill(s)).toBe(true);
+    expect(s.stroke).toBe('#ffffff00');
+  });
+
+  it('draws a line in the outline colour, and on a right-drag in the fill colour unless that is see-through', () => {
+    tools.loadShapeColors({ fill: '#aabbcc', outline: '#ff0000' });
+    expect(draw('line')).toMatchObject({ type: 'line', color: '#ff0000' });
+    expect(draw('arrow', 2)).toMatchObject({ color: '#aabbcc' });
+    // No fill: the right-drag line would be invisible, so it uses the outline colour.
+    tools.loadShapeColors({ fill: '#aabbcc00' });
+    expect(draw('line', 2)).toMatchObject({ color: '#ff0000' });
+  });
+
+  it('leaves colours 1 and 2 alone, and shapes ignore them', () => {
+    draw('rectangle');
+    expect(store.app.primary).toBe('#112233');
+    expect(store.app.secondary).toBe('#445566');
+    store.app.primary = '#abcdef';
+    store.colorSignal.emit();
+    expect(objects()[0]).toMatchObject({ stroke: '#000000' });
+  });
+
+  it('restyles picked shapes and lines when the fill or outline changes, in one history step', () => {
+    const { app } = store;
+    const rect = draw('rectangle');
+    const ln = draw('line');
+    tools.pickObjects(app.doc.activeLayer, [rect.id, ln.id]);
+    const before = app.history.position;
+    actions.setShapeColor('fill', '#00ff00');
+    actions.setShapeColor('outline', '#0000ff');
+    const [r, l] = objects() as [ShapeObject, LineObject];
+    expect(r).toMatchObject({ fill: '#00ff00', stroke: '#0000ff' });
+    // The outline is a line's colour; the fill leaves it alone.
+    expect(l.color).toBe('#0000ff');
+    // The two drags join into one step.
+    expect(app.history.position).toBe(before + 1);
+  });
+
+  it("shows a picked shape's colours in the bar without restyling anything", () => {
+    const { app } = store;
+    const a = draw('rectangle');
+    tools.loadShapeColors({ fill: '#123456', outline: '#654321' });
+    const b = draw('ellipse');
+    tools.pickObjects(app.doc.activeLayer, [a.id]);
+    const before = app.history.position;
+    // The first rectangle was drawn in the defaults; picking it loads those.
+    expect([app.fillColor, app.outlineColor]).toEqual(['#ffffff00', '#000000']);
+    tools.pickObjects(app.doc.activeLayer, [b.id, a.id]);
+    expect([app.fillColor, app.outlineColor]).toEqual(['#123456', '#654321']);
+    expect(objects()).toEqual([a, b]);
+    expect(app.history.position).toBe(before);
+    // Picking a line loads its colour as the outline and leaves the fill.
+    tools.loadShapeColors({ outline: '#00ff00' });
+    const ln = draw('line');
+    tools.loadShapeColors({ fill: '#999999', outline: '#111111' });
+    tools.pickObjects(app.doc.activeLayer, [ln.id]);
+    expect([app.fillColor, app.outlineColor]).toEqual(['#999999', '#00ff00']);
+    expect(objects()).toHaveLength(3);
+  });
+
+  it('still recolours a picked numbered marker with colour 1, and nothing else', () => {
+    const { app } = store;
+    const rect = draw('rectangle');
+    const marker = readObject({ type: 'mark', kind: 'marker', id: 900, x: 5, y: 5, w: 28, h: 28, number: 1, color: '#ff0000' })!;
+    app.doc.activeLayer.objects = [...objects(), marker];
+    tools.pickObjects(app.doc.activeLayer, [marker.id, rect.id]);
+    const before = app.history.position;
+    app.primary = '#00aa00';
+    store.colorSignal.emit();
+    expect(objects()).toMatchObject([{ stroke: '#000000' }, { kind: 'marker', color: '#00aa00' }]);
+    expect(app.history.position).toBe(before + 1);
+    // The fill colour doesn't touch a marker.
+    actions.setShapeColor('fill', '#ff00ff');
+    expect(objects()[1]).toMatchObject({ color: '#00aa00' });
+  });
+
+  it('X swaps the fill and outline while a shape tool shows them, else colours 1 and 2', () => {
+    const { app } = store;
+    tools.loadShapeColors({ fill: '#aabbcc', outline: '#ff0000' });
+    actions.swapColors();
+    expect([app.fillColor, app.outlineColor]).toEqual(['#ff0000', '#aabbcc']);
+    expect([app.primary, app.secondary]).toEqual(['#112233', '#445566']);
+    toolState.selectTool('brush');
+    actions.swapColors();
+    expect([app.primary, app.secondary]).toEqual(['#445566', '#112233']);
+    expect([app.fillColor, app.outlineColor]).toEqual(['#ff0000', '#aabbcc']);
+    // With a shape picked it restyles the shape, in one step.
+    toolState.selectTool('rectangle');
+    const rect = draw('rectangle');
+    tools.pickObjects(app.doc.activeLayer, [rect.id]);
+    const before = app.history.position;
+    actions.swapColors();
+    expect(objects()[0]).toMatchObject({ stroke: '#ff0000', fill: '#aabbcc' });
+    expect(app.history.position).toBe(before + 1);
+  });
+
+  it("sets a capture's red as the outline without restyling the picked shapes", () => {
+    const { app } = store;
+    const rect = draw('rectangle');
+    tools.pickObjects(app.doc.activeLayer, [rect.id]);
+    const before = app.history.position;
+    tools.loadShapeColors({ outline: actions.CAPTURE_COLOR });
+    expect(app.outlineColor).toBe('#ed1c24');
+    expect(objects()[0]).toMatchObject({ stroke: '#000000' });
+    expect(app.history.position).toBe(before);
+    // The next real change restyles only what changed.
+    actions.setShapeColor('fill', '#00ff00');
+    expect(objects()[0]).toMatchObject({ stroke: '#000000', fill: '#00ff00' });
   });
 });

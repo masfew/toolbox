@@ -91,6 +91,7 @@ const ACTIONS = [
   { id: 'open-4k', groups: ['start', 'files'], label: 'Open a 4K photo from Explorer while Sketch runs', where: 'main' },
   { id: 'tool-change', groups: ['ui'], label: 'Change tool with its key (slowest of 10 tools)', where: 'main' },
   { id: 'size-change', groups: ['ui'], label: 'Change the brush size with [ and ]', where: 'main' },
+  { id: 'label-drag', groups: ['ui'], label: 'Drag an options bar label with a shape picked, to the restyled shape', where: 'main' },
   { id: 'colour-swap', groups: ['ui', 'colour'], label: 'Swap colours with X', where: 'main' },
   { id: 'colour-popover', groups: ['ui', 'colour'], label: 'Open the colour popover', where: 'main' },
   { id: 'colour-swatch', groups: ['ui', 'colour'], label: 'Pick a swatch in the colour popover', where: 'main' },
@@ -440,8 +441,36 @@ async function sizeChange() {
   report('size-change', 'time', median(times), 'ms', 17);
 }
 
+async function labelDrag() {
+  await usePicture('small');
+  await useTool('rectangle');
+  const b = await pictureBox();
+  await app.drag(b.x + b.w * 0.2, b.y + b.h * 0.2, b.x + b.w * 0.5, b.y + b.h * 0.5);
+  await sleep(200);
+  // The first drag label of the Rectangle's bar (Outline): press, move 10 px to start the drag, wait for the pointer to lock.
+  const [x, y] = await centre('.opt.drag .scrub');
+  const mouse = (type, px, buttons) => app.send('Input.dispatchMouseEvent', { type, x: px, y, button: 'left', buttons, clickCount: type === 'mouseMoved' ? 0 : 1 });
+  await mouse('mousePressed', x, 1);
+  await mouse('mouseMoved', x + 10, 1);
+  await waitUntil('the drag to start', async () => (await ev(`document.querySelector('.opt.drag .scrub')?.dataset.lock ?? ''`)) !== '', 3000);
+  await sleep(150);
+  const times = [];
+  const width = `${S}.app.doc.layers[0].objects[0].width`;
+  for (let i = 0; i < runs(10); i++) {
+    // Two pixels is one step: the shape's outline grows by 1.
+    times.push(await timed('pointermove', changedFrom(width), () => mouse('mouseMoved', x + 12 + i * 2, 1)));
+    await sleep(40);
+  }
+  await mouse('mouseReleased', x + 12 + runs(10) * 2, 0);
+  await sleep(150);
+  report('label-drag', 'time', median(times), 'ms', 17);
+  // Back to the Brush, whose colours the colour actions after this one time.
+  await useTool('brush');
+}
+
 async function colourSwap() {
   await usePicture('small');
+  await useTool('brush');
   const times = [];
   for (let i = 0; i < runs(5); i++) {
     times.push(await timed('keydown', changedFrom(`${S}.app.primary`), () => app.press('x')));
@@ -452,6 +481,7 @@ async function colourSwap() {
 
 async function colourPopover(withSwatch) {
   await usePicture('small');
+  await useTool('brush');
   const open = [];
   const swatch = [];
   for (let i = 0; i < runs(5); i++) {
@@ -467,7 +497,7 @@ async function colourPopover(withSwatch) {
       swatch.push(await timed('pointerdown', changedFrom(`${S}.app.primary`), () => click(...at)));
     }
     await settle();
-    // The popover ignores a click on its chip within half a second of closing.
+    // The popover ignores a click on its colour button within half a second of closing.
     await sleep(600);
   }
   if (withSwatch) report('colour-swatch', 'time', median(swatch), 'ms', 17);
@@ -886,6 +916,7 @@ try {
     if (has('open-4k')) await attempt('open-4k', openFromExplorer);
     if (has('tool-change')) await attempt('tool-change', toolChange);
     if (has('size-change')) await attempt('size-change', sizeChange);
+    if (has('label-drag')) await attempt('label-drag', labelDrag);
     if (has('colour-swap')) await attempt('colour-swap', colourSwap);
     if (has('colour-popover')) await attempt('colour-popover', () => colourPopover(false));
     if (has('colour-swatch')) await attempt('colour-swatch', () => colourPopover(true));

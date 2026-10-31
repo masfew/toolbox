@@ -395,7 +395,7 @@ kbd {
 .options {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   height: 46px;
   padding: 0 12px;
   background: var(--layer);
@@ -412,7 +412,16 @@ kbd {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  min-width: 120px;
+  min-width: 112px;
+  flex: none;
+}
+
+/* A thin divider between the tool name and groups of controls. */
+.sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: var(--border-strong);
 }
 
 .opt {
@@ -450,6 +459,121 @@ kbd {
 .opt .unit {
   color: var(--muted);
   margin-left: -2px;
+}
+
+/*
+ * Drag labels: an icon and name you drag left or right (cursor ew-resize), then a 66 x 28 box with the value
+ * right-aligned and its unit in muted text. The box is the keyboard way in.
+ */
+.opt.drag {
+  gap: 6px;
+}
+
+.scrub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 2px;
+  color: var(--muted);
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+/* A little more room after the colour buttons, which end in a square the label would sit close to. */
+.opt.colors + .opt.drag {
+  margin-left: 4px;
+}
+
+.opt.drag.dragging .scrub {
+  color: var(--text);
+}
+
+.opt.planned .scrub {
+  cursor: default;
+}
+
+.val {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+  width: 66px;
+  height: 28px;
+  padding: 0 8px;
+  background: var(--field);
+  border: 1px solid var(--border-strong);
+  border-bottom-color: color-mix(in srgb, var(--muted) 55%, transparent);
+  border-radius: 4px;
+}
+
+.val:focus-within {
+  border-bottom-color: var(--accent);
+  box-shadow: inset 0 -1px 0 var(--accent);
+}
+
+.opt .val input.num {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  outline: none;
+}
+
+.opt .val .unit {
+  margin-left: 0;
+}
+
+/* Preview squares (line style, arrowheads) open a short menu: each choice with its drawing and name. */
+.choice-menu {
+  position: fixed;
+  display: grid;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 150px;
+}
+
+.choice-menu .item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px 0 5px;
+  text-align: left;
+}
+
+.choice-menu .item:focus-visible {
+  outline: none;
+  background: var(--hover);
+}
+
+.choice-menu .item[aria-checked='true'] {
+  background: var(--border);
+}
+
+.choice-menu .box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--field);
+}
+
+.choice-menu .grow {
+  flex: 1;
+}
+
+.choice-menu .tick {
+  flex: none;
+  color: var(--accent);
 }
 
 .opt input:disabled,
@@ -509,24 +633,7 @@ select {
   font-size: 12px;
 }
 
-/* The two colour chips: colour 1 and colour 2, with a checkerboard showing through see-through colours. */
-.chip {
-  width: 30px;
-  height: 26px;
-  padding: 3px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-}
-
-.chip span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 3px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-}
-
-.chip,
+/* A checkerboard shows through see-through colours in the popover's swatches and sliders. */
 .swatch-btn,
 .color-row .preview,
 .slider.alpha {
@@ -534,9 +641,74 @@ select {
   background-size: 8px 8px;
 }
 
-.chip.open {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+/*
+ * Colour buttons on the options bar: colours 1 and 2, a shape's fill and outline, a line's colour. `.sw` is the
+ * 30 px button (also used for other pickers that open a menu, like the line style); `.solid` a swatch of the
+ * colour and `.ring` its outline. A see-through colour (`.clear`) shows the checkerboard with a red slash.
+ */
+.sw {
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--field);
+}
+
+.sw.open {
+  border: 2px solid var(--accent);
+}
+
+.sw .solid,
+.sw .ring {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  outline: 1px solid var(--border-strong);
+}
+
+.sw .solid,
+.sw .ring::before {
+  background: linear-gradient(var(--c), var(--c)), conic-gradient(#ccc 25%, #fff 0 50%, #ccc 0 75%, #fff 0) 0 0 / 8px 8px;
+}
+
+/* The ring is the colour with the middle cut out (a mask), so a see-through colour still shows the checkerboard in it. */
+.sw .ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 3px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+.sw .clear::after,
+.no-colour span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), #e5484d calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+/* The popover's No Colour button: the same checkerboard and slash, as a square. */
+.no-colour span {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: conic-gradient(#ccc 25%, #fff 0 50%, #ccc 0 75%, #fff 0) 0 0 / 8px 8px;
 }
 
 /* ---------- Main area ---------- */
@@ -1043,6 +1215,11 @@ canvas.view {
   height: 28px;
   border-radius: 6px;
   box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+/* With a No Colour button in the row, the hex box gives up a little width to make room. */
+.color-row.has-none .hex {
+  width: 78px;
 }
 
 .color-row .preview::after,

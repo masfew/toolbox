@@ -1,4 +1,5 @@
 import { parseHex, toHex } from '../app/color';
+import type { ColorTarget } from '../app/colorTargets';
 import { app, changed, toast } from '../app/store';
 import { settingsOf } from '../app/tools';
 import { ctxOf, drawLayer, flatten, newCanvas } from '../engine/document';
@@ -78,29 +79,33 @@ export function colorAt(x: number, y: number, sample: 'layer' | 'picture'): stri
 
 /**
  * Colour picker: sets colour 1 (left) or colour 2 (right) from the picture, following the pointer
- * while it's held. Also Alt+click with any tool that paints. `into` names the colour to set whatever
- * the button (the colour popover's picker button).
+ * while it's held. Also Alt+click with any tool that paints. `into` is the colour to set whatever the
+ * button (the colour popover's picker button, and Alt+click with a line tool, which sets the outline).
  */
 export function pickDrag(
   p: Point,
   button: number,
   sample: 'layer' | 'picture',
   remember: (c: string) => void,
-  into?: 'primary' | 'secondary',
+  into?: ColorTarget,
 ): ToolDrag {
-  const which = into ?? (button === 2 ? 'secondary' : 'primary');
+  const which = button === 2 ? 'secondary' : 'primary';
+  const read = () => (into ? into.read() : app[which]);
   const pick = (q: Point) => {
     const c = colorAt(q.x, q.y, sample);
-    if (c && c !== app[which]) {
-      app[which] = c;
-      changed();
+    if (c && c !== read()) {
+      if (into) into.write(c);
+      else {
+        app[which] = c;
+        changed();
+      }
     }
   };
   pick(p);
   return {
     cursor: PICKER_CURSOR,
     move: pick,
-    up: () => remember(app[which]),
+    up: () => remember(read()),
   };
 }
 

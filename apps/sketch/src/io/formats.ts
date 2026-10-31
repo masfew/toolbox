@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, type Zippable } from 'fflate';
 import { BOARD_BACKGROUND, exportArea, flattenArea, pictureArea } from '../engine/board';
 import { checkSize, createLayer, ctxOf, flatten, PaintDocument, type Layer } from '../engine/document';
-import { readObject, reserveObjectIds, type SketchObject } from '../engine/objects';
+import { readObject, reserveObjectIds, writeObject, type SketchObject } from '../engine/objects';
 import type { FileFormat } from '../app/store';
 import type { EncodeRequest, EncodeResponse } from './encoder.worker';
 
@@ -91,7 +91,8 @@ interface LayerJson {
   file?: string;
   /** Written by versions 2 to 5 on object layers only; version 6 doesn't write it. */
   kind?: 'pixel' | 'objects';
-  objects?: SketchObject[];
+  /** As `writeObject` writes them; read back through `readObject`. */
+  objects?: object[];
 }
 
 /**
@@ -175,6 +176,9 @@ function encoder(): Worker {
 }
 
 async function encodeCanvas(canvas: OffscreenCanvas, type: 'png' | 'jpeg' | 'webp' | 'bmp', quality: number): Promise<Uint8Array> {
+  // A canvas nothing has drawn on (the see-through canvas of an object layer opened from an older file) has no
+  // pixels yet, and WebView2 refuses to make a bitmap of it ("could not be allocated"). Asking for its context makes them.
+  canvas.getContext('2d');
   const bitmap = await createImageBitmap(canvas);
   return send({ id: nextId++, bitmap, type, quality }, [bitmap]);
 }
@@ -251,7 +255,7 @@ export async function sketchFiles(doc: PaintDocument, png: (canvas: OffscreenCan
         locked: l.locked,
         opacity: l.opacity,
         file: `layers/${i}.png`,
-        ...(l.objects.length ? { objects: [...l.objects] } : {}),
+        ...(l.objects.length ? { objects: l.objects.map(writeObject) } : {}),
       }),
     ),
   };
