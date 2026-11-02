@@ -12,7 +12,7 @@ import { optionsToolId, pickedCount } from '../tools/shapes';
 import { ColorPopover } from './ColorPopover';
 import { Icon } from './icons';
 import { PreviewOption } from './PreviewOption';
-import { DRAG_START_PX, scrubMove, scrubStart, type Scrub } from './scrub';
+import { DRAG_START_PX, isLockJump, LOCK_JUMP_MS, scrubMove, scrubStart, type Scrub } from './scrub';
 
 export const FONTS = ['Segoe UI', 'Arial', 'Calibri', 'Cambria', 'Comic Sans MS', 'Consolas', 'Georgia', 'Impact', 'Segoe Print', 'Times New Roman', 'Verdana'];
 
@@ -164,16 +164,24 @@ function ScrubOption(props: { toolId: string; o: RangeSpec; value: number }) {
     let state: Scrub | null = null;
     let applied = latest.current;
     let wasLocked = false;
+    let lockedAt = -Infinity;
     const lockChange = () => {
       if (document.pointerLockElement === el) {
         wasLocked = true;
+        lockedAt = performance.now();
         el.dataset.lock = 'locked';
       } else if (wasLocked) finish(); // Escape in the lock ends the drag
     };
     const lockError = () => (el.dataset.lock = 'fallback');
     const move = (ev: PointerEvent) => {
+      const locked = document.pointerLockElement === el;
+      if (wasLocked && !locked) return; // The lock's last move, from the cursor's real place, before `lockChange` hears it ended.
+      if (locked && ev.timeStamp - lockedAt < LOCK_JUMP_MS && isLockJump(ev.movementY, innerHeight / 2 - e.clientY)) {
+        lockedAt = -Infinity;
+        return;
+      }
       // Locked, the pointer stays put and only `movementX` moves; otherwise it follows the captured pointer.
-      const dx = document.pointerLockElement === el ? ev.movementX : ev.clientX - lastX;
+      const dx = locked ? ev.movementX : ev.clientX - lastX;
       lastX = ev.clientX;
       if (!state) {
         if (Math.abs(ev.clientX - startX) < DRAG_START_PX) return;

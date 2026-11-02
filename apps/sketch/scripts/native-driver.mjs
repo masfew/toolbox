@@ -592,6 +592,33 @@ export async function attach(port, pid) {
   return connect(port, { pid, exited, kill: () => !gone() && process.kill(pid) });
 }
 
+/**
+ * Call once the pointer has locked, before driving a locked drag with DevTools mouse moves. The first DevTools move
+ * after a lock is often measured from the middle of the window, not from the last position sent, so its `movementX` is
+ * the position sent minus half the window's width. This sends one move to (x, y) and keeps it from the page, so the
+ * next move is measured from (x, y). A move that reports no movement is let through: the window sends one when it puts
+ * the real cursor in its middle, and sometimes this move is one too.
+ */
+export async function settleLockedPointer(app, x, y, buttons = 1) {
+  await app.evaluate(`(() => {
+    window.__settled = new Promise((done) => {
+      const finish = () => {
+        removeEventListener('pointermove', stop, true);
+        done();
+      };
+      const stop = (e) => {
+        if (!e.movementX && !e.movementY) return;
+        e.stopPropagation();
+        finish();
+      };
+      addEventListener('pointermove', stop, true);
+      setTimeout(finish, 1000);
+    });
+  })()`);
+  await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons, clickCount: 0 });
+  await app.evaluate('window.__settled');
+}
+
 async function connect(port, child) {
   let wsUrl = null;
   const deadline = Date.now() + 20000;

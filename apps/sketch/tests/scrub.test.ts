@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRAG_START_PX, scrubMove, scrubStart, type Scrub } from '../src/ui/scrub';
+import { DRAG_START_PX, isLockJump, scrubMove, scrubStart, type Scrub } from '../src/ui/scrub';
 
 /** Moves the pointer by each delta in turn. */
 function drag(from: number, deltas: number[], shift: boolean | boolean[] = false, min = 0, max = 100): Scrub {
@@ -77,5 +77,15 @@ describe('drag label maths', () => {
 
   it('starts a drag after a few pixels', () => {
     expect(DRAG_START_PX).toBe(3);
+  });
+
+  it('tells the lock putting the cursor in the middle of the window from the mouse', () => {
+    expect(isLockJump(351, 351)).toBe(true);
+    expect(isLockJump(345, 351)).toBe(true); // the mouse moved up a little too
+    expect(isLockJump(526, 351)).toBe(true); // a screen at 150%
+    expect(isLockJump(0, 351)).toBe(false);
+    expect(isLockJump(12, 351)).toBe(false);
+    expect(isLockJump(-351, 351)).toBe(false); // away from the middle
+    expect(isLockJump(0, 0)).toBe(false);
   });
 });

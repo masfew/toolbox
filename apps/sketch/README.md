@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.8.0. See the [changes](#changes) at the end.
+Version 1.8.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -408,6 +408,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.8.1: Dragging a number in the options bar no longer jumps as it starts. If the mouse was moving when the drag took hold of the pointer, which it nearly always is, the value could leap by 50 or more, or straight to the end of its range.
 - 1.8.0: Every tool's options bar now matches the Shape tool's. All numbers are drag labels, the Brush, Pencil, Eraser and Highlighter sizes included. Every choice (brush Type, Pen pressure, Erase to, Sample, Ratio, Align, Highlighter Colour, Spotlight Shape, Font) is a small square that shows the current one and opens a short menu, in place of dropdown lists and pairs of buttons. On and off settings have an icon, with Bold and Italic as icons alone, and they show a blue edge and tint while on instead of a solid blue fill. Crop and Remove Background have icons too.
 - 1.7.0: A tidier options bar. Shapes, lines and arrows have their own **Fill** and **Outline** colours, apart from colours 1 and 2, so drawing a shape no longer touches the brush's colours, nor the other way round. The Fill switch is gone: a fill is a colour you pick, and **No Colour** (a button in the colour picker, or opacity 0%) means none, so shapes still start hollow, and the outline can be No Colour too. Pictures saved before open exactly as they were. Numbers such as Outline, Opacity and Corners are now labels you drag left or right (one step per 2 pixels, Shift ten times as fast, and the pointer never runs out of screen) or click to type in, with the arrow keys for 1 and Shift for 10. Line style and arrowheads are small squares that open a short menu. Right-drag draws with fill and outline swapped, X swaps them, and shapes and lines drawn on a screen capture start in the capture's red. Saving a `.sktch` that was opened from a file whose layers held only shapes and text no longer fails with "The ImageBitmap could not be allocated".
 - 1.6.1: Other apps' shortcuts with Shift, such as Ctrl+Shift+X, work in the second after a capture. Sketch now only listens for its Left Shift tap from the side, so it's never in the way of any key going to another app; until now it sat in the path of every key on the PC during that second.

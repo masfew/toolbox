@@ -20,7 +20,7 @@ import { cpus, release, tmpdir, totalmem } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync, crc32 } from 'node:zlib';
-import { attach, fillFileDialog, helper, launch, overlay, ps, screen, sleep } from './native-driver.mjs';
+import { attach, fillFileDialog, helper, launch, overlay, ps, screen, settleLockedPointer, sleep } from './native-driver.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RESULTS = join(root, 'perf-results');
@@ -454,6 +454,7 @@ async function labelDrag() {
   await mouse('mouseMoved', x + 10, 1);
   await waitUntil('the drag to start', async () => (await ev(`document.querySelector('.opt.drag .scrub')?.dataset.lock ?? ''`)) !== '', 3000);
   await sleep(150);
+  await settleLockedPointer(app, x + 10, y);
   const times = [];
   const width = `${S}.app.doc.layers[0].objects[0].width`;
   for (let i = 0; i < runs(10); i++) {

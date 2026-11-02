@@ -11,6 +11,8 @@ export const PX_PER_STEP = 2;
 export const SHIFT_SPEED = 10;
 /** The pointer has to move this far before a press counts as a drag rather than a click. */
 export const DRAG_START_PX = 3;
+/** How long after the pointer locks its jump can still arrive, in ms. */
+export const LOCK_JUMP_MS = 150;
 
 export interface Scrub {
   /** The whole value. */
@@ -30,4 +32,15 @@ export function scrubMove(s: Scrub, dx: number, shift: boolean, min: number, max
   const value = Math.min(max, Math.max(min, s.value + whole));
   // At an end the leftover is dropped, so coming back from past the end starts at once.
   return { value, rest: value === s.value + whole ? total - whole : 0 };
+}
+
+/**
+ * Whether a move just after the pointer locked is the lock's own jump rather than the mouse. Locking puts the cursor in
+ * the middle of the window, and if the mouse is moving at that moment the first locked move reports that as movement,
+ * right across the window. Labels are dragged sideways and sit above the middle, so `dy` (its `movementY`) gives it
+ * away; `toMiddle` is how far below the pointer the middle was. Half is enough at any screen scale, and a real flick
+ * that big only loses one move.
+ */
+export function isLockJump(dy: number, toMiddle: number): boolean {
+  return toMiddle !== 0 && dy / toMiddle >= 0.5;
 }

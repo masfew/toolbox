@@ -16,7 +16,7 @@ import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, read
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { attach, captureTarget, clipboard, fillFileDialog, helper, holdHotkey, keys, launch, listenHotkey, notesInCentre, overlay, png, pngSize, postClose, ps, screen, sleep } from './native-driver.mjs';
+import { attach, captureTarget, clipboard, fillFileDialog, helper, holdHotkey, keys, launch, listenHotkey, notesInCentre, overlay, png, pngSize, postClose, ps, screen, settleLockedPointer, sleep } from './native-driver.mjs';
 
 const exe = resolve(process.argv[2] ?? join('src-tauri', 'target', 'release', 'sketch.exe'));
 const work = mkdtempSync(join(tmpdir(), 'sketch-native-'));
@@ -1334,6 +1334,7 @@ try {
     await bMouse('mousePressed', at.x, at.y, { buttons: 1, mods });
     await bMouse('mouseMoved', at.x + 10, at.y, { buttons: 1, mods });
     await waitUntil(`the pointer to lock for ${name}`, async () => (await labelState(name)).lock === 'locked', 5000);
+    await settleLockedPointer(app, at.x + 10, at.y);
     return { x: at.x + 10, y: at.y };
   };
   const stillLocked = () => app.evaluate('!!document.pointerLockElement');
@@ -1410,6 +1411,15 @@ try {
     await bMouse('mouseMoved', start.x + 200, start.y);
     await sleep(100);
     expect((await labelState('Corners')).value === '0', 'The value moved with the button up');
+    // A real mouse moving as the pointer locks reports the cursor's move to the middle of the window as movement. DevTools can't
+    // make that move, so the page gets one as soon as the pointer locks, the size a real drag on this bar reported.
+    const label = await labelAt('Corners');
+    await app.evaluate(`document.addEventListener('pointerlockchange', () => setTimeout(() => window.dispatchEvent(new PointerEvent('pointermove', { movementX: 135, movementY: innerHeight / 2 - ${label.y} }))), { once: true })`);
+    const again = await startLabelDrag('Corners');
+    expect((await labelState('Corners')).value === '0', `The lock's jump moved the value to ${(await labelState('Corners')).value}`);
+    await bMouse('mouseMoved', again.x + 20, again.y, { buttons: 1 });
+    expect((await labelState('Corners')).value === '10', `20 px after the lock's jump gave ${(await labelState('Corners')).value}, not 10`);
+    await bMouse('mouseReleased', again.x + 20, again.y, { buttons: 0 });
   });
 
   await barCheck('Changing tool during a drag, and Escape in the lock, end the drag and free the pointer', async () => {
