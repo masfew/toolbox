@@ -1,6 +1,7 @@
 import { createLayer, ctxOf, fillFor, flatten, isBlank, newCanvas, NO_EDGES, type Edges, type Layer, type PaintDocument } from './document';
 import { CompositeCommand, type Command } from './history';
-import { changeObject, drawObjects, layoutText, objectPaintBounds, type PictureChange, type SketchObject } from './objects';
+import { isOpen } from './board';
+import { changeObject, drawObjects, inkTouches, isSpotlight, layoutText, objectPaintBounds, objectsToBake, type PictureChange, type Rect, type SketchObject } from './objects';
 import { PixelEdit } from './tiles';
 
 /** A layer's pixels and objects at one moment. */
@@ -300,7 +301,7 @@ export class ObjectsCommand implements Command {
   }
 }
 
-// ---------- Rasterize and flatten (step 4.4) ----------
+// ---------- Painting over objects, and flatten (step 4.4) ----------
 
 /** Swaps the document's whole list of layers, and which one is current. */
 class LayersCommand implements Command {
@@ -342,39 +343,103 @@ function backdropFor(doc: PaintDocument, index: number): OffscreenCanvasRenderin
   return back;
 }
 
+const readsBackdrop = (o: SketchObject) => o.type === 'mark' && (o.kind === 'blur' || o.kind === 'pixelate');
+
 /**
- * Draws some of a layer's objects into its own pixels and takes them out of its objects, as one step,
- * and applies it. They look as they did, except where they overlapped objects that stay (the pixels
- * are under every object). Null when none of `ids` is in the layer.
+ * Whether an object can go into its layer's pixels as it looks. A whiteboard's or capture's canvas may not
+ * reach one far off screen, which would be cut off, and a highlight on a higher layer darkens the layers
+ * under it, which it can't do from inside its own. Those stay objects.
  */
-export function rasterizeObjects(doc: PaintDocument, layer: Layer, ids: number[], label: string): Command | null {
-  const index = doc.layers.indexOf(layer);
-  const objects = layer.objects.filter((o) => ids.includes(o.id));
-  if (index < 0 || !objects.length) return null;
-  const back = backdropFor(doc, index);
-  const edit = new PixelEdit(layer, label);
-  for (const o of objects) {
-    const r = objectPaintBounds(o);
-    edit.touch(r.x, r.y, r.w, r.h);
-  }
-  // At full strength: the canvas shows at the layer's opacity, as the objects did.
-  back.globalAlpha = layer.opacity;
-  drawObjects(ctxOf(layer.canvas), objects, back);
-  const before = layer.objects;
-  layer.objects = before.filter((o) => !ids.includes(o.id));
-  const parts = [edit.finish(), new ObjectsCommand(label, layer, before, layer.objects)].filter((c): c is Command => c !== null);
-  return new CompositeCommand(label, parts);
+function fitsCanvas(doc: PaintDocument, layer: Layer, o: SketchObject): boolean {
+  if (o.type === 'mark' && o.kind === 'highlight' && doc.layers.indexOf(layer) > 0) return false;
+  const r = objectPaintBounds(o);
+  return !isOpen(doc) || (r.x >= 0 && r.y >= 0 && r.x + r.w <= layer.canvas.width && r.y + r.h <= layer.canvas.height);
 }
 
-/** Draws all of a layer's objects into its pixels as one step, and applies it. Null when it has none. */
-export function rasterizeLayer(doc: PaintDocument, index: number): Command | null {
-  const layer = doc.layers[index];
-  return rasterizeObjects(
-    doc,
-    layer,
-    layer.objects.map((o) => o.id),
-    'Rasterize layer',
-  );
+/**
+ * A change to a layer's pixels that can take objects into them. Whatever a pixel tool paints, fills or
+ * moves goes on top of everything it reaches, as in Paint: `bake` turns those shapes, text and mark-up
+ * into pixels first, and `finish` makes the pixels and the objects one undo step.
+ */
+export class PaintEdit extends PixelEdit {
+  private before: readonly SketchObject[] | null = null;
+
+  constructor(
+    private readonly doc: PaintDocument,
+    layer: Layer,
+    label: string,
+  ) {
+    super(layer, label);
+  }
+
+  /** Whether `bake` can take this object. */
+  fits(o: SketchObject): boolean {
+    return fitsCanvas(this.doc, this.layer, o);
+  }
+
+  /** Draws these objects into the layer's pixels and takes them out of its objects. */
+  bake(objects: readonly SketchObject[]): void {
+    const { doc, layer } = this;
+    const index = doc.layers.indexOf(layer);
+    const going = objects.filter((o) => this.fits(o));
+    if (index < 0 || !going.length) return;
+    // Only blur and pixelate read what's under them, and this copies the picture.
+    const back = going.some(readsBackdrop) ? backdropFor(doc, index) : undefined;
+    for (const o of going) {
+      const r = objectPaintBounds(o);
+      this.touch(r.x, r.y, r.w, r.h);
+      if (o.type === 'mark' && o.kind === 'marker') doc.bakedMarker = Math.max(doc.bakedMarker, o.number);
+    }
+    // At full strength: the canvas shows at the layer's opacity, as the objects did.
+    if (back) back.globalAlpha = layer.opacity;
+    drawObjects(ctxOf(layer.canvas), going, back);
+    this.before ??= layer.objects;
+    layer.objects = layer.objects.filter((o) => !going.includes(o));
+  }
+
+  /** Bakes the objects `reached` picks, and what they cover. */
+  bakeWhere(reached: (o: SketchObject) => boolean): void {
+    const { objects } = this.layer;
+    if (objects.length) this.bake(objectsToBake(objects.filter((o) => this.fits(o)), reached));
+  }
+
+  /** Bakes what puts ink in `area`, and what that covers. */
+  bakeUnder(area: Rect): void {
+    this.bakeWhere((o) => inkTouches(o, area));
+  }
+
+  finish(): Command | null {
+    const pixels = super.finish();
+    if (!this.before) return pixels;
+    const objects = new ObjectsCommand(this.label, this.layer, this.before, this.layer.objects);
+    return new CompositeCommand(this.label, pixels ? [pixels, objects] : [objects]);
+  }
+}
+
+/** Turns the objects in `area`, or all of a layer's that can be, into pixels, as a step the caller records or reverts. Null when none did. */
+export function bakeLayer(doc: PaintDocument, layer: Layer, label: string, area?: Rect): Command | null {
+  if (!layer.objects.length) return null;
+  const edit = new PaintEdit(doc, layer, label);
+  if (area) edit.bakeUnder(area);
+  else edit.bakeWhere(() => true);
+  return edit.finish();
+}
+
+/**
+ * A layer's pixels with its objects drawn on them, as they'd be baked: its own canvas when it has none,
+ * and no spotlights, which are never baked. For reading, never drawing on.
+ */
+export function layerAsShown(doc: PaintDocument, layer: Layer): OffscreenCanvas {
+  const index = doc.layers.indexOf(layer);
+  const objects = layer.objects.filter((o) => !isSpotlight(o) && fitsCanvas(doc, layer, o));
+  if (index < 0 || !objects.length) return layer.canvas;
+  const c = newCanvas(layer.canvas.width, layer.canvas.height);
+  const ctx = ctxOf(c);
+  ctx.drawImage(layer.canvas, 0, 0);
+  const back = objects.some(readsBackdrop) ? backdropFor(doc, index) : undefined;
+  if (back) back.globalAlpha = layer.opacity;
+  drawObjects(ctx, objects, back);
+  return c;
 }
 
 /** Merges the layers that are showing into one layer of pixels, and applies it. Hidden layers are dropped. */

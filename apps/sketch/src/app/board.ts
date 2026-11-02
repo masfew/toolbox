@@ -1,7 +1,7 @@
-import { boardGrowth, CAPTURE_MARGIN, contentBounds, frameOf, isOpen, objectsBounds, pictureArea } from '../engine/board';
+import { boardGrowth, CAPTURE_MARGIN, contentBounds, frameOf, isOpen, objectsBounds, pictureArea, union } from '../engine/board';
 import { growCanvas, resizeCanvas } from '../engine/commands';
 import type { Command } from '../engine/history';
-import type { SketchObject } from '../engine/objects';
+import { inkTouches, isSpotlight, objectBounds, type SketchObject } from '../engine/objects';
 import type { Rect } from '../engine/pixels';
 import { app, toast } from './store';
 
@@ -94,7 +94,10 @@ export function growBoardForNext(need: Rect | null): void {
   if (cmd) app.history.record(cmd);
 }
 
-/** Before a pixel tool starts: the canvas must hold what's on screen near the pointer, wherever it was drawn before. */
+/**
+ * Before a pixel tool starts: the canvas must hold what's on screen near the pointer, wherever it was
+ * drawn before, and the shapes within its reach, which become pixels if the tool paints over them.
+ */
 export function growBoardForPointer(sx: number, sy: number): void {
   if (!isOpen(app.doc)) return;
   const v = app.viewport;
@@ -105,7 +108,14 @@ export function growBoardForPointer(sx: number, sy: number): void {
   const y0 = Math.max(a.y, p.y - REACH);
   const x1 = Math.min(b.x, p.x + REACH);
   const y1 = Math.min(b.y, p.y + REACH);
-  growBoardForNext({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  const near = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  // Only objects of a size to go with that: a long line across a whiteboard would ask for a canvas of up to a gigabyte.
+  const fitsReach = (o: SketchObject) => {
+    const r = objectBounds(o);
+    return r.w <= REACH && r.h <= REACH;
+  };
+  const reachable = app.doc.activeLayer.objects.filter((o) => !isSpotlight(o) && fitsReach(o) && inkTouches(o, near));
+  growBoardForNext(union(near, objectsBounds(reachable)));
 }
 
 /** Before shapes and text become pixels: the canvas must hold them, as they can sit anywhere on a board or round a capture. */

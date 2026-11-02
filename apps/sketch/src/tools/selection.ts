@@ -1,10 +1,10 @@
 import { parseHex } from '../app/color';
 import { app, changed, colorSignal, toast } from '../app/store';
-import { onOptionChange, onToolChange, settingsOf, tools } from '../app/tools';
+import { onOptionChange, onToolChange, selectTool, settingsOf, tools } from '../app/tools';
+import { layerAsShown, PaintEdit } from '../engine/commands';
 import { ctxOf, newCanvas, type Layer } from '../engine/document';
 import { CompositeCommand, type Command } from '../engine/history';
 import { clearColor } from '../engine/pixels';
-import { PixelEdit } from '../engine/tiles';
 import {
   boundsOf,
   EDGE_HANDLES,
@@ -26,6 +26,8 @@ import { floodArea } from './floodClient';
  *
  * The pixels stay in the layer until the selection is moved, resized or turned. Then they're
  * lifted off (leaving a see-through hole) and shown in the box until the selection is placed.
+ * Shapes, text and mark-up in the way go with them: it's all one picture, so they become pixels
+ * when lifted, and when something is placed over them.
  */
 export interface Selection extends Box {
   layer: Layer;
@@ -44,7 +46,7 @@ export interface Selection extends Box {
   /** The colour taken out of `image` for a transparent selection, or null. */
   cleared: string | null;
   /** The change that lifted the pixels, kept open until the selection is placed. */
-  lift: PixelEdit | null;
+  lift: PaintEdit | null;
   /** A canvas growth made for a paste, undone if the paste is cancelled. */
   pendingResize: Command | null;
   pasted: boolean;
@@ -143,7 +145,7 @@ function selectMask(pixels: Uint8ClampedArray, runs: Int32Array, r: { x: number;
   changed();
 }
 
-/** Shows a pasted picture at (x, y), ready to move, resize or turn before it's placed. */
+/** Shows a pasted picture at (x, y), ready to move, resize or turn before it's placed, on a Select tool, as in Paint. */
 export function pasteSelection(image: OffscreenCanvas, x: number, y: number, pendingResize: Command | null): void {
   const sel = create(app.doc.activeLayer, x, y, image.width, image.height, null, rectPath(image.width, image.height));
   sel.raw = image;
@@ -151,6 +153,7 @@ export function pasteSelection(image: OffscreenCanvas, x: number, y: number, pen
   sel.pendingResize = pendingResize;
   refreshCleared(sel);
   app.selection = sel;
+  if (!isSelectTool(tools.current)) selectTool(tools.slots.select);
   changed();
 }
 
@@ -198,11 +201,11 @@ export function replaceFloating(sel: Selection, raw: OffscreenCanvas): void {
   changed();
 }
 
-/** The picked pixels, cut out of their layer. */
-function pickedPixels(sel: Selection): OffscreenCanvas {
+/** The picked pixels, cut out of `source`: their layer, or a copy of it as it shows. */
+function pickedPixels(sel: Selection, source: OffscreenCanvas): OffscreenCanvas {
   const c = newCanvas(sel.sw, sel.sh);
   const ctx = ctxOf(c);
-  ctx.drawImage(sel.layer.canvas, sel.sx, sel.sy, sel.sw, sel.sh, 0, 0, sel.sw, sel.sh);
+  ctx.drawImage(source, sel.sx, sel.sy, sel.sw, sel.sh, 0, 0, sel.sw, sel.sh);
   if (sel.mask) {
     ctx.globalCompositeOperation = 'destination-in';
     ctx.drawImage(sel.mask, 0, 0);
@@ -218,9 +221,10 @@ function lift(sel: Selection): boolean {
     toast(`${l.name} is ${l.locked ? 'locked' : 'hidden'}. ${l.locked ? 'Unlock' : 'Show'} it in the Layers panel to change it.`, 4000);
     return false;
   }
-  const edit = new PixelEdit(sel.layer, 'Move selection');
+  const edit = new PaintEdit(app.doc, sel.layer, 'Move selection');
+  edit.bakeUnder({ x: sel.sx, y: sel.sy, w: sel.sw, h: sel.sh });
   edit.touch(sel.sx, sel.sy, sel.sw, sel.sh);
-  sel.raw = pickedPixels(sel);
+  sel.raw = pickedPixels(sel, sel.layer.canvas);
   const ctx = ctxOf(sel.layer.canvas);
   if (sel.mask) {
     ctx.globalCompositeOperation = 'destination-out';
@@ -251,8 +255,9 @@ export function placeSelection(): void {
     sel.lift?.finish()?.revert();
     return changed();
   }
-  const edit = sel.lift ?? new PixelEdit(sel.layer, 'Paste');
+  const edit = sel.lift ?? new PaintEdit(app.doc, sel.layer, 'Paste');
   const b = boundsOf(sel);
+  edit.bakeUnder(b);
   edit.touch(b.x, b.y, b.w, b.h);
   const ctx = ctxOf(sel.layer.canvas);
   ctx.save();
@@ -293,7 +298,7 @@ export function deleteSelection(label = 'Delete selection'): void {
 
 /** The selection's pixels as they look now, for copying. */
 export function selectionImage(sel: Selection): OffscreenCanvas {
-  const image = sel.image ?? pickedPixels(sel);
+  const image = sel.image ?? pickedPixels(sel, layerAsShown(app.doc, sel.layer));
   if (!isTransformed(sel)) return image;
   const b = boundsOf(sel);
   const c = newCanvas(b.w, b.h);
@@ -450,7 +455,7 @@ export async function wandSelect(p: Point): Promise<void> {
     return changed();
   }
   const layer = doc.activeLayer;
-  const data = ctxOf(layer.canvas).getImageData(0, 0, doc.width, doc.height);
+  const data = ctxOf(layerAsShown(doc, layer)).getImageData(0, 0, doc.width, doc.height);
   const tolerance = (settingsOf('magic-wand').tolerance as number) / 100;
   const area = await floodArea(data, x, y, tolerance);
   if (app.doc !== doc || !area) return;

@@ -2,13 +2,16 @@ import { parseHex, toHex } from '../app/color';
 import type { ColorTarget } from '../app/colorTargets';
 import { app, changed, toast } from '../app/store';
 import { settingsOf } from '../app/tools';
+import { layerAsShown, PaintEdit } from '../engine/commands';
 import { ctxOf, drawLayer, flatten, newCanvas } from '../engine/document';
-import { PixelEdit } from '../engine/tiles';
 import type { Point } from './box';
 import type { ToolDrag } from './drag';
 import { floodFill, queued } from './floodClient';
 
-/** Fill: paints the area of similar colour around the click with colour 1 (left) or colour 2 (right). */
+/**
+ * Fill: paints the area of similar colour around the click with colour 1 (left) or colour 2 (right).
+ * Outlines stop it as in Paint, and the shapes and text with ink in what it fills become pixels with it, as one step.
+ */
 export function fillAt(p: Point, button: number): Promise<void> {
   const x = Math.floor(p.x);
   const y = Math.floor(p.y);
@@ -18,8 +21,8 @@ export function fillAt(p: Point, button: number): Promise<void> {
     if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return;
     const st = settingsOf('fill');
     const layer = doc.activeLayer;
-    const ctx = ctxOf(layer.canvas);
-    const target = ctx.getImageData(0, 0, doc.width, doc.height);
+    // Read as it shows; the objects only become pixels once something is filled, so nothing is half done while the fill runs.
+    const target = ctxOf(layerAsShown(doc, layer)).getImageData(0, 0, doc.width, doc.height);
     const sample = st.sample === 'picture' ? ctxOf(flatten(doc)).getImageData(0, 0, doc.width, doc.height) : null;
     try {
       const done = await floodFill(target, sample, x, y, (st.tolerance as number) / 100, st.global as boolean, [
@@ -46,9 +49,10 @@ export function fillAt(p: Point, button: number): Promise<void> {
         if (app.history.top?.joinNext) app.history.discardTop();
         return;
       }
-      const edit = new PixelEdit(layer, 'Fill');
+      const edit = new PaintEdit(doc, layer, 'Fill');
+      edit.bakeUnder(r);
       edit.touch(r.x, r.y, r.w, r.h);
-      ctx.putImageData(new ImageData(done.data as Uint8ClampedArray<ArrayBuffer>, target.width, target.height), 0, 0, r.x, r.y, r.w, r.h);
+      ctxOf(layer.canvas).putImageData(new ImageData(done.data as Uint8ClampedArray<ArrayBuffer>, target.width, target.height), 0, 0, r.x, r.y, r.w, r.h);
       const cmd = edit.finish();
       if (cmd) app.history.record(cmd);
       changed();

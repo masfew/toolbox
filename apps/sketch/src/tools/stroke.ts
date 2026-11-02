@@ -1,8 +1,9 @@
 import { opaqueHex, parseHex } from '../app/color';
-import { ctxOf, newCanvas, type Layer } from '../engine/document';
+import { PaintEdit } from '../engine/commands';
+import { ctxOf, newCanvas, type Layer, type PaintDocument } from '../engine/document';
 import type { Command } from '../engine/history';
+import { hitObject, inkTouches, isSpotlight, objectPaintBounds, rectsOverlap, type Rect, type SketchObject } from '../engine/objects';
 import { linePixels } from '../engine/pixels';
-import { PixelEdit } from '../engine/tiles';
 
 /** A stroke being drawn see-through, for the renderer to show over its layer until it ends. */
 export interface LiveStroke {
@@ -51,10 +52,12 @@ const FOLLOW = 0.45;
  * canvas and blended onto the layer when they end, so the stroke's own overlaps don't build up.
  */
 export class Stroke {
-  private edit: PixelEdit;
+  private edit: PaintEdit;
   readonly live: LiveStroke | null;
   private ctx: OffscreenCanvasRenderingContext2D;
   private bounds = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  /** Where each object paints, worked out once: for text that means measuring it, and this runs on every pointer move. */
+  private painted = new Map<SketchObject, Rect>();
   private readonly color: string;
   /** Pressure fades each piece, so pieces mustn't overlap: their ends are cut flat. */
   private readonly fade: boolean;
@@ -66,11 +69,12 @@ export class Stroke {
   last: StrokePoint;
 
   constructor(
+    doc: PaintDocument,
     layer: Layer,
     private readonly spec: StrokeSpec,
     start: StrokePoint,
   ) {
-    this.edit = new PixelEdit(layer, spec.label);
+    this.edit = new PaintEdit(doc, layer, spec.label);
     const c = parseHex(spec.color) ?? { r: 0, g: 0, b: 0, a: 1 };
     this.color = opaqueHex(spec.color);
     this.fade = spec.nib === 'round' && spec.pressure === 'opacity';
@@ -85,6 +89,41 @@ export class Stroke {
 
   private get erasing(): boolean {
     return this.spec.color === 'clear';
+  }
+
+  /** The nib is about to go from a to b: any shape, text or mark-up it touches becomes pixels, so the stroke lands on top of it. */
+  private reach(a: StrokePoint, b: StrokePoint): void {
+    const { objects } = this.edit.layer;
+    if (!objects.length) return;
+    // The nib's own reach, to the corners of the square and flat ones, and a pixel more, as curves are tested as straight pieces.
+    const { nib, size } = this.spec;
+    const r = (nib === 'round' || nib === 'eraser' ? size / 2 : size * Math.SQRT1_2) + 1;
+    const box = { x: Math.min(a.x, b.x) - r, y: Math.min(a.y, b.y) - r, w: Math.abs(b.x - a.x) + r * 2, h: Math.abs(b.y - a.y) + r * 2 };
+    const steps = Math.max(1, Math.ceil((Math.hypot(b.x - a.x, b.y - a.y) * 2) / r));
+    const touched = (o: SketchObject) => {
+      let area = this.painted.get(o);
+      if (!area) this.painted.set(o, (area = objectPaintBounds(o)));
+      if (isSpotlight(o) || !rectsOverlap(box, area) || !this.edit.fits(o)) return false;
+      // What a click hits leaves out an arrowhead's wings, and is text's whole box, gaps, tail and outline aside, so those go by ink.
+      const arrow = o.type === 'line' && (o.start !== 'none' || o.end !== 'none');
+      for (let i = 0; i <= steps; i++) {
+        const x = a.x + ((b.x - a.x) * i) / steps;
+        const y = a.y + ((b.y - a.y) * i) / steps;
+        // Most of a long straight line is nowhere near the object, and the exact tests are the slow part.
+        if (x < area.x - r || y < area.y - r || x > area.x + area.w + r || y > area.y + area.h + r) continue;
+        const nib = { x: x - r, y: y - r, w: r * 2, h: r * 2 };
+        if (o.type === 'text' ? inkTouches(o, nib) : hitObject(o, x, y, r) || (arrow && inkTouches(o, nib))) return true;
+      }
+      return false;
+    };
+    if (objects.some(touched)) this.edit.bakeWhere(touched);
+  }
+
+  /** `reach` along a curve from a to b bending at `ctrl`, through the curve's own middle, as it cuts that corner. */
+  private reachCurve(a: StrokePoint, ctrl: StrokePoint, b: StrokePoint): void {
+    const bend = { x: (a.x + b.x) / 4 + ctrl.x / 2, y: (a.y + b.y) / 4 + ctrl.y / 2, p: ctrl.p };
+    this.reach(a, bend);
+    this.reach(bend, b);
   }
 
   /** Notes an area about to change: straight to the undo snapshot, or kept for the end of a see-through stroke. */
@@ -123,6 +162,7 @@ export class Stroke {
   /** The mark the nib makes where the stroke starts. */
   private dab(pt: StrokePoint): void {
     const { nib } = this.spec;
+    this.reach(pt, pt);
     this.mark(pt.x, pt.y, pt.x, pt.y);
     if (nib === 'pencil') return this.pencil(pt, pt);
     const ctx = this.begin(this.fade ? pt.p : 1);
@@ -198,6 +238,7 @@ export class Stroke {
     const { nib, smoothing } = this.spec;
     this.last = raw;
     if (nib === 'pencil') {
+      this.reach(this.prev, raw);
       this.mark(this.prev.x, this.prev.y, raw.x, raw.y);
       this.pencil(this.prev, raw);
       this.prev = raw;
@@ -209,12 +250,14 @@ export class Stroke {
       : raw;
     this.sm = pt;
     if (nib === 'marker' || nib === 'highlighter') {
+      this.reach(this.prev, pt);
       this.mark(this.prev.x, this.prev.y, pt.x, pt.y);
       this.sweep(this.prev, pt);
       this.prev = pt;
       return;
     }
     if (!smooth) {
+      this.reach(this.prev, pt);
       this.mark(this.prev.x, this.prev.y, pt.x, pt.y);
       this.piece(this.prev, pt);
       this.prev = pt;
@@ -222,6 +265,7 @@ export class Stroke {
     }
     // A curve through the midpoints, bending at each smoothed point.
     const mid = { x: (this.prev.x + pt.x) / 2, y: (this.prev.y + pt.y) / 2, p: (this.prev.p + pt.p) / 2 };
+    this.reachCurve(this.mid, this.prev, mid);
     this.mark(Math.min(this.mid.x, this.prev.x, mid.x), Math.min(this.mid.y, this.prev.y, mid.y), Math.max(this.mid.x, this.prev.x, mid.x), Math.max(this.mid.y, this.prev.y, mid.y));
     this.piece(this.mid, mid, this.prev);
     this.mid = mid;
@@ -242,6 +286,7 @@ export class Stroke {
     const last = this.last;
     if (this.spec.nib !== 'pencil' && (this.prev.x !== last.x || this.prev.y !== last.y)) {
       const from = this.spec.smoothing && this.spec.nib === 'round' ? this.mid : this.prev;
+      this.reachCurve(from, this.prev, last);
       this.mark(from.x, from.y, last.x, last.y);
       if (this.spec.nib === 'marker' || this.spec.nib === 'highlighter') this.sweep(from, last);
       else this.piece(from, last, this.spec.smoothing && this.spec.nib === 'round' ? this.prev : undefined);

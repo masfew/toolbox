@@ -1,4 +1,4 @@
-import { rasterizeCurrentLayer, rememberColor, settle } from '../app/actions';
+import { rememberColor, settle } from '../app/actions';
 import { COLOR_TARGETS } from '../app/colorTargets';
 import { clampView, growBoardForPointer } from '../app/board';
 import { paintBlocked } from '../app/layers';
@@ -18,7 +18,7 @@ import { PAINT_TOOLS, paintDrag } from '../tools/paint';
 import { freeSelectDrag, isSelectTool, rectSelectDrag, selectionCursor, selectionDrag, wandSelect } from '../tools/selection';
 import { calloutDrag, tailDrag, tailHandleAt } from '../tools/callout';
 import { highlightDrag, markBoxDrag, markerDrag } from '../tools/marks';
-import { clearPicked, isObjectTool, LINE_TOOLS, lineDrag, objectCursor, objectPress, offerRasterize, SHAPE_TOOLS, shapeDrag } from '../tools/shapes';
+import { clearPicked, isObjectTool, LINE_TOOLS, lineDrag, objectCursor, objectPress, SHAPE_TOOLS, shapeDrag } from '../tools/shapes';
 import { commitText, textDrag } from '../tools/text';
 import { hitHandle, type HandleEdge, type Renderer } from './renderer';
 
@@ -153,15 +153,20 @@ export class CanvasController {
     }
 
     const tool = currentTool();
+    // Only the Select tools hold a selection or a pasted picture. Any other tool puts it down and goes on to draw.
+    if (app.selection && !isSelectTool(tool.id)) {
+      settle();
+      if (e.button !== 0) return;
+    }
     if (app.selection && e.button === 0) {
       const d = selectionDrag(s.x, s.y, p);
       if (d) return this.startTool(d);
     }
 
-    // Shapes and lines: the picked one's handles, then any shape or line under the pointer.
-    // The select tools pick them too. A selection of pixels or a pasted picture is placed first.
+    // The select tools pick the shape under the pointer; the tools that draw shapes only take hold of a
+    // picked one, and draw anywhere else. A selection of pixels or a pasted picture is placed first.
     if (!app.selection && (isObjectTool(tool.id) || (isSelectTool(tool.id) && !e.altKey))) {
-      const d = objectPress(s.x, s.y, p, e);
+      const d = objectPress(s.x, s.y, p, e, isObjectTool(tool.id));
       if (d) return this.startTool(d);
     }
     clearPicked();
@@ -178,7 +183,7 @@ export class CanvasController {
     if (app.selection) {
       // Clicking outside a selection or a pasted picture places it, as in Paint.
       settle();
-      if (!isSelectTool(tool.id) || e.button !== 0) return;
+      if (e.button !== 0) return;
     }
 
     // Alt + right-drag sets the tool's size, with a circle showing it.
@@ -210,14 +215,12 @@ export class CanvasController {
     if (LINE_TOOLS.includes(tool.id)) return this.startTool(lineDrag(tool.id, p, e));
     if (PAINT_TOOLS.includes(tool.id)) {
       if (paintBlocked()) return;
-      offerRasterize(rasterizeCurrentLayer);
       ink();
       return this.startTool(paintDrag(tool.id, p, e));
     }
     switch (tool.id) {
       case 'fill':
         if (paintBlocked()) return;
-        offerRasterize(rasterizeCurrentLayer);
         ink();
         void fillAt(p, e.button);
         return;
@@ -449,7 +452,7 @@ export class CanvasController {
     if (!at) return 'default';
     const p = app.viewport.toDoc(at.sx, at.sy);
     if (app.textEdit) return 'default';
-    if (app.selection) {
+    if (app.selection && isSelectTool(tool.id)) {
       const c = selectionCursor(at.sx, at.sy, p);
       if (c) return c;
     }
@@ -458,10 +461,9 @@ export class CanvasController {
       if (edge) return CURSORS[edge];
     }
     if (isObjectTool(tool.id) || (isSelectTool(tool.id) && !app.selection)) {
-      const c = objectCursor(at.sx, at.sy, p);
+      const c = objectCursor(at.sx, at.sy, p, isObjectTool(tool.id));
       if (c) return c;
     }
-    if (app.selection && !isSelectTool(tool.id)) return 'default';
     if (tool.planned) return 'not-allowed';
     if ((this.altDown && usesColors()) || tool.id === 'picker') return PICKER_CURSOR;
     if (tool.id === 'text') return this.chosen('text', p);

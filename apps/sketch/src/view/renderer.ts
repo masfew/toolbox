@@ -218,8 +218,8 @@ export class Renderer {
   }
 
   /**
-   * One layer: its pixels (with a stroke being drawn, an adjustment's preview or a floating selection on
-   * them), then its objects over them, as `drawLayer` draws it everywhere else.
+   * One layer: its pixels (with a stroke being drawn or an adjustment's preview on them), then its objects
+   * over them, as `drawLayer` draws it everywhere else, then a floating selection, which lands on top.
    */
   private drawLayer(layer: Layer): void {
     const ctx = this.ctx;
@@ -244,6 +244,14 @@ export class Renderer {
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
     }
+    if (layer.objects.length) {
+      const te = app.textEdit;
+      // Text being typed shows in place of the saved one.
+      const objects = te?.original && te.layer === layer ? layer.objects.map((o) => (o.id === te.obj.id ? te.obj : o)) : layer.objects;
+      ctx.globalAlpha = layer.opacity;
+      drawObjects(ctx, objects);
+      ctx.globalAlpha = 1;
+    }
     const sel = app.selection;
     if (sel?.image && sel.layer === layer) {
       ctx.save();
@@ -253,13 +261,6 @@ export class Renderer {
       ctx.drawImage(sel.image, 0, 0);
       ctx.restore();
     }
-    if (!layer.objects.length) return;
-    const te = app.textEdit;
-    // Text being typed shows in place of the saved one.
-    const objects = te?.original && te.layer === layer ? layer.objects.map((o) => (o.id === te.obj.id ? te.obj : o)) : layer.objects;
-    ctx.globalAlpha = layer.opacity;
-    drawObjects(ctx, objects);
-    ctx.globalAlpha = 1;
   }
 
   /**

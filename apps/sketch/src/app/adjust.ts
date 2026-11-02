@@ -1,5 +1,7 @@
 import { adjustedPart, adjustLayer, filterFor, isNoChange, type AdjustArea, type Adjustment } from '../engine/adjust';
+import { bakeLayer } from '../engine/commands';
 import type { Layer } from '../engine/document';
+import { CompositeCommand, type Command } from '../engine/history';
 import { replaceFloating, type Selection } from '../tools/selection';
 import { commitText } from '../tools/text';
 import { blockedReason } from './layers';
@@ -7,10 +9,11 @@ import { app, changed, openModal, toast } from './store';
 
 /**
  * The Adjust menu (step 5.3). An adjustment changes the selection if there is one, otherwise the
- * current layer's pixels. A lifted or pasted selection changes before it's placed.
+ * current layer, whose shapes and text become pixels so they change with it. A lifted or pasted
+ * selection changes before it's placed.
  */
 
-type Target = { kind: 'layer'; layer: Layer; area: AdjustArea; whole: boolean } | { kind: 'floating'; sel: Selection };
+type Target = { kind: 'layer'; layer: Layer; area: AdjustArea; whole: boolean; baked: Command | null } | { kind: 'floating'; sel: Selection };
 
 /** What the adjustment changes, or null (with a message) when that can't be changed now. */
 function target(): Target | null {
@@ -23,8 +26,11 @@ function target(): Target | null {
     toast(why, 4000);
     return null;
   }
-  if (sel) return { kind: 'layer', layer, area: { x: sel.sx, y: sel.sy, w: sel.sw, h: sel.sh, mask: sel.mask }, whole: false };
-  return { kind: 'layer', layer, area: { x: 0, y: 0, w: layer.canvas.width, h: layer.canvas.height, mask: null }, whole: true };
+  if (sel) {
+    const area = { x: sel.sx, y: sel.sy, w: sel.sw, h: sel.sh };
+    return { kind: 'layer', layer, area: { ...area, mask: sel.mask }, whole: false, baked: bakeLayer(app.doc, layer, 'Adjust', area) };
+  }
+  return { kind: 'layer', layer, area: { x: 0, y: 0, w: layer.canvas.width, h: layer.canvas.height, mask: null }, whole: true, baked: bakeLayer(app.doc, layer, 'Adjust') };
 }
 
 const wholeOf = (c: OffscreenCanvas): AdjustArea => ({ x: 0, y: 0, w: c.width, h: c.height, mask: null });
@@ -51,9 +57,9 @@ function apply(t: Target, change: Adjustment | 'auto'): void {
     return;
   }
   const cmd = adjustLayer(t.layer, t.area, change);
-  if (cmd) app.history.record(cmd);
-  // Shapes and text can't be adjusted, so say they were left as they were.
-  if (!app.selection && t.layer.objects.length) toast(`Adjustments change pixels, so the shapes and text on ${t.layer.name} stay as they were.`, 4000);
+  if (cmd && t.baked) app.history.record(new CompositeCommand(cmd.label, [t.baked, cmd]));
+  else if (cmd) app.history.record(cmd);
+  else t.baked?.revert();
   changed();
 }
 
@@ -64,6 +70,7 @@ export async function adjustWithDialog(kind: 'brightness' | 'hue'): Promise<void
   const result = await openModal('adjust', { adjust: kind, preview: (a: Adjustment | null) => preview(t, a) });
   preview(t, null);
   if (result && !isNoChange(result)) apply(t, result);
+  else if (t.kind === 'layer') t.baked?.revert();
   changed();
 }
 

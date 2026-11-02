@@ -4,8 +4,6 @@ import {
   cropTo,
   flattenLayers,
   flipPicture,
-  rasterizeLayer,
-  rasterizeObjects,
   replaceWithImage,
   resizeCanvas,
   rotatePicture,
@@ -41,7 +39,7 @@ import {
 } from '../io/formats';
 import * as platform from '../platform';
 import { isClear, pushRecent } from './color';
-import { fitView, growBoard, growBoardForNext, growBoardForObjects, settleEdges } from './board';
+import { fitView, growBoard, growBoardForNext, settleEdges } from './board';
 import { blockedReason, layerPrefs } from './layers';
 import { savePref } from './prefs';
 import { app, changed, colorSignal, docSignal, openModal, tabs, toast, type FileFormat, type FileInfo, type Overlay } from './store';
@@ -194,9 +192,9 @@ async function writeAs(format: FileFormat, quality: number, path: string | null,
   }
 }
 
-/** Whether a flat picture file would lose something: layers, editable shapes and text, or a whiteboard. */
+/** Whether a flat picture file would lose something worth asking about: layers or a whiteboard. Shapes and text just go in, as in Paint. */
 export function needsSketchFile(doc: PaintDocument): boolean {
-  return doc.layers.length > 1 || doc.board || doc.layers.some((l) => l.objects.length > 0);
+  return doc.layers.length > 1 || doc.board;
 }
 
 /** Ctrl+S: saves to the open file in its format, or asks where when there isn't one. */
@@ -522,38 +520,7 @@ export async function cut(): Promise<void> {
   }
 }
 
-// ---------- Rasterize and flatten ----------
-
-/** Draws the current layer's shapes and text into its pixels, so painting can go over them. */
-export function rasterizeCurrentLayer(): void {
-  settle();
-  const doc = app.doc;
-  const layer = doc.activeLayer;
-  if (!layer.objects.length) return toast(`${layer.name} has no shapes or text to rasterize.`);
-  const why = blockedReason(layer);
-  if (why) return toast(why, 4000);
-  if (app.objectSel?.layer === layer) app.objectSel = null;
-  // Shapes and text off a whiteboard's or capture's canvas would be cut off.
-  growBoardForObjects(layer.objects);
-  const cmd = rasterizeLayer(doc, doc.active);
-  if (!cmd) return;
-  app.history.record(cmd);
-  toast('The shapes and text are pixels now. Undo turns them back into shapes.');
-  changed();
-}
-
-/** Draws the picked shapes into the pixels of their layer. */
-export function rasterizePicked(): void {
-  const picked = pickedObjects();
-  if (!picked) return;
-  const n = picked.objects.length;
-  growBoardForObjects(picked.objects);
-  const cmd = rasterizeObjects(app.doc, picked.layer, picked.objects.map((o) => o.id), n === 1 ? 'Rasterize shape' : 'Rasterize shapes');
-  if (!cmd) return;
-  app.objectSel = null;
-  app.history.record(cmd);
-  changed();
-}
+// ---------- Flatten ----------
 
 /** Merges every layer that's showing into one layer of pixels. */
 export function flattenImage(): void {
