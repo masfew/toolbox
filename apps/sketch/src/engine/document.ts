@@ -77,6 +77,8 @@ export class PaintDocument {
    * mark-up join its objects. Only the person adds layers (New Layer, Duplicate, Paste onto New Layer).
    */
   active = 0;
+  /** The highest number of a marker painted over, so the next one doesn't repeat what's now in the pixels. */
+  bakedMarker = 0;
   /**
    * A whiteboard: no edges, so the canvas grows wherever pixels are drawn, and shapes and text can go
    * anywhere, even off the canvas. It shows on a white board and exports cropped to what's on it.

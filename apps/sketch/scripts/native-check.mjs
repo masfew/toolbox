@@ -303,6 +303,8 @@ try {
 
   await check("Closing the window with unsaved changes asks Save or Don't Save, and clicking outside the box keeps it open", async () => {
     const b = app.canvasBox;
+    await press('b');
+    await waitFor('the Brush tool', (s) => s.tool === 'Brush');
     await app.drag(b.x + b.w / 2, b.y + b.h / 2, b.x + b.w / 2 + 50, b.y + b.h / 2);
     await waitFor('the picture to be marked changed', (s) => s.title === 'big.png* - Sketch');
     postClose(app.pid);
@@ -1527,6 +1529,7 @@ try {
     await drawBox(0.2, 0.2, 0.5, 0.6);
     const hollow = (await shapesNow())[0];
     expect(hexClear(hollow.fill), `The new shape's fill is ${hollow.fill}`);
+    await toolKey('m', 'Rectangle Select');
     await dropPick();
     const middle = await inPicture(0.35, 0.4);
     await bDrag(middle.x, middle.y, middle.x, middle.y);
@@ -1535,8 +1538,10 @@ try {
     await bDrag(edge.x, edge.y, edge.x, edge.y);
     expect((await barState()).picked === 1, 'Clicking the edge of a hollow shape did not pick it');
     // A filled one is picked from its middle.
+    await toolKey('u', 'Rectangle');
     await pickSwatch('fill', '#22b14c');
     await drawBox(0.6, 0.2, 0.9, 0.6);
+    await toolKey('m', 'Rectangle Select');
     await dropPick();
     const middle2 = await inPicture(0.75, 0.4);
     await bDrag(middle2.x, middle2.y, middle2.x, middle2.y);
@@ -1821,10 +1826,16 @@ try {
     await app.evaluate(`window.sketch.run('tool.rectangle')`);
     await drawBox(0.1, 0.1, 0.3, 0.4);
     await drawBox(0.5, 0.1, 0.7, 0.4);
+    await app.evaluate(`window.sketch.run('tool.select-rect')`);
+    await sleep(80);
     const edge = await inPicture(0.1, 0.25);
     await bMouse('mouseMoved', edge.x, edge.y);
     await bMouse('mousePressed', edge.x, edge.y, { buttons: 1, mods: 8 });
     await bMouse('mouseReleased', edge.x, edge.y, { buttons: 0, mods: 8 });
+    const edge2 = await inPicture(0.5, 0.25);
+    await bMouse('mouseMoved', edge2.x, edge2.y);
+    await bMouse('mousePressed', edge2.x, edge2.y, { buttons: 1, mods: 8 });
+    await bMouse('mouseReleased', edge2.x, edge2.y, { buttons: 0, mods: 8 });
     await sleep(200);
     expect((await barState()).picked === 2, `${(await barState()).picked} shapes picked, not 2`);
     const r = await inside();
@@ -2117,9 +2128,8 @@ try {
     await app.press('Escape');
     await app.press('b');
     await app.waitFor('the Brush tool', (s) => s.tool === 'Brush');
-    // Through the rectangle: painting goes under the layer's shapes, and says so the first time.
-    await app.drag(...(await at(0.1, 0.4)), ...(await at(0.9, 0.4)));
-    await app.waitFor('the painting toast', (s) => (s.toast ?? '').includes('Painting goes under the shapes and text on this layer'));
+    // Clear of the rectangle and the text, which stay shapes.
+    await app.drag(...(await at(0.1, 0.8)), ...(await at(0.9, 0.8)));
     // The Layers panel, opened, shows one layer.
     await app.evaluate(`(() => {
       const b = [...document.querySelectorAll('.panel-section h2 button')].find((b) => b.textContent.includes('Layers'));
@@ -2132,7 +2142,7 @@ try {
         const d = window.sketch.app.doc;
         const l = d.layers[0];
         const c = l.canvas;
-        const data = c.getContext('2d').getImageData(0, Math.round(d.height * 0.4), c.width, 1).data;
+        const data = c.getContext('2d').getImageData(0, Math.round(d.height * 0.8), c.width, 1).data;
         let ink = 0;
         for (let i = 0; i < data.length; i += 4) if (data[i] < 128 && data[i + 3] > 200) ink++;
         return { layers: d.layers.length, types: l.objects.map((o) => o.type).join(','), ink, history: window.sketch.app.history.entries().map((e) => e.label).join(', ') };
@@ -2140,11 +2150,13 @@ try {
     const before = await picture();
     expect(panel === 1, `The Layers panel shows ${panel} layers`);
     expect(before.layers === 1 && before.types === 'shape,text' && before.ink > 100, `Before saving: ${JSON.stringify(before)}`);
-    // Saved as .sktch (Save As offers it, since the picture has shapes), then opened again in a new tab.
+    // Saved as .sktch (Save As starts on PNG, as shapes go into a picture without asking), then opened again in a new tab.
     await app.press('s', ctrl | shift);
     await app.waitFor('the Save As box', (s) => s.dialog === 'Save As');
     const format = await app.evaluate(`document.querySelector('.dialog select')?.value ?? ''`);
-    expect(format === 'sktch', `Save As starts on ${format}`);
+    expect(format === 'png', `Save As starts on ${format}`);
+    await app.evaluate(`(() => { const f = document.querySelector('.dialog select'); f.value = 'sktch'; f.dispatchEvent(new Event('change', { bubbles: true })); f.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(100);
     await app.press('Enter');
     fillFileDialog(app.pid, layerFile);
     await app.waitFor('the save', (s) => s.title === 'one-layer.sktch - Sketch');
@@ -2153,9 +2165,9 @@ try {
     await app.waitFor('the file in a second tab', (s) => s.tabs === 2 && s.title === 'one-layer.sktch - Sketch');
     const after = await picture();
     expect(after.layers === 1 && after.types === 'shape,text' && after.ink === before.ink, `After reopening: ${JSON.stringify(after)}`);
-    // The rectangle can still be picked, on that layer: a click on its left edge with the Rectangle tool.
-    await app.press('u');
-    await app.waitFor('the Rectangle tool', (s) => s.tool === 'Rectangle');
+    // The rectangle can still be picked, on that layer: a click on its left edge with a Select tool.
+    await app.press('m');
+    await app.waitFor('the Rectangle Select tool', (s) => s.tool === 'Rectangle Select');
     const edge = await app.evaluate(`(() => {
       const a = window.sketch.app;
       const o = a.doc.layers[0].objects.find((o) => o.type === 'shape');
@@ -2167,6 +2179,173 @@ try {
     await sleep(200);
     const picked = await app.evaluate(`(() => { const a = window.sketch.app; return a.objectSel ? { ids: a.objectSel.ids.length, first: a.objectSel.layer === a.doc.layers[0] } : null; })()`);
     expect(picked?.ids === 1 && picked.first, `Picked after reopening: ${JSON.stringify(picked)}`);
+  });
+
+  // ---------- It's all one picture ----------
+
+  const spot = async (fx, fy) => {
+    const p = await inPicture(fx, fy);
+    return [p.x, p.y];
+  };
+  /** A pixel of the picture as it shows. */
+  const shown = (fx, fy) =>
+    app.evaluate(`(() => {
+      const a = window.sketch.app;
+      return [...window.sketch.flatten(a.doc).getContext('2d').getImageData(Math.round(a.doc.width * ${fx}), Math.round(a.doc.height * ${fy}), 1, 1).data];
+    })()`);
+  const objectCount = () => app.evaluate(`window.sketch.app.doc.activeLayer.objects.length`);
+  const tool = async (key, name) => {
+    await app.press(key);
+    await app.waitFor(`the ${name} tool`, (s) => s.tool === name);
+  };
+  const same = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 2);
+  const RED = [255, 0, 0, 255];
+  const GREEN = [0, 255, 0, 255];
+  /** A new picture, in a tab of its own, with a red brush and shapes filled green. */
+  const blankPicture = async () => {
+    await app.evaluate(`window.sketch.run('file.new')`);
+    await sleep(300);
+    await app.evaluate(`(() => { const a = window.sketch.app; a.primary = '#ff0000'; a.fillColor = '#00ff00'; a.outlineColor = '#00ff00'; })()`);
+    await tool('b', 'Brush');
+  };
+  const greenBox = async (x0, y0, x1, y1) => {
+    await app.evaluate(`window.sketch.run('tool.rectangle')`);
+    await app.waitFor('the Rectangle tool', (s) => s.tool === 'Rectangle');
+    await app.drag(...(await spot(x0, y0)), ...(await spot(x1, y1)));
+    await sleep(150);
+  };
+
+  await check('A paste lands with a Select tool, as in Paint: a drag moves it, and picking the Brush places it and draws on it', async () => {
+    await blankPicture();
+    await app.drag(...(await spot(0.9, 0.9)), ...(await spot(0.95, 0.95)));
+    await sleep(150);
+    clipboard.image(small);
+    await app.press('v', ctrl, ['paste']);
+    const s = await app.waitFor('the paste', (s) => s.floating === '300 × 200 px');
+    expect(s.tool === 'Rectangle Select', `Tool after pasting: ${s.tool}`);
+    const start = await app.evaluate(`[window.sketch.app.selection.x, window.sketch.app.selection.y]`);
+    await app.drag(...(await spot(0.2, 0.15)), ...(await spot(0.25, 0.2)));
+    const moved = await app.evaluate(`[window.sketch.app.selection.x, window.sketch.app.selection.y]`);
+    expect(moved[0] > start[0], `The paste was at ${start} and is at ${moved}`);
+    await tool('b', 'Brush');
+    await app.waitFor('the paste to be placed', (s) => s.floating === '');
+    await app.drag(...(await spot(0.3, 0.2)), ...(await spot(0.4, 0.2)));
+    await sleep(150);
+    const px = await shown(0.35, 0.2);
+    expect(same(px, RED), `The brush stroke over the paste shows ${px}`);
+    const last = await app.evaluate(`window.sketch.app.history.top.label`);
+    expect(last === 'Brush stroke', `Last step: ${last}`);
+  });
+
+  await check('Painting over a shape lands on top, one undo gives the shape back, and a shape it misses stays a shape', async () => {
+    await blankPicture();
+    await greenBox(0.3, 0.3, 0.6, 0.6);
+    await greenBox(0.75, 0.1, 0.9, 0.2);
+    expect((await objectCount()) === 2, `${await objectCount()} shapes`);
+    await tool('b', 'Brush');
+    await app.drag(...(await spot(0.2, 0.45)), ...(await spot(0.7, 0.45)));
+    await sleep(150);
+    const px = await shown(0.45, 0.45);
+    expect(same(px, RED), `The stroke over the shape shows ${px}`);
+    expect((await objectCount()) === 1, `${await objectCount()} shapes left after painting over one of two`);
+    const toast = (await app.state()).toast ?? '';
+    expect(!toast.toLowerCase().includes('rasterize'), `Toast: ${toast}`);
+    await app.press('z', ctrl);
+    await sleep(150);
+    expect((await objectCount()) === 2, 'Undo did not bring the shape back');
+    expect(same(await shown(0.45, 0.45), GREEN), `After undo the shape shows ${await shown(0.45, 0.45)}`);
+    await tool('e', 'Eraser');
+    await app.drag(...(await spot(0.2, 0.45)), ...(await spot(0.7, 0.45)));
+    await sleep(150);
+    const gone = await shown(0.45, 0.45);
+    expect(!same(gone, GREEN) && (await objectCount()) === 1, `The eraser left ${gone} and ${await objectCount()} shapes`);
+  });
+
+  await check('Painting across a hollow frame and selecting inside it leave what is inside the frame as shapes', async () => {
+    await blankPicture();
+    await greenBox(0.45, 0.45, 0.55, 0.55);
+    await app.evaluate(`window.sketch.app.fillColor = '#ffffff00'`);
+    await greenBox(0.2, 0.2, 0.8, 0.8);
+    await tool('b', 'Brush');
+    await app.drag(...(await spot(0.15, 0.5)), ...(await spot(0.25, 0.5)));
+    await sleep(150);
+    expect(same(await shown(0.2, 0.5), RED), `The stroke across the frame shows ${await shown(0.2, 0.5)}`);
+    expect((await objectCount()) === 1, `${await objectCount()} shapes left: painting the frame should take only the frame`);
+    await app.press('z', ctrl);
+    await sleep(150);
+    await tool('m', 'Rectangle Select');
+    await app.drag(...(await spot(0.6, 0.3)), ...(await spot(0.7, 0.35)));
+    await sleep(150);
+    await app.press('Delete');
+    await sleep(150);
+    expect((await objectCount()) === 2, `${await objectCount()} shapes left after deleting a selection that holds no ink`);
+    // A fill inside the frame stops at it, and a shape clear of what it fills stays a shape.
+    await app.evaluate(`window.sketch.app.fillColor = '#00ff00'`);
+    await greenBox(0.03, 0.03, 0.08, 0.08);
+    await tool('g', 'Fill');
+    await app.drag(...(await spot(0.3, 0.7)), ...(await spot(0.3, 0.7)));
+    await sleep(800);
+    expect(same(await shown(0.3, 0.7), RED), `The fill shows ${await shown(0.3, 0.7)}`);
+    expect(!same(await shown(0.1, 0.1), RED), 'The fill ran past the frame');
+    const left = await app.evaluate(`window.sketch.app.doc.activeLayer.objects.length`);
+    expect(left === 1, `${left} shapes left: the one clear of the fill should stay`);
+  });
+
+  await check('A rectangle selection moves and deletes shapes with the pixels, and undo brings them back', async () => {
+    await blankPicture();
+    await greenBox(0.3, 0.3, 0.5, 0.5);
+    await tool('m', 'Rectangle Select');
+    // Off the shape first, as a press on one picks it.
+    await app.drag(...(await spot(0.9, 0.9)), ...(await spot(0.9, 0.9)));
+    await app.drag(...(await spot(0.2, 0.2)), ...(await spot(0.6, 0.6)));
+    await sleep(150);
+    await app.drag(...(await spot(0.4, 0.4)), ...(await spot(0.6, 0.6)));
+    await sleep(150);
+    await app.press('Enter');
+    await sleep(150);
+    expect((await objectCount()) === 0, 'The shape stayed behind');
+    expect(same(await shown(0.6, 0.6), GREEN), `Where the shape went shows ${await shown(0.6, 0.6)}`);
+    expect(!same(await shown(0.35, 0.35), GREEN), `Where the shape was shows ${await shown(0.35, 0.35)}`);
+    await app.press('z', ctrl);
+    await sleep(150);
+    expect((await objectCount()) === 1 && same(await shown(0.4, 0.4), GREEN), 'Undo did not put the shape back');
+    await app.evaluate(`window.sketch.run('edit.selectAll')`);
+    await sleep(100);
+    await app.press('Delete');
+    await sleep(150);
+    expect((await objectCount()) === 0 && !same(await shown(0.4, 0.4), GREEN), 'Select All and Delete left the shape');
+  });
+
+  await check('The Shapes tool draws on top of a shape instead of picking it, and only moves the one just drawn', async () => {
+    await blankPicture();
+    await greenBox(0.2, 0.2, 0.6, 0.6);
+    // Inside the picked shape: it moves.
+    const before = await app.evaluate(`window.sketch.app.doc.activeLayer.objects[0].x`);
+    await app.drag(...(await spot(0.4, 0.4)), ...(await spot(0.45, 0.4)));
+    await sleep(150);
+    expect((await app.evaluate(`window.sketch.app.doc.activeLayer.objects[0].x`)) > before, 'The shape just drawn did not move');
+    // A click away, then a drag inside it: a new shape.
+    await app.drag(...(await spot(0.9, 0.9)), ...(await spot(0.9, 0.9)));
+    await sleep(100);
+    await app.drag(...(await spot(0.4, 0.4)), ...(await spot(0.5, 0.5)));
+    await sleep(150);
+    expect((await objectCount()) === 2, `${await objectCount()} shapes after drawing inside one`);
+  });
+
+  await check('Saving a picture with shapes as PNG goes straight through', async () => {
+    const flat = join(work, 'with-shapes.png');
+    await blankPicture();
+    await greenBox(0.3, 0.3, 0.5, 0.5);
+    await app.press('s', ctrl);
+    await app.waitFor('the Save As box', (s) => s.dialog === 'Save As');
+    await app.press('Enter');
+    fillFileDialog(app.pid, flat);
+    await app.waitFor('the save', (s) => s.title === 'with-shapes.png - Sketch');
+    await greenBox(0.6, 0.6, 0.7, 0.7);
+    await app.press('s', ctrl);
+    const s = await app.waitFor('the save', (s) => s.title === 'with-shapes.png - Sketch' || !!s.dialog);
+    expect(!s.dialog, `Ctrl+S asked: ${s.dialog}`);
+    expect((await objectCount()) === 2, 'Saving took the shapes away');
   });
   await app.quit();
 
@@ -2485,6 +2664,35 @@ try {
       const r = await app.evaluate(`(() => { const r = document.querySelector('canvas.view').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
       return [r.x + dx, r.y + dy];
     };
+
+    await check('The Brush and the Pencil both draw on a capture', async () => {
+      const inkOnCapture = () =>
+        app.evaluate(`(() => {
+          const a = window.sketch.app;
+          const c = window.sketch.flatten(a.doc);
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+          let ink = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i] === 0xed && d[i + 1] === 0x1c && d[i + 2] === 0x24) ink++;
+          return ink;
+        })()`);
+      const s = await app.state();
+      expect(s.tool === 'Brush', `Tool on the capture: ${s.tool}`);
+      const before = await inkOnCapture();
+      await app.drag(...(await onPicture(-60, -40)), ...(await onPicture(60, 20)));
+      await sleep(200);
+      const brush = await inkOnCapture();
+      expect(brush > before + 100, `The brush left ${brush - before} pixels on the capture`);
+      await app.press('z', ctrl);
+      await app.press('p');
+      await app.waitFor('the Pencil tool', (s) => s.tool === 'Pencil');
+      await app.drag(...(await onPicture(-60, -40)), ...(await onPicture(60, 20)));
+      await sleep(200);
+      expect((await inkOnCapture()) > before, 'The pencil left nothing on the capture');
+      await app.press('z', ctrl);
+      await sleep(150);
+      await app.press('b');
+      await app.waitFor('the Brush tool', (s) => s.tool === 'Brush');
+    });
 
     await check('The Copy button copies the capture with an arrow and text drawn on it, as on screen', async () => {
       await app.press('a');

@@ -1,9 +1,10 @@
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { addLayer, mergeDown, rasterizeLayer, rasterizeObjects } from '../src/engine/commands';
+import { addLayer, bakeLayer, layerAsShown, mergeDown, PaintEdit } from '../src/engine/commands';
 import { createLayer, ctxOf, flatten, PaintDocument, type Layer } from '../src/engine/document';
-import type { ShapeObject, SketchObject } from '../src/engine/objects';
+import { objectPaintBounds, objectsToBake, rectsOverlap, type LineObject, type MarkObject, type ShapeObject, type SketchObject } from '../src/engine/objects';
 import { readDocument, sketchFiles } from '../src/io/formats';
+import { Stroke, type StrokeSpec } from '../src/tools/stroke';
 import { fakePng, installFakeCanvas, pixel } from './fakeCanvas';
 
 // Objects are drawn as boxes in their colour, so tests can tell where each one went.
@@ -254,15 +255,20 @@ describe('merge down', () => {
   });
 });
 
-describe('rasterizing', () => {
-  it('Rasterize Layer draws the objects into the layer’s own pixels, as one undo step', () => {
+describe('painting over objects', () => {
+  const line = (x1: number, y1: number, x2: number, y2: number, color: string): LineObject => ({
+    id: nextId++, type: 'line', x1, y1, x2, y2, bend: 0, color, width: 1, dash: 'solid', opacity: 1, start: 'none', end: 'none',
+  });
+  const pencil: StrokeSpec = { nib: 'pencil', color: '#ff0000', size: 1, opacity: 1, smoothing: false, pressure: 'off', label: 'Pencil' };
+
+  it('bakes objects into the layer’s own pixels, as one undo step', () => {
     const doc = new PaintDocument(8, 8, '#ffffff');
     const layer = doc.layers[0];
     paint(layer, 0, 0, 8, 2, '#ff0000');
     const objects = [rect(1, 1, 3, 3, '#0000ff'), rect(4, 4, 3, 3, '#00ff00')];
     layer.objects = objects;
     const before = look(doc);
-    const cmd = rasterizeLayer(doc, 0)!;
+    const cmd = bakeLayer(doc, layer, 'Fill')!;
     expect(doc.layers).toHaveLength(1);
     expect(layer.objects).toEqual([]);
     expect(look(doc)).toEqual(before);
@@ -275,20 +281,98 @@ describe('rasterizing', () => {
     expect(look(doc)).toEqual(before);
   });
 
-  it('Rasterize Shapes draws only the picked objects into their own layer', () => {
+  it('bakes only what it is given, into its own layer', () => {
     const doc = new PaintDocument(8, 8, null);
     const top = createLayer('Layer 2', 8, 8);
     const keep = rect(4, 4, 3, 3, '#00ff00');
     const flat = rect(0, 0, 3, 3, '#0000ff');
     top.objects = [flat, keep];
     addLayer(doc, top, 'New layer');
-    const cmd = rasterizeObjects(doc, top, [flat.id], 'Rasterize shape')!;
+    const edit = new PaintEdit(doc, top, 'Pencil');
+    edit.bake([flat]);
+    const cmd = edit.finish()!;
     expect(top.objects).toEqual([keep]);
     expect(pixel(top.canvas, 1, 1)).toEqual(BLUE);
     expect(pixel(doc.layers[0].canvas, 1, 1)).toEqual([0, 0, 0, 0]);
     cmd.revert();
     expect(top.objects).toEqual([flat, keep]);
     expect(pixel(top.canvas, 1, 1)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('takes the objects under a baked one that it overlaps, never those above it or apart from it', () => {
+    const under = rect(0, 0, 4, 4, '#0000ff');
+    const apart = rect(40, 40, 2, 2, '#00ff00');
+    const reached = rect(2, 2, 4, 4, '#ff0000');
+    const above = rect(4, 4, 4, 4, '#000000');
+    const boxes = (a: SketchObject, b: SketchObject) => rectsOverlap(objectPaintBounds(a), objectPaintBounds(b));
+    expect(objectsToBake([under, apart, reached, above], (o) => o === reached, boxes)).toEqual([under, reached]);
+  });
+
+  it('leaves a spotlight on top', () => {
+    const spot: MarkObject = { id: nextId++, type: 'mark', kind: 'spotlight', x: 0, y: 0, w: 4, h: 4, angle: 0, color: '#000000', dim: 60, round: false } as MarkObject;
+    expect(objectsToBake([spot], () => true)).toEqual([]);
+  });
+
+  it('a stroke lands on top of a line it crosses and the line becomes pixels, as one undo step', () => {
+    const doc = new PaintDocument(32, 32, '#ffffff');
+    const layer = doc.layers[0];
+    const crossed = line(0, 8, 15, 8, '#0000ff');
+    const apart = line(0, 28, 15, 28, '#00ff00');
+    layer.objects = [apart, crossed];
+    const stroke = new Stroke(doc, layer, pencil, { x: 6, y: 5, p: 1 });
+    stroke.to({ x: 6, y: 12, p: 1 });
+    const cmd = stroke.finish()!;
+    expect(layer.objects).toEqual([apart]);
+    expect(pixel(layer.canvas, 6, 8)).toEqual([255, 0, 0, 255]);
+    cmd.revert();
+    expect(layer.objects).toEqual([apart, crossed]);
+    expect(pixel(layer.canvas, 6, 8)).toEqual([255, 255, 255, 255]);
+    cmd.apply();
+    expect(layer.objects).toEqual([apart]);
+    expect(pixel(layer.canvas, 6, 8)).toEqual([255, 0, 0, 255]);
+  });
+
+  it('a stroke that touches nothing leaves every object as it is', () => {
+    const doc = new PaintDocument(16, 16, '#ffffff');
+    const layer = doc.layers[0];
+    const far = line(0, 14, 15, 14, '#0000ff');
+    layer.objects = [far];
+    const stroke = new Stroke(doc, layer, pencil, { x: 2, y: 2, p: 1 });
+    stroke.to({ x: 8, y: 2, p: 1 });
+    stroke.finish();
+    expect(layer.objects).toEqual([far]);
+  });
+
+  it('keeps an object a whiteboard’s canvas doesn’t reach, rather than cutting it off', () => {
+    const doc = new PaintDocument(8, 8, null);
+    doc.board = true;
+    const layer = doc.layers[0];
+    const outside = rect(6, 6, 10, 10, '#0000ff');
+    const inside = rect(3, 3, 1, 1, '#0000ff');
+    layer.objects = [outside, inside];
+    const edit = new PaintEdit(doc, layer, 'Pencil');
+    edit.bake([outside, inside]);
+    expect(layer.objects).toEqual([outside]);
+  });
+
+  it('remembers the highest marker painted over', () => {
+    const doc = new PaintDocument(64, 64, null);
+    const marker = { id: nextId++, type: 'mark', kind: 'marker', x: 10, y: 10, w: 20, h: 20, angle: 0, number: 7, color: '#ff0000' } as MarkObject;
+    doc.layers[0].objects = [marker];
+    new PaintEdit(doc, doc.layers[0], 'Pencil').bake([marker]);
+    expect(doc.bakedMarker).toBe(7);
+  });
+
+  it('layerAsShown shows the objects without changing the layer', () => {
+    const doc = new PaintDocument(8, 8, '#ffffff');
+    const layer = doc.layers[0];
+    expect(layerAsShown(doc, layer)).toBe(layer.canvas);
+    const o = rect(1, 1, 3, 3, '#0000ff');
+    layer.objects = [o];
+    const shown = layerAsShown(doc, layer);
+    expect(pixel(shown, 2, 2)).toEqual(BLUE);
+    expect(pixel(layer.canvas, 2, 2)).toEqual([255, 255, 255, 255]);
+    expect(layer.objects).toEqual([o]);
   });
 });
 

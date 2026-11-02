@@ -32,9 +32,9 @@ const pick = (list) => list[Math.floor(random() * list.length)];
 
 /** Commands run straight from the command list: ones that change the picture without asking anything. */
 const COMMANDS = [
-  'edit.selectAll', 'edit.delete', 'edit.duplicate', 'edit.front', 'edit.back', 'edit.rasterize', 'edit.swapColors',
+  'edit.selectAll', 'edit.delete', 'edit.duplicate', 'edit.front', 'edit.back', 'edit.swapColors',
   'arrange.left', 'arrange.hcentre', 'arrange.spaceX', 'image.crop', 'image.trim', 'image.rotateRight', 'image.rotateLeft',
-  'image.flipH', 'image.flipV', 'image.flatten', 'image.rasterizeLayer', 'image.newLayer', 'image.deleteLayer',
+  'image.flipH', 'image.flipV', 'image.flatten', 'image.newLayer', 'image.deleteLayer',
   'image.mergeDown', 'layer.up', 'layer.down', 'adjust.bw', 'adjust.invert', 'adjust.autoLevel', 'view.zoomIn',
   'view.zoomOut', 'view.fit', 'view.grid', 'view.snapping', 'edit.sizeUp', 'edit.sizeDown',
 ];

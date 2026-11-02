@@ -125,7 +125,7 @@ function markers(): MarkObject[] {
 
 /** Sets the marker tool's next number to one more than the highest marker in the picture. */
 function syncNext(): void {
-  const top = Math.max(0, ...markers().map((m) => m.number));
+  const top = Math.max(app.doc.bakedMarker, ...markers().map((m) => m.number));
   loadOptions('marker', { next: Math.min(99, top + 1) });
 }
 

@@ -239,7 +239,7 @@ export function drawObject(ctx: Ctx, o: SketchObject, source?: Ctx): void {
   else drawShape(ctx, o);
 }
 
-const isSpotlight = (o: SketchObject): o is MarkObject => o.type === 'mark' && o.kind === 'spotlight';
+export const isSpotlight = (o: SketchObject): o is MarkObject => o.type === 'mark' && o.kind === 'spotlight';
 
 /**
  * Draws a layer's objects in order. Every spotlight is drawn in one go where the first one is, so
@@ -310,6 +310,74 @@ export function objectPaintBounds(o: SketchObject): Rect {
   const r = rectAround(o.tail ? [...corners, o.tail] : corners);
   const m = o.outline || o.tail ? o.size * 0.1 + 4 : 2;
   return { x: r.x - m, y: r.y - m, w: r.w + m * 2, h: r.h + m * 2 };
+}
+
+/** True when two rectangles share any area. */
+export function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+/** The area two rectangles share, or null. */
+function sharedRect(a: Rect, b: Rect): Rect | null {
+  if (!rectsOverlap(a, b)) return null;
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  return { x, y, w: Math.min(a.x + a.w, b.x + b.w) - x, h: Math.min(a.y + a.h, b.y + b.h) - y };
+}
+
+/** How many pixels across the ink of an object is looked at, at most: enough to tell whether two touch. */
+const INK_SIZE = 256;
+
+/** Blur and pixelate only draw with what's under them, so their box stands for their ink. */
+const inkIsBox = (o: SketchObject) => o.type === 'mark' && (o.kind === 'blur' || o.kind === 'pixelate');
+
+/** The object drawn in `r`, as RGBA. */
+function inkIn(o: SketchObject, r: Rect): Uint8ClampedArray {
+  const scale = Math.min(1, INK_SIZE / Math.max(r.w, r.h));
+  const w = Math.max(1, Math.ceil(r.w * scale));
+  const h = Math.max(1, Math.ceil(r.h * scale));
+  const ctx = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D;
+  ctx.scale(scale, scale);
+  ctx.translate(-r.x, -r.y);
+  drawObject(ctx, o);
+  return ctx.getImageData(0, 0, w, h).data;
+}
+
+/** True when the object puts any ink in `area`: the inside of a hollow shape round it doesn't count. */
+export function inkTouches(o: SketchObject, area: Rect): boolean {
+  const r = sharedRect(objectPaintBounds(o), area);
+  if (!r) return false;
+  if (inkIsBox(o)) return true;
+  const ink = inkIn(o, r);
+  for (let i = 3; i < ink.length; i += 4) if (ink[i]) return true;
+  return false;
+}
+
+/** True when two objects' ink shares a pixel. */
+function inksOverlap(a: SketchObject, b: SketchObject): boolean {
+  const r = sharedRect(objectPaintBounds(a), objectPaintBounds(b));
+  if (!r) return false;
+  if (inkIsBox(a)) return inkTouches(b, r);
+  if (inkIsBox(b)) return inkTouches(a, r);
+  const inkA = inkIn(a, r);
+  const inkB = inkIn(b, r);
+  for (let i = 3; i < inkA.length; i += 4) if (inkA[i] && inkB[i]) return true;
+  return false;
+}
+
+/**
+ * The objects that become pixels when something is painted over the ones `reached` picks: those, and any
+ * under them whose ink they cover, so nothing changes places. Other objects stay editable. A spotlight
+ * dims the whole picture round it rather than sitting anywhere, so it always stays.
+ */
+export function objectsToBake(objects: readonly SketchObject[], reached: (o: SketchObject) => boolean, covers = inksOverlap): SketchObject[] {
+  const baked = new Set<SketchObject>();
+  for (let i = objects.length - 1; i >= 0; i--) {
+    const o = objects[i];
+    if (isSpotlight(o)) continue;
+    if (reached(o) || [...baked].some((b) => covers(b, o))) baked.add(o);
+  }
+  return objects.filter((o) => baked.has(o));
 }
 
 /** The same object moved by (dx, dy). */

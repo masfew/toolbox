@@ -51,7 +51,7 @@ export function paintDrag(toolId: string, p: Point, e: PointerEvent): ToolDrag {
   const last = app.lastPoint;
   const fromLast = e.shiftKey && last && last.layerId === layer.id;
   const spec = specFor(toolId, e.button);
-  const stroke = new Stroke(layer, spec, fromLast ? { x: last.x, y: last.y, p: at.p } : at);
+  const stroke = new Stroke(app.doc, layer, spec, fromLast ? { x: last.x, y: last.y, p: at.p } : at);
   if (fromLast) stroke.lineTo(at);
   // Holding still at the end of the stroke may turn it into a clean shape (F18), unless Settings has that off.
   const quick = cleanUp.on && CLEAN_UP_TOOLS.includes(toolId) ? new QuickShape(stroke, layer, lookOf(spec), fromLast ? [{ x: last.x, y: last.y }, at] : [at], e) : null;

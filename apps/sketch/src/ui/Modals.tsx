@@ -330,17 +330,13 @@ export function Modals() {
         </Dialog>
       );
     case 'keep-layers': {
-      // One layer with shapes or text: they're what a flat picture would lose.
-      const oneLayer = app.doc.layers.length === 1;
       const format = FORMATS[app.file.format ?? 'png'].label;
       return (
-        <Dialog title={app.doc.board ? 'Keep your whiteboard?' : oneLayer ? 'Keep your shapes and text?' : 'Keep your layers?'} onCancel={() => m.resolve('cancel')}>
+        <Dialog title={app.doc.board ? 'Keep your whiteboard?' : 'Keep your layers?'} onCancel={() => m.resolve('cancel')}>
           <p>
             {app.doc.board
               ? `${format} files can't hold a whiteboard. Save a Sketch file to keep it endless and editable, or save a picture of what's on it.`
-              : oneLayer
-                ? `${format} files can't keep shapes and text editable. Save a Sketch file to keep them, or merge them into the picture.`
-                : `${format} files can't hold layers. Save a Sketch file to keep them, or merge them into one picture.`}
+              : `${format} files can't hold layers. Save a Sketch file to keep them, or merge them into one picture.`}
           </p>
           <div class="actions">
             <button type="button" onClick={() => m.resolve('cancel')}>

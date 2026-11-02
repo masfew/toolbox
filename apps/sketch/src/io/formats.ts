@@ -234,8 +234,11 @@ async function encodeSketch(doc: PaintDocument): Promise<Uint8Array> {
  * canvas. Kept apart from the zipping, which runs in the encoder worker, so tests can read it back.
  */
 export async function sketchFiles(doc: PaintDocument, png: (canvas: OffscreenCanvas) => Promise<Uint8Array>): Promise<{ files: Zippable; pngs: Uint8Array[] }> {
-  const pngs = await Promise.all(doc.layers.map((l) => png(l.canvas)));
-  const withObjects = doc.layers.some((l) => l.objects.length);
+  // The objects from the moment the pixels are read: a stroke during the wait can turn one into pixels.
+  const layers = [...doc.layers];
+  const objects = layers.map((l) => l.objects);
+  const pngs = await Promise.all(layers.map((l) => png(l.canvas)));
+  const withObjects = objects.some((o) => o.length);
   const meta: SketchJson = {
     format: 'sketch',
     // A picture with no objects still opens in every Sketch that can show it (version 1, or 5 for a
@@ -248,14 +251,14 @@ export async function sketchFiles(doc: PaintDocument, png: (canvas: OffscreenCan
     height: doc.height,
     fill: doc.fill,
     active: doc.active,
-    layers: doc.layers.map(
+    layers: layers.map(
       (l, i): LayerJson => ({
         name: l.name,
         visible: l.visible,
         locked: l.locked,
         opacity: l.opacity,
         file: `layers/${i}.png`,
-        ...(l.objects.length ? { objects: l.objects.map(writeObject) } : {}),
+        ...(objects[i].length ? { objects: objects[i].map(writeObject) } : {}),
       }),
     ),
   };

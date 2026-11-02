@@ -278,7 +278,7 @@ export const TOOLS: ToolSpec[] = [
       sample,
     ],
   },
-  { id: 'picker', name: 'Colour Picker', icon: 'picker', slot: 'picker', options: [colors, { ...sample, group: true }] },
+  { id: 'picker', name: 'Colour Picker', icon: 'picker', slot: 'picker', options: [colors, { ...sample, default: 'picture', group: true }] },
   {
     id: 'text',
     name: 'Text',

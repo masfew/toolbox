@@ -421,24 +421,33 @@ function handleAt(sx: number, sy: number): { o: Drawn; layer: Layer; id: ObjectH
   return h ? { o, layer: picked.layer, id: h.id } : null;
 }
 
-export function objectCursor(sx: number, sy: number, p: Point): string | null {
+/** The object at a picture point that a press would take hold of: with `pickedOnly`, only one already picked. */
+function grabbable(p: Point, pickedOnly: boolean): { layer: Layer; obj: Drawn } | null {
+  const found = objectAt(p);
+  if (!found || !pickedOnly) return found;
+  const sel = app.objectSel;
+  return sel?.layer === found.layer && sel.ids.includes(found.obj.id) ? found : null;
+}
+
+export function objectCursor(sx: number, sy: number, p: Point, pickedOnly: boolean): string | null {
   const h = handleAt(sx, sy);
   if (h) {
     if (isBoxed(h.o)) return handleCursor(h.o, h.id as EdgeHandle | 'rotate');
     return h.id === 'bend' ? 'grab' : 'move';
   }
-  return objectAt(p) ? 'move' : null;
+  return grabbable(p, pickedOnly) ? 'move' : null;
 }
 
 /**
- * Pressing with the Shapes, Lines or a Select tool: a picked object's handle resizes, turns or bends it;
+ * Pressing with a Select, Shapes, Lines or Mark-Up tool: a picked object's handle resizes, turns or bends it;
  * an object picks it and drags it (with the others picked); Shift+click adds it to the pick or takes it out.
- * Null when the press missed every object.
+ * With `pickedOnly` (the drawing tools, which draw wherever they press) only a picked object counts, so
+ * the shape just drawn can still be moved. Null when the press missed.
  */
-export function objectPress(sx: number, sy: number, p: Point, e: PointerEvent): ToolDrag | null {
+export function objectPress(sx: number, sy: number, p: Point, e: PointerEvent, pickedOnly: boolean): ToolDrag | null {
   const h = e.button === 0 ? handleAt(sx, sy) : null;
   if (h) return handleDrag(h.layer, h.o, h.id, p);
-  const found = objectAt(p);
+  const found = grabbable(p, pickedOnly);
   if (!found) return null;
   const { layer, obj } = found;
   const sel = app.objectSel;
@@ -677,25 +686,6 @@ export function pasteCopied(): void {
   const objects = copied.objects.map((o) => ({ ...moveObject(o, d, d), id: newObjectId() }));
   addObjects(objects, objects.length === 1 ? `Paste ${nameOf(objects[0])}` : 'Paste shapes', copied.layer);
   toast(objects.length === 1 ? `Pasted the ${nameOf(objects[0])}` : `Pasted ${objects.length} shapes`);
-}
-
-// ---------- Painting over objects ----------
-
-const offered = new Set<number>();
-
-/**
- * Pixel tools paint a layer's pixels, which are under its shapes and text, so those stay editable and
- * on top. The first time that happens on a layer with objects, says so, with a button to rasterize the
- * layer so painting can go over them.
- */
-export function offerRasterize(rasterize: () => void): void {
-  const layer = app.doc.activeLayer;
-  if (offered.has(layer.id) || !layer.objects.length) return;
-  offered.add(layer.id);
-  toast('Painting goes under the shapes and text on this layer, which stay on top. Rasterize the layer to paint over them.', 8000, {
-    label: 'Rasterize layer',
-    run: rasterize,
-  });
 }
 
 // ---------- Restyling ----------
