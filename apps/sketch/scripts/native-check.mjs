@@ -1865,8 +1865,8 @@ try {
     app.child.kill(); // Like a crash: no close, no clean-up.
     await app.quit();
     app = await launch(exe, work, [], null, crash.env);
-    const s = await app.waitFor('the picture to come back', (s) => s.title === 'Untitled* - Sketch' && s.size === '300 × 200 px');
-    expect((s.toast ?? '').startsWith('Brought back Untitled'), `Toast: ${s.toast}`);
+    // The toast comes up about 30 ms after the picture (`restore` tidies the slots in between), so it's waited for with it.
+    await app.waitFor('the picture and its toast to come back', (s) => s.title === 'Untitled* - Sketch' && s.size === '300 × 200 px' && (s.toast ?? '').startsWith('Brought back Untitled'));
     expect(slots(crash.dir, '.json').length === 1, `Slots after recovery: ${slots(crash.dir, '.json').join(', ')}`);
   });
 
