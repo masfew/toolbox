@@ -1,6 +1,6 @@
 # Sketch
 
-Version 1.9.1. See the [changes](#changes) at the end.
+Version 1.9.2. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -408,6 +408,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.9.2: A new app icon: the looping stroke in blue, pink and yellow on a dark tile with a coloured rim, so it stands out on light and dark taskbars alike. The taskbar, Start menu and desktop show it once Windows refreshes its icon cache, which can take a sign-out.
 - 1.9.1: Dragging a number in the options bar no longer jumps as it starts. If the mouse was moving when the drag took hold of the pointer, which it nearly always is, the value could leap by 50 or more, or straight to the end of its range.
 - 1.9.0: Drawing works the way it does in Paint: it's all one picture. **The Brush draws on a pasted picture.** Until now a paste kept floating while the Brush stayed the current tool, so dragging moved the picture instead of drawing, and clicking the Brush again did nothing, while picking the Pencil placed it. A pasted or dropped picture now lands with a Select tool, as in Paint: drag it into place, then pick the Brush or any tool and it's placed. **What you paint goes on top.** Painting used to go under shapes and text, with a message about rasterizing. Now a shape or text the Brush, Pencil or Eraser touches becomes pixels under the stroke, and the rest stay editable; one undo brings it back. Fill takes the shapes and text in what it fills, and the Adjust menu those on the layer or in the selection. **Selections take everything.** Moving, deleting or copying a selection includes the shapes and text in it, a paste placed over a shape lands on top of it, and the Magic Wand and the Colour Picker see the picture as it shows. **Tools that draw, draw.** The Shapes, Lines and Mark-Up tools draw wherever you press instead of picking the shape there; use a Select tool to pick one. **Saving is simpler.** Ctrl+S on a PNG with shapes on it just saves, and Save As starts on PNG for a picture with shapes. Rasterize Layer and Rasterize Shapes are gone, since nothing needs them now.
 - 1.8.0: Every tool's options bar now matches the Shape tool's. All numbers are drag labels, the Brush, Pencil, Eraser and Highlighter sizes included. Every choice (brush Type, Pen pressure, Erase to, Sample, Ratio, Align, Highlighter Colour, Spotlight Shape, Font) is a small square that shows the current one and opens a short menu, in place of dropdown lists and pairs of buttons. On and off settings have an icon, with Bold and Italic as icons alone, and they show a blue edge and tint while on instead of a solid blue fill. Crop and Remove Background have icons too.
