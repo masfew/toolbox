@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.1.0. See the [changes](#changes) at the end.
+Version 2.2.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -10,8 +10,8 @@ Every plan page has the same parts:
 
 - a header with the version and dates, and a one-paragraph summary
 - a plan overview table of phases, steps and statuses, linking to each step's details
-- any extra sections the plan needs (goals, architecture, risks, diagrams and so on)
-- the build outline: collapsible phase and step cards with What / How / Why details
+- any extra sections the plan needs (goals, architecture, risks, diagrams and so on), folded under one Background and Technical Details heading
+- the build outline: collapsible phase and step cards with What / How / Why details, folded away once every phase is finished
 - future idea cards with Accept (✓), Reject (✕) and Edit (pencil) buttons, and drag handles to reorder planned features, whose choices and edits the page saves for Claude to read back
 
 ## Requirements
@@ -89,7 +89,7 @@ Ask for a plan as usual. Claude builds the page, publishes it as an Artifact tit
 - *"Read the plan and build step 3.2."* A session reads only the outline and the parts it needs, not the whole page.
 - *"Build the selected phases in the <plan>."* After you tick phases in the overview (see Building Selected Phases below).
 
-On the page, a round button in the bottom-right corner takes you to the next step that isn't finished, and a **Future Ideas** button under the summary jumps down to the Future Ideas board. Finished phases fold up in the overview, and once the whole build plan is finished, or 10 or more planned features are done, those fold together into one row. Drag a planned feature by the dots left of its header to change its order.
+On the page, a round button in the bottom-right corner takes you to the next step that isn't finished, and a **Future Ideas** button under the summary jumps down to the Future Ideas board. Only phases in progress (or blocked) start open in the overview; the rest fold up to one row each, and once the whole build plan is finished, or 10 or more planned features are done, those fold together into one row. Drag a planned feature by the dots left of its header to change its order.
 
 **Snapshots.** A plan's content lives in the page's database, and the page builds itself from it every time it opens. The page's HTML is a snapshot for people who can't load the database (signed out, or a tool that doesn't run the page's script). When you open a plan that has changed and whose snapshot is over a day old (or more than 30 updates behind), the page saves a fresh snapshot by itself. The **Save Snapshot** line under the summary saves one whenever you want.
 
@@ -164,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.2.0: Plan pages open shorter. In the plan overview only phases in progress (or blocked) start open; finished and not-started ones start folded to one row. The extra sections between the overview and the build outline sit under one Background and Technical Details heading, folded at first, with their names listed under it; opened, they show beside a line running down from the heading, with a Hide row at the end. The build outline folds under its heading too, folded at first once every phase is finished, and the Completed and Rejected future idea groups start folded. Jumping to anything inside a folded part opens it. Published plans get this the next time their look is refreshed.
 - 2.1.0: Plan pages are only for plans you ask for. Asking for a strategy, proposal or draft on a page, without calling it a plan, now gets an ordinary page instead of the plan template; a plan or roadmap asked for by name, or made in plan mode, is a plan page as before. **Rerun `python install.py` after updating** to refresh the lines in `~/.claude/CLAUDE.md`, which said to use the template for every plan Claude makes.
 - 2.0.0: Light plans are gone: the skill no longer keeps a session's own Markdown plan and saved state, and the install no longer adds the `SessionStart` hook that pasted it back in after `/clear`. They only worked in the Claude desktop app and went unused. **Rerun `python install.py` after updating**, so it takes the old hook out of `~/.claude/settings.json`; until then every session start reports that `session_resume.py` is missing. You can delete `~/.claude/better-plans-session-resume.log` and any `session-plan.md` files left in the desktop app's `side-session-notes` folder. Plan pages work as before.
 - 1.6.0: A Future Ideas button under the plan's summary, on the right of the Save Snapshot line, jumps straight down to the Future Ideas board, so long plans need no scrolling to reach it. Published plans get it the next time their look is refreshed.

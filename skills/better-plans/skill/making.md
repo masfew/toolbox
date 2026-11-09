@@ -102,7 +102,7 @@ A table of every step in the plan, grouped into phases, under the heading **Plan
 - **Size:** most plans have two to five phases. A phase can hold a single step. A very small plan (four steps or fewer) may have just one phase.
 - **Name:** one or two words, since the overview's phase cell holds the bare number and the name on one short line, so a one-step phase is no taller than any other row. There is no per-phase count.
 - **Order:** the page sorts phases (and, separately, planned features) by status: done, then in progress or blocked, then not started, then skipped, keeping written order within each group, and numbers them in that order. Write them in the order the work will happen.
-- **Collapsing:** clicking a phase cell folds its rows to one line. Done and skipped phases start folded; the rest start open, and a phase folds by itself once it finishes. A user's own fold or unfold holds until the phase's finished state changes.
+- **Collapsing:** clicking a phase cell folds its rows to one line. Only phases in progress or blocked start open; the rest start folded, and a phase folds by itself once it's neither. A user's own fold or unfold holds until that changes.
 - **Build boxes:** the page adds a tick box to the phase cells the user can pick to build next, and a "Claimed" label to phases a session has claimed; no markup is needed (see [building.md](building.md)).
 - **Markup:** each phase is one `<tbody data-phase="N">`. Its first row starts with the phase cell, a `<th class="phase" scope="rowgroup" rowspan="…" data-target="phase-N" tabindex="0">`, holding the number (`.ph-num`, "1" rather than "Phase 1") and the name (`.ph-name`). Set `rowspan` to the number of steps in the phase.
 
@@ -148,7 +148,7 @@ The full details of every step, under the heading **Build Outline**, as cards: o
 - **Format:** write short paragraphs and short lists. Put a caveat or dependency in a `.note`.
 - **Phase card markup:** `<details class="phase-card" id="phase-N" open>`. Its summary holds a `.card-title` (a `.card-num` reading "Phase N", then the name in an `<h3>`) followed by the phase's status pill. The step cards go inside a `<div class="phase-body">`.
 - **Step card markup:** `<details class="step-card" id="step-N-M" open>`. Its summary holds a `.card-title` (a `.card-num` reading "Step N.M", then the name in an `<h4>`, word for word the overview's name) followed by the step's status pill, the same status as the overview. Everything else goes inside a `<div class="step-body">`: the details in a `<div class="prose">`, then the `↑ Back to overview` link (`<a class="back" href="#overview">`).
-- **Collapsing:** write `open` on every card and leave it there. When the page loads, the script leaves only in-progress steps open, along with the phases that hold them, and collapses every other card. Jumping to a card from the overview opens it.
+- **Collapsing:** write `open` on every card and leave it there. When the page loads, the script leaves only in-progress steps open, along with the phases that hold them, and collapses every other card. The whole Build Outline also folds under its heading, folded at first once every phase in it is finished. Jumping to a card from the overview opens it.
 - **Back to next step:** once the plan overview has scrolled out of view, the script shows a round button in the bottom-right corner that glides back up to the overview's first row that isn't done or skipped (core steps first, then planned features), a third of the way down the window. With every row finished it goes to the top of the page. It needs no markup, only the overview's `id="overview"`.
 
 ### 5. Future Ideas
@@ -159,7 +159,7 @@ Ideas that could come later but aren't part of the plan yet, as idea cards the u
 
 When a plan needs more than the core sections, for example goals and scope, architecture, a tech stack, a testing approach, tuning values, options compared, or risks, follow these rules:
 
-- **Placement:** add each extra section between the Plan Overview and the Build Outline, as `<section class="block block-extra" id="…">` with an `<h2>` (in a source, a `## Section:` part). The `block-extra` class spaces out the blocks stacked inside it and draws the hairline rule above the section that separates it from the one before. The Build Outline gets the same rule on its own, so don't add rules or dividers by hand. Put background (goals, scope, how it works) first, then the rest in the order a reader needs it.
+- **Placement:** add each extra section between the Plan Overview and the Build Outline, as `<section class="block block-extra" id="…">` with an `<h2>` (in a source, a `## Section:` part). The `block-extra` class spaces out the blocks stacked inside it and draws the hairline rule above the section that separates it from the one before. The Build Outline gets the same rule on its own, so don't add rules or dividers by hand. Put background (goals, scope, how it works) first, then the rest in the order a reader needs it. The script gathers all the extra sections under one folded heading, Background and Technical Details, so write no heading or wrapper for them.
 - **Building blocks:** build the content only from the template's existing ones:
   - running text and `<h4>` subheadings in `.prose`
   - tables (`.table-wrap` > `table.table`)

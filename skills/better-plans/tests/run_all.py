@@ -1,5 +1,6 @@
 """run_all.py: every better-plans test against this repo's skill/ — scen.py (Python model), parity.js (plan.js against
-scen.py's cases), autosnap.js (the page's automatic snapshot) and idea_target.py. Needs node on PATH.
+scen.py's cases), autosnap.js (the page's automatic snapshot), idea_target.py and folds.py (what starts folded, in a
+headless Chrome or Edge; skipped without one). Needs node on PATH.
 Run: python -I run_all.py. Exits 1 if any suite fails."""
 import os
 import subprocess
@@ -14,6 +15,7 @@ SUITES = [
     ("parity.js", ["node", str(HERE / "parity.js"), str(cases)], {}),
     ("autosnap.js", ["node", str(HERE / "autosnap.js")], {}),
     ("idea_target.py", [sys.executable, "-I", str(HERE / "idea_target.py")], {}),
+    ("folds.py", [sys.executable, "-I", str(HERE / "folds.py")], {}),
 ]
 failed = []
 for name, cmd, env in SUITES:

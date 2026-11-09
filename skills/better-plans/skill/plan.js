@@ -40,8 +40,9 @@
   var main = document.querySelector('main.page');
   if (!main) return;
   var lastBuilt = null, waiting = false;
-  var foldChoice = {};   // overview phases the reader folded or unfolded ({folded, finished}), by phase name, kept through rebuilds
+  var foldChoice = {};   // overview phases the reader folded or unfolded ({folded, auto}), by phase name, kept through rebuilds
   var groupChoice = {};  // overview groups of finished phases the reader unfolded (core, future: true when folded), kept through rebuilds
+  var blockChoice = {};  // sections the reader folded or unfolded ({collapsed, auto}), by key (extras, details, completed, rejected)
   // The snapshot as parsed, before boot() changes anything, for the first comparison with what the entries build.
   var original = (function () {
     var m = markers(), holder = document.createElement('div');
@@ -865,10 +866,10 @@
     recountPhases(null);
 
     // Every phase (or planned feature) with steps folds up in the overview to one row (its phase cell, a step count and its
-    // status) in place of a row per step. Finished ones (all done or skipped) start folded, the rest open. The chevron in its
+    // status) in place of a row per step. Only the ones in progress (or blocked) start open; the rest start folded. The chevron in its
     // phase cell, or a click on the rest of the folded row, unfolds it; the same chevron folds it again. What the reader chose
-    // lasts through rebuilds (foldChoice) but not a reload, until the phase becomes finished or stops being finished: then it
-    // folds or unfolds by its status again.
+    // lasts through rebuilds (foldChoice) but not a reload, until the phase moves into or out of progress: then it folds or
+    // unfolds by its status again.
     function phaseKey(body) { var n = body.querySelector('th.phase .ph-name'); return n ? n.textContent : body.getAttribute('data-phase'); }
     Array.prototype.forEach.call(table.querySelectorAll('tbody[data-phase] th.phase .ph'), function (ph) {
       var btn = document.createElement('button');
@@ -910,16 +911,18 @@
       });
     }
     function isFinished(st) { return st === 'done' || st === 'skipped'; }
+    function isActive(st) { return st === 'progress' || st === 'blocked'; }   // sorted together too (STATUS_RANK)
     function refold() {
       Array.prototype.forEach.call(table.querySelectorAll('tbody[data-phase]'), function (body) {
-        var list = stepStatuses(body), st = phaseStatus(list), finished = isFinished(st);
+        var list = stepStatuses(body), st = phaseStatus(list), auto = !isActive(st);
         var key = phaseKey(body), choice = foldChoice[key];
-        if (choice && choice.finished !== finished) { delete foldChoice[key]; choice = null; }
+        if (choice && choice.auto !== auto) { delete foldChoice[key]; choice = null; }
         body.classList.toggle('can-fold', list.length > 0);
-        setFold(body, list.length > 0 && (choice ? choice.folded : finished), st, list.length);
+        setFold(body, list.length > 0 && (choice ? choice.folded : auto), st, list.length);
       });
       regroup();
       if (paintBuild) paintBuild();   // a new fold row copied the phase cell as it was
+      if (blocks && blocks.details) updateOutline();
     }
 
     // Finished phases also fold together, into one group row: the core phases once every one is finished (GROUP_MIN_CORE or
@@ -1008,7 +1011,7 @@
     function toggleFold(body) {
       var keyboard = document.activeElement && document.activeElement.classList.contains('fold-btn');
       var folded = !body.classList.contains('is-folded');
-      foldChoice[phaseKey(body)] = { folded: folded, finished: isFinished(phaseStatus(stepStatuses(body))) };
+      foldChoice[phaseKey(body)] = { folded: folded, auto: !isActive(phaseStatus(stepStatuses(body))) };
       refold();
       // The chevron that was pressed may have gone with its row: keep the focus on the one now showing.
       if (keyboard) {
@@ -1017,16 +1020,139 @@
       }
     }
 
-    // Opening a card also opens the phase card around it.
-    function reveal(target) {
-      for (var el = target; el; el = el.parentElement) if (el.tagName === 'DETAILS') el.open = true;
+    // Sections that fold under their heading: the background sections between the overview and the Build Outline (under
+    // one heading of their own, starting folded), the Build Outline (folded when every phase in it is finished), and the
+    // Completed and Rejected groups of Future Ideas (folded; set up in initFeatures). A folded section shows a one-line note
+    // under its heading, and its content (`bodies`) is hidden="until-found", so Find in page still reaches it and opens it.
+    // DOM only, so snapshots never hold them. What the reader chose lasts through rebuilds (blockChoice) but not a reload,
+    // until the default changes.
+    var blocks = {}, FINDABLE = 'onbeforematch' in document.body;
+    function addBlock(key, members, toggle, note, auto, bodies) {
+      var choice = blockChoice[key];
+      if (choice && choice.auto !== auto) { delete blockChoice[key]; choice = null; }
+      blocks[key] = { members: members, toggle: toggle, note: note, auto: auto, bodies: bodies || [] };
+      members.forEach(function (el) { el.setAttribute('data-fold', key); });
+      toggle.setAttribute('data-fold-key', key);
+      blocks[key].bodies.forEach(function (el) { on(el, 'beforematch', function () { setBlock(key, false, true); }); });
+      setBlock(key, choice ? choice.collapsed : auto);
     }
-    function revealHash() {
+    // A new default (the Build Outline finishing or reopening) replaces what the reader chose under the old one.
+    function setAuto(key, auto) {
+      var b = blocks[key];
+      if (!b || b.auto === auto) return;
+      b.auto = auto;
+      delete blockChoice[key];
+      setBlock(key, auto);
+    }
+    function setBlock(key, collapsed, chosen) {
+      var b = blocks[key];
+      if (!b) return;
+      if (chosen) blockChoice[key] = { collapsed: collapsed, auto: b.auto };
+      b.members.forEach(function (el) { el.classList.toggle('is-collapsed', collapsed); });
+      b.bodies.forEach(function (el) { if (collapsed) el.setAttribute('hidden', FINDABLE ? 'until-found' : ''); else el.removeAttribute('hidden'); });
+      var label = (collapsed ? 'Show ' : 'Hide ') + b.toggle.querySelector('span').textContent.trim();
+      b.toggle.title = label;
+      b.toggle.setAttribute('aria-expanded', String(!collapsed));
+      if (b.note) b.note.hidden = !collapsed;
+    }
+    function blockHead(h2) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'block-toggle';
+      btn.innerHTML = CHEVRON + '<span></span>';
+      btn.lastChild.textContent = h2.textContent.trim();
+      h2.textContent = '';
+      h2.appendChild(btn);
+      var note = document.createElement('p');
+      note.className = 'block-intro fold-note';
+      h2.parentNode.insertBefore(note, h2.nextSibling);
+      return { btn: btn, note: note };
+    }
+    // The background sections move into one group: a heading row with the section count, then the sections beside a rail
+    // that runs down from the chevron, then a Hide row.
+    var extras = Array.prototype.slice.call(main.querySelectorAll(':scope > section.block-extra'));
+    if (extras.length) {
+      var extrasGroup = document.createElement('div');
+      extrasGroup.className = 'bg-group';
+      extrasGroup.innerHTML = '<div class="bg-head"><h2>Background and Technical Details</h2><span class="bg-count"></span></div>' +
+        '<div class="bg-body"></div><p class="bg-end"><button type="button" class="group-hide">' + CHEVRON +
+        '<span>Hide background and technical details</span></button></p>';
+      extrasGroup.querySelector('.bg-count').textContent = extras.length + (extras.length === 1 ? ' section' : ' sections');
+      extras[0].parentNode.insertBefore(extrasGroup, extras[0]);
+      var extrasBody = extrasGroup.querySelector('.bg-body');
+      extras.forEach(function (s) { extrasBody.appendChild(s); });
+      var eh = blockHead(extrasGroup.querySelector('h2'));
+      extrasGroup.insertBefore(eh.note, extrasBody);   // under the heading row, not inside it
+      eh.note.textContent = extras.map(function (s) {
+        var h = s.querySelector(':scope > h2');
+        return h ? h.textContent.trim() : '';
+      }).filter(Boolean).join(' · ');
+      addBlock('extras', [extrasGroup], eh.btn, eh.note, true, [extrasBody]);
+      extrasGroup.querySelector('.bg-end .group-hide').setAttribute('data-fold-key', 'extras');
+    }
+    // The Build Outline's phase cards move into one .fold-body under the heading. Its note and default follow the phases'
+    // statuses, which change live on older plans, so refold() calls updateOutline() again.
+    var outline = document.getElementById('details');
+    var outlineH2 = outline && outline.querySelector(':scope > h2');
+    var outlineHead = null, outlineCards = null;
+    if (outlineH2) {
+      outlineHead = blockHead(outlineH2);
+      outlineCards = document.createElement('div');
+      outlineCards.className = 'fold-body';
+      Array.prototype.slice.call(outline.children).forEach(function (el) {
+        if (el !== outlineH2 && el !== outlineHead.note) outlineCards.appendChild(el);
+      });
+      outline.appendChild(outlineCards);
+    }
+    function updateOutline() {
+      if (!outlineHead) return;
+      var sts = Array.prototype.map.call(outlineCards.querySelectorAll(':scope > .phase-card'), function (card) {
+        var p = pillOf(card);
+        return p ? p.getAttribute('data-status') : 'todo';
+      });
+      var done = sts.filter(function (s) { return s === 'done'; }).length;
+      var skipped = sts.filter(function (s) { return s === 'skipped'; }).length;
+      var finished = sts.length > 0 && sts.every(isFinished);
+      outlineHead.note.textContent = finished
+        ? 'All ' + sts.length + ' phases ' + (skipped ? 'finished (' + skipped + ' skipped)' : 'done')
+        : done + ' of ' + sts.length + ' phases done';
+      if (blocks.details) setAuto('details', finished);
+      else addBlock('details', [outline], outlineHead.btn, outlineHead.note, finished, [outlineCards]);
+    }
+    updateOutline();
+    on(main, 'click', function (e) {
+      var t = e.target.closest && e.target.closest('[data-fold-key]');
+      if (!t || !main.contains(t)) return;
+      var key = t.getAttribute('data-fold-key'), b = blocks[key];
+      if (!b) return;
+      var collapsed = !b.members[0].classList.contains('is-collapsed');
+      setBlock(key, collapsed, true);
+      // Folded from a Hide row at the bottom: that row is gone, so the focus moves to the heading, and the page glides
+      // back up to the heading when it's now above the window (read after the fold, which shortened the page).
+      if (collapsed && t !== b.toggle) {
+        b.toggle.focus({ preventScroll: true });
+        var top = b.members[0].getBoundingClientRect().top;
+        if (top < 0) glideTo(top + window.scrollY - window.innerHeight / 4);
+      }
+    });
+
+    // Opening a card also opens the phase card around it, and any folded section it's in. A soft reveal (a hash left in
+    // the address, met again on a rebuild) leaves alone a section the reader folded themselves.
+    function reveal(target, soft) {
+      for (var el = target; el; el = el.parentElement) {
+        if (el.tagName === 'DETAILS') el.open = true;
+        if (el.classList.contains('is-collapsed') && el.hasAttribute('data-fold')) {
+          var key = el.getAttribute('data-fold'), choice = blockChoice[key];
+          if (!(soft && choice && choice.collapsed)) setBlock(key, false, true);
+        }
+      }
+    }
+    function revealHash(soft) {
       var target = location.hash && document.getElementById(location.hash.slice(1));
-      if (target) reveal(target);
+      if (target) reveal(target, soft === true);
     }
-    revealHash();
-    on(window, 'hashchange', revealHash);
+    revealHash(true);
+    on(window, 'hashchange', function () { revealHash(false); });
 
     // Future ideas. Accept, Reject and Reset choices are saved in the artifact's database, in the "features" collection
     // (one document per feature, keyed by its data-feature id: {decision: "accept" | "reject" | "undecided", edit: "..."}), where Claude
@@ -1043,6 +1169,7 @@
     if (board) initFeatures(board);
     refold();   // after the features, which add their "Pending reset" label to the phase cell the fold row copies
     initBuild();
+    revealHash(true);   // again, now the Future Ideas groups exist and may be folded
 
     // Build selections, on database plans. The owner and editors tick the phases they want built next, and a session
     // told to "build the selected phases" claims them all at once, then builds them (building.md). Ticks and claims are
@@ -1347,8 +1474,10 @@
         var wrap = document.createElement('div');
         wrap.className = 'feature-group';
         wrap.setAttribute('data-group', g[0]);
-        var title = document.createElement('div');
+        var folds = g[0] !== 'pending';
+        var title = document.createElement(folds ? 'button' : 'div');
         title.className = 'group-title';
+        if (folds) { title.type = 'button'; title.className += ' block-toggle'; title.innerHTML = CHEVRON; }
         var name = document.createElement('span');
         name.textContent = g[1];
         var count = document.createElement('span');
@@ -1361,6 +1490,7 @@
         wrap.appendChild(list);
         board.appendChild(wrap);
         groups[g[0]] = { wrap: wrap, list: list, count: count };
+        if (folds) addBlock(g[0], [wrap], title, null, true, [list]);
       });
       var hint = document.querySelector('[data-feature-hint]');
       function decisionOf(f) { return saved[f.id] || f.baked; }
@@ -1455,7 +1585,11 @@
           hint.textContent = error || 'Waiting on Claude: ' + joinParts(parts) + '. Tell Claude you’ve updated your future ideas to bring the plan up to date.';
           hint.hidden = !error && !parts.length;
         }
-        if (focused && focused !== document.activeElement && document.body.contains(focused)) focused.focus();
+        // A card that moved into a folded group (Rejected, Completed) took its focused button out of view: focus the group's heading.
+        var foldedIn = focused && document.body.contains(focused) && focused.closest('[data-fold].is-collapsed');
+        var foldHead = foldedIn && foldedIn.querySelector('[data-fold-key]');
+        if (foldHead) { if (foldHead !== document.activeElement) foldHead.focus(); }
+        else if (focused && focused !== document.activeElement && document.body.contains(focused)) focused.focus();
       }
       place();
       placeFeatures = place;
@@ -1740,7 +1874,7 @@
           refold();
           updateProgress();
           if (placeFeatures) placeFeatures();
-          revealHash();
+          revealHash(true);
         }
         var m = /^(\d+)\.(\d+)$/.exec(baseVersion);
         var version = m && records.length ? m[1] + '.' + (parseInt(m[2], 10) + records.length) : baseVersion;
@@ -1862,6 +1996,9 @@
       observer.observe(overview);
       toTop.addEventListener('click', function (e) {
         var row = nextRow();
+        // A phase that isn't in progress starts folded: unfold it, so the row the button glides to shows.
+        var rowBody = row && row.closest('tbody');
+        if (rowBody && rowBody.classList.contains('is-folded')) toggleFold(rowBody);
         glideTo(row ? row.getBoundingClientRect().top + window.scrollY - window.innerHeight / 3 : 0);
         // From the keyboard, focus moves to that row (or the title), since the button hides once the overview is back in view.
         if (!e.detail) {
