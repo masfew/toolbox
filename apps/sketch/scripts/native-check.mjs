@@ -3074,10 +3074,14 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
         const others = sketchPids().map((p) => `${p}:${screen(work, `[SketchScreen]::Overlay(${p})`)}`);
         throw new Error(`${e.message} (in front: process ${owner}${sketchPids().includes(owner) ? ', a Sketch' : ''}; Sketch processes and overlays: ${others.join(' ') || 'none'})`);
       });
+      // Returned: the time just before the drag that ends the capture, so files it makes can be told
+      // from older ones.
+      const dragAt = Date.now();
       // 400 ms: about when the notification has slid in, well inside the second.
       if (keys) overlay.dragThenKeys(work, o, target.x + 10, target.y + 10, target.x + 9 + w, target.y + 9 + h, 400, keys);
       else overlay.drag(work, o, target.x + 10, target.y + 10, target.x + 9 + w, target.y + 9 + h);
       await overlay.gone(work, o);
+      return dragAt;
     };
     const noteLife = (ms) => (ms ? writeFileSync(join(bg.dir, 'note-ms.txt'), String(ms)) : rmSync(join(bg.dir, 'note-ms.txt'), { force: true }));
     // The keys with Sketch open: in front, Sketch takes the capture itself (it hides first);
@@ -3190,13 +3194,27 @@ $p = Get-Process -Id $ids -ErrorAction SilentlyContinue; "$(($p | Measure-Object
         const life = Number(ps(`(Get-ItemProperty 'HKCU:\\Control Panel\\Accessibility').MessageDuration`)) || 5;
         noteLife(0);
         try {
-          await helperCapture(250, 150);
-          const t0 = Date.now();
+          // Timed from the notification's picture, which the helper writes just before showing it and
+          // starting its timer (`show` in note.rs). Timing from after `helperCapture` started up to a
+          // second late, since its wait for the overlay to go is a PowerShell run or more.
+          const dragAt = await helperCapture(250, 150);
+          const captures = join(bg.dir, 'captures');
+          let t0 = 0;
+          await waitUntil('the notification\'s picture', () => {
+            for (const f of readdirSync(captures).filter((f) => f.startsWith(`${helperPid}-`) && f.endsWith('.png'))) {
+              try {
+                const t = statSync(join(captures, f)).mtimeMs;
+                if (t >= dragAt) t0 = Math.max(t0, t);
+              } catch {} // Gone between the listing and the look.
+            }
+            return t0 > 0;
+          }, 3000);
           const pid = await hiddenSketch();
           await waitUntil('the hidden Sketch to close', async () => !alive(pid), life * 1000 + 5000);
           const s = (Date.now() - t0) / 1000;
-          console.log(`      Closed ${s.toFixed(1)} s after the capture (Windows' notification time: ${life} s)`);
-          expect(s > life - 0.5, `The hidden Sketch closed after only ${s.toFixed(1)} s`);
+          console.log(`      Closed ${s.toFixed(2)} s after the notification showed (Windows' notification time: ${life} s)`);
+          // The timer starts after the picture is written, so a correct app is never early; 0.2 s covers the clocks.
+          expect(s > life - 0.2, `The hidden Sketch closed after only ${s.toFixed(2)} s`);
           expect(notesInCentre(helperPid) === 0, 'The notification is still in the notification centre');
           expect(sketchPids().length === 0, 'A Sketch process is left');
           const left = readdirSync(join(bg.dir, 'captures')).filter((f) => f.endsWith('.rgba'));

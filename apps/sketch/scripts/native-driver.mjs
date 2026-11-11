@@ -721,7 +721,9 @@ async function connect(port, child) {
     })()`);
 
   await send('Runtime.enable');
-  await waitFor('the first picture', (s) => /px$/.test(s.size ?? ''));
+  // A whiteboard counts: a relaunch after a crash can bring one back as the tab showing, sometimes
+  // before the first look here.
+  await waitFor('the first picture', (s) => /px$/.test(s.size ?? '') || s.size === 'Whiteboard');
   // The page exposes its state for checks once it has asked whether test hooks are on, which can come after the first picture.
   for (let end = Date.now() + 5000; Date.now() < end && !(await evaluate('!!window.sketch')); ) await sleep(50);
   const dpr = await evaluate('window.devicePixelRatio');
