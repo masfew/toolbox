@@ -2434,7 +2434,8 @@ try {
   };
   const setSlider = (n) =>
     app.evaluate(`(async () => {
-      if (!document.querySelector('.mouse-popover')) document.querySelector('.mouse-btn').click();
+      // A right click opens the menu; a plain click switches the speed on or off.
+      if (!document.querySelector('.mouse-popover')) document.querySelector('.mouse-btn').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
       const end = performance.now() + 3000;
       while (!document.querySelector('.mouse-popover') && performance.now() < end) await new Promise((r) => setTimeout(r, 20));
       const r = document.querySelector('.mouse-popover input[type=range]');
@@ -2445,6 +2446,13 @@ try {
       return document.querySelector('.mouse-value').textContent;
     })()`);
   const buttonTip = () => app.evaluate(`document.querySelector('.mouse-btn').getAttribute('aria-label')`);
+  // A plain click on the button switches the speed on or off (at normal it opens the menu instead).
+  const clickMouseButton = async () => {
+    await app.evaluate(`document.querySelector('.mouse-btn').click()`);
+    await sleep(150); // The button redraws after the click.
+  };
+  const mouseState = () =>
+    app.evaluate(`({ on: window.sketch.mouse.on, offset: window.sketch.mouse.offset, popover: !!document.querySelector('.mouse-popover'), changed: document.querySelector('.mouse-btn').classList.contains('changed') })`);
 
   await check('Drawing without Left Ctrl keeps the own speed', async () => {
     writeFileSync(mouseFile, '10');
@@ -2454,6 +2462,8 @@ try {
     const shown = await setSlider(-4);
     expect(shown === '50%', `The slider shows ${shown}`);
     expect((await buttonTip()) === 'Mouse speed with Left Ctrl held: 50%', `Button: ${await buttonTip()}`);
+    const first = await mouseState();
+    expect(first.on && first.changed && first.popover, `Right click then slider: ${JSON.stringify(first)}`);
     await canvasMouse('mousePressed');
     await sleep(300);
     expect(systemSpeed() === '10', `Speed during a stroke without Ctrl: ${systemSpeed()}`);
@@ -2489,6 +2499,30 @@ try {
     expect(systemSpeed() === '10', `Speed after Ctrl came up without a key-up: ${systemSpeed()}`);
     await ctrlKey('keyUp');
     await ctrlHeld(false);
+
+    // Clicking the button switches the speed off and keeps the slider's value: Left Ctrl then does nothing.
+    await clickMouseButton();
+    const off = await mouseState();
+    expect(!off.on && off.offset === -4 && !off.changed, `After switching off: ${JSON.stringify(off)}`);
+    expect((await buttonTip()) === 'Mouse speed off (50% with Left Ctrl held)', `Off button: ${await buttonTip()}`);
+    await holdCtrl();
+    await sleep(400);
+    expect(systemSpeed() === '10', `Speed with Left Ctrl held while off: ${systemSpeed()}`);
+    await ctrlKey('keyUp');
+    await ctrlHeld(false);
+    // Switching on again brings the same speed back, and switching off during a hold ends it.
+    await clickMouseButton();
+    const on = await mouseState();
+    expect(on.on && on.offset === -4 && on.changed, `After switching on: ${JSON.stringify(on)}`);
+    await holdCtrl();
+    await waitUntil('the slower speed', () => systemSpeed() === '6', 3000);
+    await clickMouseButton();
+    await waitUntil('the own speed back after switching off', () => systemSpeed() === '10', 3000);
+    expect(!existsSync(savedSpeed), 'The saved speed is still there after switching off during a hold');
+    await ctrlKey('keyUp');
+    await ctrlHeld(false);
+    await clickMouseButton();
+    expect((await mouseState()).on, 'The button did not switch the speed back on');
   });
 
   await check('Killing Sketch with Left Ctrl held leaves the normal speed after the next start, and the slider is remembered', async () => {
@@ -2503,6 +2537,22 @@ try {
     expect(systemSpeed() === '10', `Speed after the next start: ${systemSpeed()}`);
     expect(!existsSync(savedSpeed), 'The saved speed is still there after the next start');
     expect((await buttonTip()) === 'Mouse speed with Left Ctrl held: 75%', `Button after reopening: ${await buttonTip()}`);
+    // Switched off is remembered too, with the slider's value, and Left Ctrl still does nothing after the restart.
+    await clickMouseButton();
+    postClose(app.pid);
+    expect(await app.quit(5000), "The app didn't close");
+    app = await launch(exe, work, [], 'mouse', mouseData.env);
+    await app.press('m');
+    const stayedOff = await mouseState();
+    expect(!stayedOff.on && stayedOff.offset === -2 && !stayedOff.changed, `After a restart while off: ${JSON.stringify(stayedOff)}`);
+    expect((await buttonTip()) === 'Mouse speed off (75% with Left Ctrl held)', `Off button after reopening: ${await buttonTip()}`);
+    await holdCtrl();
+    await sleep(400);
+    expect(systemSpeed() === '10', `Speed with Left Ctrl held after restarting while off: ${systemSpeed()}`);
+    await ctrlKey('keyUp');
+    await ctrlHeld(false);
+    await clickMouseButton();
+    expect((await mouseState()).on, 'The button did not switch the speed back on after the restart');
   });
 
   await check('Reset Mouse Speed and closing Sketch both put the own speed back', async () => {
@@ -2512,7 +2562,49 @@ try {
     await waitUntil('the normal speed', () => systemSpeed() === '10', 3000);
     expect(!(await app.evaluate(`document.querySelector('.mouse-btn').classList.contains('changed')`)), 'The button still looks changed after Reset');
     await ctrlKey('keyUp');
+    // At normal there is nothing to switch on, so a click opens the menu instead.
+    await clickMouseButton();
+    const atNormal = await mouseState();
+    expect(atNormal.on && atNormal.offset === 0 && atNormal.popover, `Click at normal: ${JSON.stringify(atNormal)}`);
+    // Closing the menu starts a half-second in which a press on the button doesn't reopen it.
+    const closeMenu = async () => {
+      await app.press('Escape');
+      await waitUntil('the menu to close', async () => !(await mouseState()).popover, 3000);
+      await sleep(600);
+    };
+    await closeMenu();
+    // Holding the button opens the menu without switching anything (the real mouse, 400 ms and a bit), as does the corner arrow.
+    const hold = async (ms) => {
+      const c = await app.evaluate(`(() => { const r = document.querySelector('.mouse-btn').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+      await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: c.x, y: c.y });
+      await app.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: c.x, y: c.y, button: 'left', buttons: 1, clickCount: 1 });
+      await sleep(ms);
+      await app.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: c.x, y: c.y, button: 'left', buttons: 0, clickCount: 1 });
+      await sleep(200);
+    };
+    await setSlider(-2); // Opens the menu (a right click) and sets 75%.
+    await closeMenu();
+    await hold(700);
+    const held = await mouseState();
+    expect(held.popover && held.on && held.offset === -2, `After holding the button: ${JSON.stringify(held)}`);
+    await closeMenu();
+    await app.evaluate(`document.querySelector('.mouse-btn .corner').click()`);
+    await waitUntil('the corner arrow to open the menu', async () => (await mouseState()).popover, 3000);
+    // A long press on the button while the menu is open only closes it, however long it's held.
+    await hold(700);
+    const closedByPress = await mouseState();
+    expect(!closedByPress.popover && closedByPress.on, `Holding the button with the menu open: ${JSON.stringify(closedByPress)}`);
+    await sleep(600);
+    // A short real click switches off; Reset to Normal leaves it off; moving the slider switches it on.
+    await hold(60);
+    expect(!(await mouseState()).on, 'A short press did not switch the speed off');
+    await app.evaluate(`window.sketch.run('view.mouseReset')`);
+    await sleep(150);
+    const resetOff = await mouseState();
+    expect(!resetOff.on && resetOff.offset === 0, `Reset while off: ${JSON.stringify(resetOff)}`);
     await setSlider(-2);
+    const sliderOn = await mouseState();
+    expect(sliderOn.on && sliderOn.offset === -2, `Slider while off: ${JSON.stringify(sliderOn)}`);
     await holdCtrl();
     await waitUntil('the slower speed', () => systemSpeed() === '8', 3000);
     postClose(app.pid);

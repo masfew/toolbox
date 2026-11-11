@@ -10,7 +10,7 @@ import { loadPref, savePref } from './prefs';
 import { app, changed, openModal, tabs } from './store';
 import { closeTab, stepTab } from './tabs';
 import { restartToUpdate, update } from './update';
-import { mouse, setMouseSpeed } from './mouse';
+import { mouse, setMouseOn, setMouseSpeed } from './mouse';
 import { currentTool, selectSlot, selectTool, stepCurrentSize, tools } from './tools';
 import { applyCrop, cropIsWhole } from '../tools/crop';
 import { deleteSelection, selectAll } from '../tools/selection';
@@ -171,6 +171,17 @@ export const COMMANDS: AppCommand[] = [
   { id: 'view.grid', label: 'Pixel Grid', group: 'View', keys: ["Ctrl+'"], run: actions.toggleGrid, checked: () => app.showGrid, keywords: 'shows from 800%' },
   { id: 'view.snapping', label: 'Snap to Shapes', group: 'View', run: actions.toggleSnapping, checked: () => app.snapping, keywords: 'smart guides align snapping magnet hold ctrl to skip' },
   { id: 'view.panel', label: 'Side Panel', group: 'View', keys: ['F6'], run: actions.togglePanel, checked: () => app.showPanel, keywords: 'layers history sidebar', icon: 'panel' },
+  {
+    id: 'view.mouseSpeedOn',
+    label: 'Mouse Speed',
+    group: 'View',
+    run: () => setMouseOn(!mouse.on),
+    checked: () => mouse.on,
+    // At normal there's nothing to switch, as with the button.
+    enabled: () => mouse.offset !== 0,
+    keywords: 'pointer sensitivity slower cursor ctrl toggle on off turn',
+    icon: 'mouse',
+  },
   {
     id: 'view.mouseReset',
     label: 'Reset Mouse Speed',
