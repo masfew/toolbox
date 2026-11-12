@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.2.1. See the [changes](#changes) at the end.
+Version 2.2.2. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -164,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.2.2: A step marked skipped now stays where it is in its phase or planned feature and keeps its number, instead of moving to the end. Whole phases and planned features that are skipped still move to the end of the overview, as before.
 - 2.2.1: Version numbers after a product or model name, such as "Llama 3.2", "Qwen 2.5", "CUDA 12.4" or "Unreal Engine 5.4", stay plain text instead of turning into links to the plan's step with that number. Text already linked stays as it is. Published plans get this the next time their look is refreshed.
 - 2.2.0: Plan pages open shorter. In the plan overview only phases in progress (or blocked) start open; finished and not-started ones start folded to one row. The extra sections between the overview and the build outline sit under one Background and Technical Details heading, folded at first, with their names listed under it; opened, they show beside a line running down from the heading, with a Hide row at the end. The build outline folds under its heading too, folded at first once every phase is finished, and the Completed and Rejected future idea groups start folded. Jumping to anything inside a folded part opens it. Published plans get this the next time their look is refreshed.
 - 2.1.0: Plan pages are only for plans you ask for. Asking for a strategy, proposal or draft on a page, without calling it a plan, now gets an ordinary page instead of the plan template; a plan or roadmap asked for by name, or made in plan mode, is a plan page as before. **Rerun `python install.py` after updating** to refresh the lines in `~/.claude/CLAUDE.md`, which said to use the template for every plan Claude makes.
