@@ -236,11 +236,13 @@
     });
     return { base: base, own: own, seeded: seeded, meta: docs._plan };
   }
-  // Numbers, from the order and the statuses. Phases go done, then in progress or blocked, then not started, then
-  // skipped (core phases among themselves, planned features among themselves), in their stored order within each, so
-  // a status change can renumber them. m.live is the replay's statuses; before it, the entries' own. Moves and adds
+  // Numbers, from the order and the statuses. Planned features go done, then in progress or blocked, then not started,
+  // then skipped, in their stored order within each, so a status change can renumber them; core phases keep their
+  // stored order whatever their status. m.live is the replay's statuses; before it, the entries' own. Moves and adds
   // place things by the stored order (storedPhases, storedFeats). dbplan.py's number does the same. Only plans whose
   // _plan has statusOrder sort: older records name steps by the stored order's numbers, so a snapshot turns it on.
+  // Plans with statusOrder but not coreOrder still sort core phases too (records there name core steps by the sorted
+  // numbers); the page's own snapshot turns coreOrder on, once those records are written into the entries.
   var STATUS_RANK = { done: 0, progress: 1, blocked: 1, todo: 2, skipped: 3 };
   function number(m) {
     var items = Object.keys(m.E).map(function (k) { return { id: k, body: m.E[k] }; }).sort(byKey);
@@ -257,7 +259,7 @@
         .sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (x) { return x.ph; });
     }
     var sorted = !!m.M.statusOrder;
-    m.phases = sorted ? byStatus(m.storedPhases) : m.storedPhases.slice();
+    m.phases = sorted && !m.M.coreOrder ? byStatus(m.storedPhases) : m.storedPhases.slice();
     m.feats = sorted ? byStatus(m.storedFeats) : m.storedFeats.slice();
     var planned = {};
     m.feats.forEach(function (f) { planned[f.body.feature] = true; });
@@ -283,7 +285,8 @@
   }
   // A phase whose status group a record (with stay) changed moves only as far as it must: up to the end of its new
   // group, or down to the top of it. Its sort key changes, so the stored order stays the order shown and later
-  // moves, adds and status changes start from what the page showed. dbplan.py's settle does the same.
+  // moves, adds and status changes start from what the page showed. dbplan.py's settle does the same. With coreOrder
+  // only planned features settle: core phases don't sort, so their keys stay as written.
   function settle(m, shown, old) {
     var now = {};
     shown.forEach(function (ph) { now[ph.id] = rankOf(m, ph.id); });
@@ -452,7 +455,7 @@
         m.steps[pid].forEach(function (s) { if (!has(status, s.id)) status[s.id] = LABELS[s.body.status] ? s.body.status : 'todo'; });
       });
     }
-    var shown = stIds.length && r.stay && m.M.statusOrder ? [m.phases.slice(), m.feats.slice()] : null, old = {};
+    var shown = stIds.length && r.stay && m.M.statusOrder ? [m.M.coreOrder ? [] : m.phases.slice(), m.feats.slice()] : null, old = {};
     if (shown) shown[0].concat(shown[1]).forEach(function (ph) { old[ph.id] = rankOf(m, ph.id); });
     stIds.forEach(function (x) { if (x[0] && has(status, x[0]) && LABELS[x[1]]) status[x[0]] = x[1]; });
     noteIds.forEach(function (x) { if (x[0] && typeof x[1] === 'string') (notes[x[0]] = notes[x[0]] || []).push(tok(x[1])); });
@@ -2110,7 +2113,10 @@
   }
   // Why the snapshot should be saved now: 'records' (over 30 behind), 'age' (over a day old, or no time on it), or ''.
   function snapshotDue(m, statuses, differs, now) {
-    if (!m || !differs) return '';
+    if (!m) return '';
+    // A plan folded before core order (or never folded by the page) gets it from the first save this plan.js makes.
+    if (!m.M.coreOrder) return 'order';
+    if (!differs) return '';
     if (pendingRecords(m, statuses) > AUTO_RECORDS) return 'records';
     var at = Date.parse(m.M.snapshotAt || '');
     return isNaN(at) || now - at > AUTO_AGE ? 'age' : '';
@@ -2210,6 +2216,9 @@
     var m;
     try { m = buildModel(hub.plan, hub.statuses); } catch (e) { m = hub.model; }
     var fold = foldPlan(m), at = new Date().toISOString();
+    // The snapshot is numbered as the database will be once _plan gets the flags below.
+    m.M = Object.assign({}, m.M, { statusOrder: true, coreOrder: true });
+    number(m);
     var rec = { steps: {}, at: at, date: today(), fold: true,
       checkpoint: { entries: fold.entries, meta: { title: m.M.title, summary: m.M.summary || '' }, steps: {}, notes: {} } };
     var html = snapshotPage(Object.assign({}, m, { stamp: at }));
@@ -2222,7 +2231,7 @@
     });
     chain = chain.then(function () {
       return db.collection('plan').doc('_plan').update({ version: m.version, updated: m.updated, bakedAt: at, snapshotAt: at,
-        snapshotAuto: !!auto, statusOrder: true, title: m.M.title, summary: m.M.summary || '' });
+        snapshotAuto: !!auto, statusOrder: true, coreOrder: true, title: m.M.title, summary: m.M.summary || '' });
     });
     old.concat([{ id: rid }]).forEach(function (r) {
       chain = chain.then(function () { return db.collection('statuses').doc(r.id)['delete'](); });

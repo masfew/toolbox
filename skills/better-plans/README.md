@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.2.2. See the [changes](#changes) at the end.
+Version 2.3.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -164,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.3.0: The phases of the build plan now stay in the order they were written, whatever their status: a phase finished ahead of an earlier one, or one that's blocked or skipped, keeps its place and number. Only planned features in Future Ideas still sort themselves (done, in progress, not started, skipped) and renumber. Published plans get this the next time their look is refreshed: the first time you open one after that, the page saves a snapshot by itself to switch it on. Some phases the old sort already moved may stay where they are now; ask Claude to move one back if you want it in its written place.
 - 2.2.2: A step marked skipped now stays where it is in its phase or planned feature and keeps its number, instead of moving to the end. Whole phases and planned features that are skipped still move to the end of the overview, as before.
 - 2.2.1: Version numbers after a product or model name, such as "Llama 3.2", "Qwen 2.5", "CUDA 12.4" or "Unreal Engine 5.4", stay plain text instead of turning into links to the plan's step with that number. Text already linked stays as it is. Published plans get this the next time their look is refreshed.
 - 2.2.0: Plan pages open shorter. In the plan overview only phases in progress (or blocked) start open; finished and not-started ones start folded to one row. The extra sections between the overview and the build outline sit under one Background and Technical Details heading, folded at first, with their names listed under it; opened, they show beside a line running down from the heading, with a Hide row at the end. The build outline folds under its heading too, folded at first once every phase is finished, and the Completed and Rejected future idea groups start folded. Jumping to anything inside a folded part opens it. Published plans get this the next time their look is refreshed.

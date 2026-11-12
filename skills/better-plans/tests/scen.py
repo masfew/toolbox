@@ -279,11 +279,14 @@ m = with_records(rec_of("F2.1=progress"), rec_of("--move", "F1", "after", "F5"),
 check("move within group", m.pnum["p-unit-picker"] == "F5" and m.pnum["p-pantry-gauge"] == "F6",
       {k: m.pnum[k] for k, _ in m.feats})
 
-# 20 a snapshot of a plan without statusOrder keeps what its by-number records meant, then turns the sort on
+# 20 a snapshot of a plan without statusOrder keeps what its by-number records meant; Claude's (folded) leaves the
+# sort off, and the page's own snapshot (which writes statusOrder and coreOrder) turns it on
 m = with_records(rec_of("F2.1=progress"), rec_of("F7.1=skipped", "F7.2=skipped"))
 F, meta = db.folded(m)
+check("Claude's fold leaves statusOrder off", "statusOrder" not in meta and "coreOrder" not in meta, meta)
+meta = dict(meta, statusOrder=True, coreOrder=True)   # as the page's saveSnapshot writes it
 m2 = db.Model({**{k: v for k, v in plan0.items() if k == "_plan" or k.startswith("_seed")}, **F, "_plan": meta}, {}, fe0)
-check("fold turns statusOrder on", meta.get("statusOrder") is True and F["s-keep-list-at-meal-end"]["status"] == "skipped"
+check("page fold turns statusOrder on", F["s-keep-list-at-meal-end"]["status"] == "skipped"
       and F["s-stock-data-from-receipts"]["status"] == "progress" and m2.pnum["p-pantry-gauge"] == "F6"
       and m2.pnum["p-leftovers"] == f"F{len(m2.feats)}", {k: m2.pnum[k] for k, _ in m2.feats})
 
@@ -303,6 +306,64 @@ check("reopened to the top of not started", m.pnum["p-pantry-gauge"] == "F6" and
 m = with_records(rec_of("F8.1=done", "F8.2=done", "F7.1=done", "F7.2=done"), plan=sorted_plan)
 check("two finished in one record keep their order", m.pnum["p-leftovers"] == "F7" and m.pnum["p-settings-menu"] == "F8",
       {k: m.pnum[k] for k, _ in m.feats})
+
+# 22 with _plan.coreOrder too, core phases keep their written order and numbers whatever their status (finished out of
+# order, blocked, skipped), and settling leaves their sort keys alone; planned features still sort and settle
+core_plan = copy.deepcopy(sorted_plan)
+core_plan["_plan"]["coreOrder"] = True
+core_keys = {k: v["sort"] for k, v in plan0.items() if v.get("kind") == "phase" and not v.get("feature")}
+def core_nums(m):
+    return {k: m.pnum[k] for k, _ in m.phases}
+r1 = rec_of("2.1=todo", "3.1=todo", "F2.1=progress")
+r2 = rec_of("3.1=done", "4.1=blocked")   # phase 3 finished before phase 2, phase 4 blocked
+r3 = rec_of("2.1=done", "F6.1=done")      # 2.1 is still the shopping list's first step; the gauge is F6 by then
+m = with_records(r1, plan=core_plan)
+check("core order: reopened phases keep their place", core_nums(m) == {"p-recipe-store": "1", "p-shopping-list": "2",
+      "p-meal-planner": "3", "p-polish": "4"} and m.id_of["2.1"] == "s-list-panel" and m.pnum["p-pantry-gauge"] == "F6",
+      (core_nums(m), m.pnum["p-pantry-gauge"]))
+m = with_records(r1, r2, plan=core_plan)
+check("core order: finished out of order and blocked", core_nums(m)["p-meal-planner"] == "3" and core_nums(m)["p-polish"] == "4"
+      and core_nums(m)["p-shopping-list"] == "2" and m.id_of["4.1"] == "s-polish-pass"
+      and m.status["s-week-grid"] == "done" and m.status["s-polish-pass"] == "blocked", core_nums(m))
+m = with_records(r1, r2, r3, plan=core_plan)
+F, meta = db.folded(m)
+check("core order: later records by the same numbers, keys untouched",
+      m.status["s-list-panel"] == "done" and m.pnum["p-pantry-gauge"] == "F6"
+      and all(m.E[k]["sort"] == v for k, v in core_keys.items()) and all(F[k]["sort"] == v for k, v in core_keys.items())
+      and F["p-pantry-gauge"]["sort"] != plan0["p-pantry-gauge"]["sort"] and meta.get("coreOrder") is True,
+      ({k: m.E[k]["sort"] for k in core_keys}, F["p-pantry-gauge"]["sort"]))
+m = with_records(rec_of(*[f"3.{i}=skipped" for i in range(1, 7)], "F7.1=skipped", "F7.2=skipped"), plan=core_plan)
+check("core order: a skipped phase stays, a skipped feature sinks", core_nums(m)["p-meal-planner"] == "3"
+      and core_nums(m)["p-polish"] == "4" and m.pnum["p-leftovers"] == f"F{len(m.feats)}", (core_nums(m), m.pnum["p-leftovers"]))
+
+# 23 the gate: on a plan with statusOrder but not coreOrder (every published plan before it), core phases still sort and
+# settle, so a pending record written against the sorted numbers names the same step as before. A snapshot Claude
+# saves (folded) leaves coreOrder off, since the page it publishes keeps its old plan.js; the page's own snapshot turns
+# it on (plan.js saveSnapshot), and then the folded plan shows the same statuses, numbered by the settled keys
+r1 = rec_of("3.2=progress")   # the meal planner drops below polish: polish is 3, the meal planner 4
+r2 = rec_of("4.2=done")       # written then, so 4.2 is the meal planner's second step, finished again
+m = with_records(r1, r2, plan=sorted_plan)
+check("gate: old pending records keep their meaning", m.pnum["p-meal-planner"] == "4" and m.status["s-live-counts"] == "done"
+      and m.E["p-meal-planner"]["sort"] > m.E["p-polish"]["sort"], (core_nums(m), m.status["s-live-counts"]))
+m_core = with_records(r1, r2, plan=core_plan)   # the same records read with coreOrder name another step
+check("gate: needed (coreOrder reads them otherwise)", m_core.status["s-live-counts"] == "progress"
+      and m_core.pnum["p-meal-planner"] == "3", core_nums(m_core))
+F, meta = db.folded(m)
+check("gate: Claude's snapshot leaves coreOrder off", "coreOrder" not in meta and meta.get("statusOrder") is True, meta)
+meta = dict(meta, coreOrder=True)   # as the page's saveSnapshot writes it
+m2 = db.Model({**{k: v for k, v in sorted_plan.items() if k == "_plan" or k.startswith("_seed")}, **F, "_plan": meta}, {}, fe0)
+check("gate: the page's snapshot turns it on, same plan", core_nums(m2) == core_nums(m) and m2.status == m.status
+      and m2.M.get("coreOrder") is True, core_nums(m2))
+newsrc = tmp / "new.txt"
+newsrc.write_text("# New Plan\n\nA summary.\n\n## Phase: One\n\n### Step: First\n<h5>What</h5>\n<p>A step.</p>\n\n"
+                  "## Phase: Two\n\n### Step: Second [done]\n<h5>What</h5>\n<p>Another.</p>\n", encoding="utf-8")
+run("new", newsrc, "--files", tmp / "newplan", "--out", tmp / "newplan.html")
+seed_dir = tmp / "newplan" / "seed"
+newmeta = json.loads((seed_dir / "_plan.json").read_text(encoding="utf-8"))
+nm = db.Model({"_plan": newmeta, "_seed": json.loads((seed_dir / "_seed.json").read_text(encoding="utf-8"))}, {}, {})
+check("new plans keep core order", newmeta.get("coreOrder") is True and newmeta.get("statusOrder") is True
+      and [(db.text_of(nm.E[k]["name"]), nm.pnum[k]) for k, _ in nm.phases] == [("One", "1"), ("Two", "2")],
+      (newmeta, [(k, nm.pnum[k]) for k, _ in nm.phases]))
 
 # 18 build selections (features/_build): which phases can be ticked, the report, the claim and the release
 def with_build(phases, plan=None):

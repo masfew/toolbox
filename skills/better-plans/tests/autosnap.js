@@ -116,7 +116,7 @@ const base = loadDir(DB);
 const now = Date.now();
 function plan({ snapshotAgo, records, auto }) {
   const d = clone(base);
-  Object.assign(d.plan._plan, { snapshotAt: iso(now - snapshotAgo), bakedAt: iso(now - snapshotAgo - 1000) });
+  Object.assign(d.plan._plan, { snapshotAt: iso(now - snapshotAgo), bakedAt: iso(now - snapshotAgo - 1000), statusOrder: true, coreOrder: true });
   if (auto) d.plan._plan.snapshotAuto = true;
   for (let i = 0; i < records; i++) d.statuses['r-test-' + i] = { steps: { '1.1': i % 2 ? 'done' : 'progress' }, at: iso(now - snapshotAgo + 1000 + i), date: '2026-10-20' };
   return d;
@@ -206,6 +206,35 @@ const RUN = 400;   // ms of real time: 20 s of page time, past the longest wait 
   a = openTab(s, 'A', {});
   await wait(RUN);
   check('lease held elsewhere: auto skips quietly', s.publishes.length === 0 && folds(s) === 0 && /changed since/.test(a.line()), [s.publishes.length, a.line()]);
+
+  // 10 a plan folded before core order (statusOrder, no coreOrder) with a core phase reopened out of order: the page's
+  // save turns coreOrder on and numbers the published snapshot that way, so after the reload it's up to date
+  d = plan({ snapshotAgo: 3 * DAY, records: 1 });
+  delete d.plan._plan.coreOrder; d.plan._plan.statusOrder = true;
+  d.statuses['r-test-0'] = { steps: { '2.1': 'todo' }, at: iso(now - 3 * DAY + 1000), date: '2026-10-20' };
+  s = makeStore(d, {});
+  a = openTab(s, 'A', {});
+  await wait(RUN);
+  const html10 = s.publishes.length ? s.publishes[0].html : '';
+  const inner10 = html10.slice(html10.indexOf('-->\n', html10.indexOf('PLAN CONTENT START')) + 4, html10.indexOf('<!-- PLAN CONTENT END'));
+  const b10 = openTab(s, 'A2', { original: inner10.trim() });
+  await wait(RUN);
+  check('core order: snapshot numbered as the database', s.publishes.length === 1 && s.cols.plan._plan.coreOrder === true &&
+    /up to date$/.test(b10.line() || ''), [s.publishes.length, s.cols.plan._plan.coreOrder, b10.line()]);
+
+  // 11 the same kind of plan with a recent, up-to-date snapshot and nothing pending: it still saves once, to turn core
+  // order on, and a page opened after that doesn't save again
+  d = plan({ snapshotAgo: 3600e3, records: 0 });
+  delete d.plan._plan.coreOrder;
+  s = makeStore(d, {});
+  openTab(s, 'A', { original: contentOf(d) });
+  await wait(RUN);
+  const html11 = s.publishes.length ? s.publishes[0].html : '';
+  const inner11 = html11.slice(html11.indexOf('-->\n', html11.indexOf('PLAN CONTENT START')) + 4, html11.indexOf('<!-- PLAN CONTENT END'));
+  openTab(s, 'A2', { original: inner11.trim() });
+  await wait(RUN);
+  check('core order: turned on even when up to date, once', s.publishes.length === 1 && s.cols.plan._plan.coreOrder === true &&
+    s.cols.plan._plan.statusOrder === true, [s.publishes.length, s.cols.plan._plan]);
 
   results.forEach(([n, ok, det]) => console.log((ok ? 'PASS ' : 'FAIL ') + n + (ok ? '' : '   ' + JSON.stringify(det))));
   console.log(results.filter(r => r[1]).length + ' of ' + results.length + ' passed');

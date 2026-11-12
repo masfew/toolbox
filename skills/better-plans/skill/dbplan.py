@@ -300,12 +300,15 @@ class Model:
         self.number()
         self.replay()
 
-    # Numbers, from the order and the statuses. Phases go done, then in progress or blocked, then not started, then
-    # skipped (core phases among themselves, planned features among themselves), in their stored order within each,
-    # so a status change can renumber them. self.live is the replay's statuses; before it, the entries' own. Moves and
-    # adds place things by the stored order (stored_phases, stored_feats). plan.js's number does the same.
+    # Numbers, from the order and the statuses. Planned features go done, then in progress or blocked, then not
+    # started, then skipped, in their stored order within each, so a status change can renumber them; core phases keep
+    # their stored order whatever their status. self.live is the replay's statuses; before it, the entries' own. Moves
+    # and adds place things by the stored order (stored_phases, stored_feats). plan.js's number does the same.
     # Only plans whose _plan has statusOrder sort: records written before it name steps by the stored order's numbers,
-    # so a plan turns it on at a snapshot (folded), once those records are written into the entries.
+    # so a plan turns it on at the page's own snapshot (plan.js saveSnapshot), once those records are written into the
+    # entries. Plans with statusOrder but not coreOrder still sort core phases too, for the same reason; the page's
+    # snapshot and new_plan turn both on. folded keeps both as they were: a snapshot Claude publishes keeps the page's
+    # old plan.js, which would still sort core phases and misread records written against the new numbers.
     def number(self):
         items = sorted(((k, v) for k, v in self.E.items()), key=sortkey)
         self.steps = {}
@@ -317,7 +320,8 @@ class Model:
         self.stored_phases = [(k, v) for k, v in items if v.get("kind") == "phase" and not v.get("feature")]
         self.stored_feats = [(k, v) for k, v in items if v.get("kind") == "phase" and v.get("feature")]
         by_status = bool(self.M.get("statusOrder"))
-        self.phases = sorted(self.stored_phases, key=rank) if by_status else list(self.stored_phases)
+        core_by_status = by_status and not self.M.get("coreOrder")
+        self.phases = sorted(self.stored_phases, key=rank) if core_by_status else list(self.stored_phases)
         self.feats = sorted(self.stored_feats, key=rank) if by_status else list(self.stored_feats)
         planned = {v["feature"] for _, v in self.feats}
         self.sections = [(k, v) for k, v in items if v.get("kind") == "section"]
@@ -344,7 +348,8 @@ class Model:
 
     # A phase whose status group a record (with stay) changed moves only as far as it must: up to the end of its new
     # group, or down to the top of it. Its sort key changes, so the stored order stays the order shown and later
-    # moves, adds and status changes start from what the page showed. plan.js's settle does the same.
+    # moves, adds and status changes start from what the page showed. plan.js's settle does the same. With coreOrder
+    # only planned features settle: core phases don't sort, so their keys stay as written.
     def settle(self, shown, old):
         now = {pid: self.rank_of(pid) for pid, _ in shown}
         up = [(pid, v) for pid, v in shown if now[pid] < old[pid]]
@@ -375,7 +380,8 @@ class Model:
           major    true                        the next major version instead of +0.1
           stay     true                        a phase or planned feature whose status group the steps change moves
                                                to the end of its new group (going up) or the top (going down), by
-                                               a new sort key (settle); records without it leave the keys alone
+                                               a new sort key (settle); records without it leave the keys alone, and
+                                               with _plan.coreOrder core phases never move
           checkpoint {entries?: {id: entry | null}, meta?: {title, summary}, steps: {id: status},
                       notes: {id: [html]}}     the plan as it stood: entries replaced (null: gone), then statuses
                                                and notes reset by id. Everything in the records before the last
@@ -559,7 +565,8 @@ class Model:
             for lst in self.steps.values():
                 for sid, v in lst:
                     status.setdefault(sid, v.get("status") if v.get("status") in LABELS else "todo")
-        shown = [list(self.phases), list(self.feats)] if st_ids and r.get("stay") and self.M.get("statusOrder") else None
+        shown = ([[] if self.M.get("coreOrder") else list(self.phases), list(self.feats)]
+                 if st_ids and r.get("stay") and self.M.get("statusOrder") else None)
         old = {pid: self.rank_of(pid) for lst in shown for pid, _ in lst} if shown else {}
         for sid, st in st_ids:
             if sid and sid in status and st in LABELS:
@@ -960,7 +967,9 @@ def folded(m):
                     body = body + "\n" + h if body else h
             F[sid]["body"] = body
     meta = dict(m.M)
-    meta.update({"version": m.version, "updated": m.updated, "bakedAt": m.stamp, "statusOrder": True})
+    # statusOrder and coreOrder stay as they were: only the page's own fold turns them on, since a snapshot Claude
+    # publishes keeps the page's old plan.js, which may sort core phases once statusOrder is on.
+    meta.update({"version": m.version, "updated": m.updated, "bakedAt": m.stamp})
     return F, meta
 
 
@@ -1580,6 +1589,7 @@ def new_plan(src, template, today=None):
     entries["_plan"]["bakedAt"] = ""
     entries["_plan"]["snapshotAt"] = now_stamp()
     entries["_plan"]["statusOrder"] = True
+    entries["_plan"]["coreOrder"] = True
     m = Model(seed_docs(entries))
     bad = dropped(m)
     if bad:
