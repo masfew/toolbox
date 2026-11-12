@@ -27,6 +27,8 @@ cases.forEach((c, i) => {
   const norm = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k] && JSON.stringify(Object.keys(o[k]).sort().map(x => [x, o[k][x]]))]));
   if (norm(f.entries) !== norm(c.fold)) errs.push(`fold entries differ: js ${Object.keys(f.entries).sort()} py ${Object.keys(c.fold).sort()}`);
   if (tk !== c.tokens) errs.push(`tokens js ${tk}`);
+  const nm = api.tokenizeHtml(c.names_in, c.names_ids, {});
+  if (nm !== c.names) errs.push(`name tokens js ${nm} py ${c.names}`);
   if (errs.length) { bad++; console.log(`case ${i}: FAIL`); errs.forEach(e => console.log('  ' + e)); }
 });
 console.log(`${cases.length - bad} of ${cases.length} cases match`);

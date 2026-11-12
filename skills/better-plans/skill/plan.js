@@ -162,7 +162,7 @@
   var REFNUM = /(F?)([0-9]+)(?:\.([0-9]+))?/g;
   var SKIP_TAGS = { code: 1, pre: 1, svg: 1, kbd: 1, script: 1, style: 1 };
   var UNITS = /^\s*(?:%|×|x\b|k\b|h\b|s\b|ms\b|days?\b|weeks?\b|months?\b|years?\b|hours?\b|hrs?\b|minutes?\b|mins?\b|seconds?\b|secs?\b|times\b|px\b|pt\b|em\b|rem\b|fps\b|[kmg]?hz\b|[kmgt]i?b\b|tokens?\b|points?\b|pts\b|stars?\b|°)/i;
-  var BEFORE = /(?:\b(?:versions?|ver|release|python|node|chrome|ios|android|windows|macos|opus|sonnet|haiku|claude|gpt|api|sdk|about|around|roughly|approximately|approx|nearly|almost|over|under|than|rated|scored?|rating|average|avg|median|mean|costs?|price)\.?|[~≈×$£€]|→|->|←|<-|=>)\s*$/i;
+  var BEFORE = /(?:\b(?:versions?|ver|release|python|node|chrome|ios|android|windows|macos|opus|sonnet|haiku|llama[0-9]*|gemma[0-9]*|qwen[0-9]*|mistral|mixtral|phi|deepseek|gemini|grok|whisper|ollama|cuda|cudnn|rocm|pytorch|torch|tensorflow|numpy|electron|typescript|javascript|react|java|kotlin|swift|rust|ruby|php|dotnet|ubuntu|debian|linux|kernel|firefox|safari|unity|unreal|ue|engine|godot|blender|roblox|luau|xcode|npm|vite|esbuild|claude|gpt|api|sdk|about|around|roughly|approximately|approx|nearly|almost|over|under|than|rated|scored?|rating|average|avg|median|mean|costs?|price)\.?|[~≈×$£€]|→|->|←|<-|=>)\s*$/i;
   var AFTER_ARROW = /^\s*(?:→|->|←|<-|=>)/;
   function refTokens(seg, idOf, fids) {
     var out = '', i = 0, m;

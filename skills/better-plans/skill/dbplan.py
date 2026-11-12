@@ -134,7 +134,12 @@ SKIP_TAGS = {"code", "pre", "svg", "kbd", "script", "style"}
 UNITS = re.compile(r"^\s*(?:%|×|x\b|k\b|h\b|s\b|ms\b|days?\b|weeks?\b|months?\b|years?\b|hours?\b|hrs?\b|minutes?\b|"
                    r"mins?\b|seconds?\b|secs?\b|times\b|px\b|pt\b|em\b|rem\b|fps\b|[kmg]?hz\b|[kmgt]i?b\b|tokens?\b|"
                    r"points?\b|pts\b|stars?\b|°)", re.I)
+# Product and model names that take version numbers ("Llama 3.2", "CUDA 12.4", "Unreal Engine 5.4") sit in the list too.
 BEFORE = re.compile(r"(?:\b(?:versions?|ver|release|python|node|chrome|ios|android|windows|macos|opus|sonnet|haiku|"
+                    r"llama[0-9]*|gemma[0-9]*|qwen[0-9]*|mistral|mixtral|phi|deepseek|gemini|grok|whisper|ollama|"
+                    r"cuda|cudnn|rocm|pytorch|torch|tensorflow|numpy|electron|typescript|javascript|react|java|kotlin|"
+                    r"swift|rust|ruby|php|dotnet|ubuntu|debian|linux|kernel|firefox|safari|unity|unreal|ue|engine|godot|"
+                    r"blender|roblox|luau|xcode|npm|vite|esbuild|"
                     r"claude|gpt|api|sdk|about|around|roughly|approximately|approx|nearly|almost|over|under|than|"
                     r"rated|scored?|rating|average|avg|median|mean|costs?|price)\.?|[~≈×$£€]|→|->|←|<-|=>)\s*$", re.I)
 AFTER_ARROW = re.compile(r"^\s*(?:→|->|←|<-|=>)")

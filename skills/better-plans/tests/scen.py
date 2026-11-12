@@ -186,6 +186,13 @@ want = ("<p>See {{S:s-health-check}} and {{S:s-suggest-meals-from-leftovers}}, {
         "{{S:s-live-counts}} and {{S:s-health-check}} ({{S:s-health-check}}). Not 1.5 days, v3.6, version 3.6, 3.6 s, "
         "3.6x, 1.0 → 1.1, 3.6.1, <code>3.6</code>, F12 key.</p>")
 check("tokenize", t == want, t)
+# product and model names that take versions stay plain numbers, even when those steps exist; parity.js runs the same text
+NAMES = ("<p>Llama 3.2 1B, Llama 3.1 8B, Qwen 2.5, Qwen2 2.5, Gemma3 3.1, CUDA 12.4, Unreal Engine 5.4, UE 5.4, Unity 3.2, "
+         "Whisper 3.1, Electron 12.4, TypeScript 5.4. But step 3.2 (and 2.5, 12.4) still link.</p>")
+NAME_IDS = {"3.1": "s-a", "3.2": "s-b", "2.5": "s-c", "12.4": "s-d", "5.4": "s-e"}
+want = NAMES.replace("step 3.2 (and 2.5, 12.4)", "step {{S:s-b}} (and {{S:s-c}}, {{S:s-d}})")
+t = db.tokenize_html(NAMES, NAME_IDS, {})
+check("tokenize skips product names", t == want, t)
 
 # 12 allowlist check
 bad = db.check_html('<p onclick="x()">a <img src=x> <a href="javascript:alert(1)">b</a> <span class="evil">c</span></p>')
@@ -356,7 +363,8 @@ if os.environ.get("DUMP"):
         fr = db.fold_record(mm, F, meta)
         dump.append({"plan": [{"id": k, "body": v} for k, v in pl.items()], "statuses": [{"id": k, "body": v} for k, v in sts.items()],
                      "content": db.build_content(mm), "version": mm.version, "fold": fr["checkpoint"]["entries"],
-                     "tokens": mm.tokenize("<p>See 3.6 and F7.2, F8, steps 3.2 and 3.6 (3.6). Not 1.5 days, v3.6, version 3.6, 3.6 s, 1.0 → 1.1, 3.6.1, <code>3.6</code>.</p>")})
+                     "tokens": mm.tokenize("<p>See 3.6 and F7.2, F8, steps 3.2 and 3.6 (3.6). Not 1.5 days, v3.6, version 3.6, 3.6 s, 1.0 → 1.1, 3.6.1, <code>3.6</code>.</p>"),
+                     "names_in": NAMES, "names_ids": NAME_IDS, "names": db.tokenize_html(NAMES, NAME_IDS, {})})
     Path(os.environ["DUMP"]).write_text(json.dumps(dump, ensure_ascii=False), encoding="utf-8")
 for name, ok, detail in results:
     print(("PASS " if ok else "FAIL ") + name + ("" if ok else f"   {detail}"))
