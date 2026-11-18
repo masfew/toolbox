@@ -34,6 +34,7 @@ public partial class App : Application
     //   --render <dir>   render the widget's views to PNGs and exit (for checking the look); no tray, no admin
     //   --demo           with --render: made-up readings and app names instead of this PC's (for the README's pictures)
     //   --make-icon <f>  write the app icon (.ico) and exit
+    //   --setup          Vitals Setup: install this copy (install.py runs it from the build); see Setup.SetupRunner
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -41,6 +42,7 @@ public partial class App : Application
         string? Arg(string name) { int i = Array.IndexOf(args, name); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
         bool Has(string name) => args.Contains(name);
 
+        if (Has("--setup")) { Setup.SetupRunner.Start(this, Arg, Has); return; }
         if (Arg("--make-icon") is string ico) { IconArt.WriteIco(ico); Shutdown(); return; }
         // Started elevated by Settings (StartupTask.Set without admin) only to create or remove the startup task.
         if (Arg("--set-startup") is string startup) { Shutdown(StartupTask.IsAdmin && StartupTask.Set(startup == "on") == null ? 0 : 1); return; }
@@ -125,7 +127,11 @@ public partial class App : Application
             try { using var installer = Process.GetProcessById(pid); } catch (ArgumentException) { return; } // already gone
             string exe = Environment.ProcessPath!.Replace("'", "''");
             // --elevate-tried: come back with the rights it has now, without asking for admin again.
-            string script = $"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; Start-Process -FilePath '{exe}' -ArgumentList '--elevate-tried'";
+            // Setup leaves Vitals.no-restart in %TEMP% when its "Start Vitals now" box was cleared.
+            string noRestart = Path.Combine(Path.GetTempPath(), "Vitals.no-restart").Replace("'", "''");
+            string script = $"Wait-Process -Id {pid} -ErrorAction SilentlyContinue; " +
+                            $"if (Test-Path -LiteralPath '{noRestart}') {{ Remove-Item -LiteralPath '{noRestart}' }} " +
+                            $"else {{ Start-Process -FilePath '{exe}' -ArgumentList '--elevate-tried' }}";
             var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe")) { UseShellExecute = false, CreateNoWindow = true };
             foreach (var a in new[] { "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script }) psi.ArgumentList.Add(a);
             using var _ = Process.Start(psi);

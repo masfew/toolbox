@@ -60,9 +60,12 @@ internal static class IconArt
         return icon;
     }
 
-    public static BitmapSource WindowIcon()
+    public static BitmapSource WindowIcon() => Image(32);
+
+    /// <summary>The icon as a WPF image of the given size.</summary>
+    public static BitmapSource Image(int size)
     {
-        using var bmp = Render(32);
+        using var bmp = Render(size);
         using var ms = new MemoryStream();
         bmp.Save(ms, ImageFormat.Png);
         ms.Position = 0;

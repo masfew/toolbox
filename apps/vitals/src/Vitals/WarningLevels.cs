@@ -113,9 +113,12 @@ internal sealed class WarningLevels
 
     private static string Trim(string s) => s.Length > 300 ? s[..300] + "…" : s;
 
-    private static string? FindClaude()
+    /// <summary>Where Claude Code is, or null: ~/.local/bin (its own installer's place), then PATH. Setup checks it too.</summary>
+    internal static string? FindClaude()
     {
-        string local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "claude.exe");
+        string profile = Environment.GetEnvironmentVariable("USERPROFILE") is string p && p.Length > 0
+            ? p : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string local = Path.Combine(profile, ".local", "bin", "claude.exe");
         if (File.Exists(local)) return local;
         var path = Environment.GetEnvironmentVariable("PATH") ?? "";
         return path.Split(Path.PathSeparator).Select(d => Path.Combine(d.Trim(), "claude.exe")).FirstOrDefault(File.Exists);

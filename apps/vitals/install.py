@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """
-Builds Vitals from this folder and installs it for your Windows user, with a
-Start menu shortcut. Safe to rerun: a rerun builds and installs this folder's
-current version and keeps your settings.
+Builds Vitals from this folder and opens Vitals Setup, a standard Windows
+setup window, to install it for your Windows user. Safe to rerun: a rerun
+builds this folder's current version and opens Setup again to update it,
+keeping your settings.
 
-    python install.py            build Vitals and install it, or update an earlier install
+    python install.py            build Vitals and open Setup
+    python install.py --quiet    build and install with no window (for updates from a script)
     python install.py --remove   uninstall Vitals and undo everything the install added
                                  (your settings stay in %APPDATA%/Vitals)
+
+    --start-with-windows yes|no  Setup's "Start Vitals when I sign in" box, ticked or not
+                                 (with --quiet, the choice itself)
+    --claude-levels yes|no       Setup's "Let Claude Code pick my warning levels" box, likewise
+    --test                       Setup's test mode, for tests and recordings: it leaves a
+                                 running Vitals and the Start with Windows task alone
+
+Left out, each box starts as it is now: ticked on a first install, and on an
+update as Vitals is set up already. --quiet then keeps things as they are.
 
 What it does:
 1. Checks that this is Windows, that Python is new enough and that the .NET 10
@@ -18,24 +29,26 @@ What it does:
    its AppData writes (where Vitals installs) into the app's private package
    folder. The rest of the install then reruns itself outside the package and
    passes its output and exit status back.
-4. Closes a running Vitals, even one running as administrator: it sets the
-   Local\\Vitals.Close event, which Vitals listens for, and only if that
-   doesn't work stops the process. A Vitals closed by the event starts again,
-   with the rights it had, once this install ends; one this script stopped is
-   started again by this script.
-5. Copies the build to %LOCALAPPDATA%/Programs/Vitals and adds the Start menu
-   shortcut Vitals.lnk.
-6. Puts the tool at one fixed place, ~/.claude/tools/vitals (a link in a git
+4. Runs Setup from the build (Vitals.exe --setup) and waits for it. Setup asks
+   the two questions, closes a running Vitals (even one running as
+   administrator, through the Local\\Vitals.Close event), copies Vitals to
+   %LOCALAPPDATA%/Programs/Vitals, adds the Start menu shortcut, creates or
+   removes the Start with Windows task (Windows' administrator prompt), saves
+   the choices in %APPDATA%/Vitals/config.json, and starts Vitals at Finish
+   when "Start Vitals now" is ticked. It writes what it did to a log, which
+   this script prints.
+5. Puts the tool at one fixed place, ~/.claude/tools/vitals (a link in a git
    clone, a copy anywhere else, so --remove works from there after an
    unzipped release is deleted), and saves what it installed to
    ~/.claude/tools/vitals.install.json.
-7. Ends with "Setup complete", then lists what only you can do.
+6. Ends with "Setup complete". If Setup was cancelled or failed, it exits with
+   status 1 and says so, and nothing in step 5 changes.
 
---remove closes Vitals, then deletes %LOCALAPPDATA%/Programs/Vitals, the Start
-menu shortcut, ~/.claude/tools/vitals and the record. It stops first if Start
-with Windows is still on, since removing that task needs administrator rights:
-turn it off in Vitals' Settings, then rerun. Your settings and log stay in
-%APPDATA%/Vitals, and the end of the output says so.
+--remove deletes the Start with Windows task if there is one (Windows'
+administrator prompt shows once; declining it stops the removal before
+anything changes), closes Vitals, then deletes %LOCALAPPDATA%/Programs/Vitals,
+the Start menu shortcut, ~/.claude/tools/vitals and the record. Your settings
+and log stay in %APPDATA%/Vitals, and the end of the output says so.
 
 Ends with "Setup complete" (or "Removed"), or exits with status 1 and a
 FAILED message saying what to do.
@@ -91,14 +104,7 @@ INSTRUCTIONS = ""
 # secrets typed into a hidden prompt, clicks in other apps. Keep each one a
 # single instruction that says where to do it.
 # Example: "Open Example App's settings and turn on Allow plugins."
-HUMAN_STEPS = [
-    "Open Vitals from the Start menu, if it isn't running already. Its widget shows in the bottom-right corner "
-    "of your right-most screen.",
-    "To keep its tray icon on the taskbar, drag it out of the ^ menu, or turn it on under Settings > "
-    "Personalization > Taskbar > Other system tray icons.",
-    "Optional, for the CPU temperature: install the PawnIO driver from https://pawnio.eu (it needs administrator "
-    "rights), then close Vitals from its tray icon and open it again.",
-]
+HUMAN_STEPS = []  # Setup's Finish page shows the person's own steps (the tray icon, PawnIO)
 
 # The .NET SDK the build needs, and how to get it.
 DOTNET_MAJOR = 10
@@ -112,6 +118,7 @@ EXE = INSTALL_DIR / "Vitals.exe"
 START_MENU_LINK = (Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
                    / "Vitals.lnk")
 DATA_DIR = Path(os.environ.get("APPDATA", "")) / "Vitals"
+VITALS_CONFIG = DATA_DIR / "config.json"
 CLOSE_EVENT = "Local\\Vitals.Close"  # Vitals closes when this is set (App.xaml.cs)
 PID_FILE = "Vitals.install-pid"  # in %TEMP%: Vitals starts again once this process id ends
 STARTUP_TASK = "Vitals"  # the Start with Windows task (StartupTask.cs)
@@ -900,58 +907,74 @@ def close_vitals(start_again):
     return restart if start_again else None
 
 
-def start_vitals():
-    """Starts the installed Vitals as it was before this script stopped it:
-    without administrator rights, and without asking for them."""
-    subprocess.Popen([str(EXE), "--elevate-tried"], cwd=str(INSTALL_DIR),
-                     creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS, CREATE_NEW_PROCESS_GROUP
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def install_app():
-    """Copies the build to INSTALL_DIR and adds the Start menu shortcut. Returns
-    who starts Vitals again, as close_vitals does."""
-    if not (BUILD_DIR / "Vitals.exe").is_file():
-        fail(f"there's no build in {BUILD_DIR}. Run install.py again from this folder.")
-    restart = close_vitals(start_again=True)
-    # Copy next to it first, so a failed copy leaves the earlier install working.
-    new = INSTALL_DIR.with_name("Vitals.new")
-    if exists(new):
-        shutil.rmtree(new)
-    shutil.copytree(BUILD_DIR, new)
-    try:
-        if exists(INSTALL_DIR):
-            shutil.rmtree(INSTALL_DIR)
-        new.rename(INSTALL_DIR)
-    except OSError as e:
-        fail(f"couldn't replace {INSTALL_DIR} ({e}). Close anything using it, then rerun.")
-    shutil.rmtree(BUILD_DIR, ignore_errors=True)
-    print(f"installed Vitals in {INSTALL_DIR}")
-
-    START_MENU_LINK.parent.mkdir(parents=True, exist_ok=True)
-    r = powershell(f"$s = (New-Object -ComObject WScript.Shell).CreateShortcut({ps_quote(START_MENU_LINK)}); "
-                   f"$s.TargetPath = {ps_quote(EXE)}; $s.WorkingDirectory = {ps_quote(INSTALL_DIR)}; "
-                   f"$s.IconLocation = {ps_quote(f'{EXE},0')}; "
-                   "$s.Description = 'A small always-on-top CPU, GPU, RAM and VRAM monitor'; $s.Save()")
-    if r.returncode != 0:
-        fail(f"couldn't create the Start menu shortcut {START_MENU_LINK} ({r.stderr.strip()}).")
-    print(f"added the Start menu shortcut {START_MENU_LINK}")
-
-    if restart == "script":
-        start_vitals()
-    return restart
-
-
 def startup_task_on():
     """True if Vitals' Start with Windows task exists."""
     return subprocess.run(["schtasks", "/Query", "/TN", STARTUP_TASK], capture_output=True).returncode == 0
 
 
+def run_as_admin(program, arguments):
+    """Runs program with administrator rights, which shows Windows' administrator
+    prompt, and waits for it. Returns its exit code, or None if the prompt was
+    declined."""
+    args = ", ".join(ps_quote(a) for a in arguments)
+    r = powershell(f"try {{ $p = Start-Process -FilePath {ps_quote(program)} -ArgumentList {args} -Verb RunAs "
+                   "-WindowStyle Hidden -Wait -PassThru -ErrorAction Stop } catch { exit 1223 }; exit $p.ExitCode")
+    return None if r.returncode == 1223 else r.returncode
+
+
+def update_vitals_config(**values):
+    """Sets keys in Vitals' config.json and keeps the rest; a running Vitals
+    reloads the file. Returns False if the file couldn't be read or written."""
+    config = {}
+    try:
+        if VITALS_CONFIG.exists():
+            config = json.loads(VITALS_CONFIG.read_text(encoding="utf-8-sig"))
+        config.update(values)
+        VITALS_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+        VITALS_CONFIG.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        return True
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"couldn't update {VITALS_CONFIG} ({e}), so set this in Vitals' Settings instead.")
+        return False
+
+
+def run_setup(quiet, test, start_with_windows, claude_levels):
+    """Runs Vitals Setup from the build and waits for it. Prints its log, and
+    fails unless it installed Vitals."""
+    exe = BUILD_DIR / "Vitals.exe"
+    if not exe.is_file():
+        fail(f"there's no build in {BUILD_DIR}. Run install.py again from this folder.")
+    log = Path(tempfile.gettempdir()) / f"vitals-setup-{uuid.uuid4().hex}.log"
+    args = [str(exe), "--setup", "--setup-log", str(log)] + ["--quiet"] * quiet + ["--setup-test"] * test
+    for name, value in (("--start-with-windows", start_with_windows), ("--claude-levels", claude_levels)):
+        if value is not None:
+            args += [name, value]
+    if not quiet:
+        print("Opening Vitals Setup. Finish it in its window; this waits until it closes.")
+    code = subprocess.run(args).returncode
+    try:
+        print(log.read_text(encoding="utf-8").rstrip())
+        log.unlink()
+    except OSError:
+        pass
+    shutil.rmtree(BUILD_DIR, ignore_errors=True)
+    if code == 2:
+        fail("Setup was cancelled, so Vitals wasn't installed or changed.")
+    if code != 0:
+        fail("Setup couldn't finish; the line starting FAILED above says why.")
+
+
 def remove_app():
     if startup_task_on():
-        fail("Start with Windows is on, and removing its task needs administrator rights. Turn it off in Vitals' "
-             "Settings (its tray icon's menu), then rerun. If Vitals is already gone, run "
-             f"`schtasks /Delete /TN {STARTUP_TASK} /F` in a terminal opened as administrator instead.")
+        print("Removing the Start with Windows task: click Yes on Windows' administrator prompt...")
+        code = run_as_admin("schtasks.exe", ["/Delete", "/TN", STARTUP_TASK, "/F"])
+        if code != 0 or startup_task_on():
+            why = "the administrator prompt was declined" if code is None else "it didn't work"
+            fail(f"couldn't remove the Start with Windows task ({why}), so nothing was removed. Rerun and click Yes, "
+                 "or turn Start with Windows off in Vitals' Settings first.")
+        print("removed the Start with Windows task")
+        if VITALS_CONFIG.exists():
+            update_vitals_config(startWithWindows=False)
     close_vitals(start_again=False)
     if exists(START_MENU_LINK):
         START_MENU_LINK.unlink()
@@ -1036,7 +1059,7 @@ def remove():
 
 
 def main():
-    # differs from the template: builds Vitals first, and installs or removes the app around the template's steps
+    # differs from the template: builds Vitals, then runs its Setup window around the template's steps
     p = argparse.ArgumentParser(description=f"Install or remove {TOOL_NAME}.")
     action = p.add_mutually_exclusive_group()
     action.add_argument("--copy", action="store_const", const="copy", dest="action",
@@ -1045,16 +1068,31 @@ def main():
                         help="link ~/.claude/tools to this folder, even outside a git clone")
     action.add_argument("--remove", action="store_const", const="remove", dest="action",
                         help="uninstall Vitals and undo everything the install added")
+    p.add_argument("--quiet", action="store_true", help="install with no window, keeping things as they are "
+                   "unless the options below say otherwise")
+    p.add_argument("--start-with-windows", choices=("yes", "no"),
+                   help="Setup's Start with Windows box (with --quiet, the choice itself)")
+    p.add_argument("--claude-levels", choices=("yes", "no"),
+                   help="Setup's box for letting Claude Code pick the warning levels (with --quiet, the choice itself)")
+    p.add_argument("--test", action="store_true",
+                   help="Setup's test mode: leaves a running Vitals and the Start with Windows task alone")
     args = p.parse_args()
+    if args.action == "remove" and (args.start_with_windows or args.claude_levels or args.quiet or args.test):
+        p.error("--remove takes none of the other options")
     if os.environ.get(OUTSIDE_PACKAGE):  # the rerun outside the app's package: its output goes back through a file
         sys.stdout = sys.stderr = open(os.environ[OUTSIDE_PACKAGE], "w", encoding="utf-8", buffering=1)
     elif args.action != "remove":
+        if not is_link(STABLE_DIR) and same_path(os.path.realpath(STABLE_DIR), TOOL_DIR):
+            install(args.action or "copy")  # fails with the template's message before building anything
         # Built here, before any rerun outside the app's package, so the build's output shows as it runs.
         check_dependencies()
         build()
 
     if (STARTUP or NEEDS_REAL_APPDATA) and in_app_package():
-        rerun_outside_app_package([f"--{args.action}"] * bool(args.action))
+        rerun_outside_app_package([f"--{args.action}"] * bool(args.action) + ["--quiet"] * args.quiet
+                                  + ["--test"] * args.test
+                                  + ["--start-with-windows", args.start_with_windows] * bool(args.start_with_windows)
+                                  + ["--claude-levels", args.claude_levels] * bool(args.claude_levels))
     if args.action == "remove":
         remove_app()
         remove()
@@ -1062,12 +1100,8 @@ def main():
             print(f"Your settings and log are still in {DATA_DIR}. Delete it if you don't need them.")
     else:
         check_dependencies()
-        restart = install_app()
+        run_setup(args.quiet, args.test, args.start_with_windows, args.claude_levels)
         install(args.action or ("link" if in_git_clone() else "copy"))
-        if restart == "self":
-            print("Vitals starts again once this install ends.")
-        elif restart == "script":
-            print("Vitals is running again.")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ public sealed class AppConfig
     public bool AlwaysOnTop { get; set; } = true;
     public bool LockPosition { get; set; } = false;
     public bool SnapToCorners { get; set; } = true;
-    public double Opacity { get; set; } = 0.8;
+    public double Opacity { get; set; } = 0.9;
 
     // Config file only.
     public bool RunAsAdmin { get; set; } = true;
