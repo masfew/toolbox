@@ -41,6 +41,7 @@ Apps are programs you start yourself, outside Claude Code. Claude Code can still
 | Tool | What it does | Tested on |
 |---|---|---|
 | <a id="sketch"></a>[sketch](apps/sketch/) | Fast, simple paint app (a modern Microsoft Paint) with layers, editable shapes, arrows and text, screenshot mark-up, whiteboards, tabs and a screen capture key that works anywhere; a copy built from a clone updates itself after each `git pull` | Windows 11 (Windows only) |
+| <a id="vitals"></a>[vitals](apps/vitals/) | Small always-on-top widget with CPU, GPU, RAM and VRAM use, CPU and GPU temperatures, graphs of the last minute and the busiest apps on hover, as a light replacement for a heavy monitoring app; GPU readings need an NVIDIA card | Windows 11 (Windows only) |
 | <a id="wispr-mute"></a>[wispr-mute](apps/wispr-mute/) | Tray helper for Wispr Flow that mutes your audio the moment you start dictating and unmutes it when you stop, with a whitelist of apps (such as Discord) that stay audible, and keeps Wispr Flow's tray icon pinned across its updates | Windows 11 (Windows only) |
 
 ## Linking to a Tool

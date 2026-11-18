@@ -1,0 +1,25 @@
+# Vitals
+
+Read [README.md](README.md) first: what Vitals does, its config keys and how it's built.
+
+## Hard constraints
+
+- **Run test builds with `--no-elevate`.** Without it, Vitals relaunches itself as administrator whenever the PawnIO driver is installed, and Windows shows an administrator prompt (UAC) on the person's screen.
+- **Stop every Vitals you start** (by its process id when the person's own Vitals runs too) before ending the turn. It's an always-on-top window with a tray icon, so a forgotten test copy sits on the person's screen.
+- **Never install the PawnIO driver yourself.** It's a kernel driver outside the project; the person installs it (README, CPU Temperature).
+
+## Traps
+
+- **AppData from a Claude desktop session is a private copy.** Anything a Claude desktop session starts writes `%APPDATA%\Vitals` (config.json, vitals.log) into the Claude app's package cache, which the person's own Vitals never sees. Test runs from a session start with a fresh config and trigger the Claude Code warning-level check each time. `install.py` reruns its install steps outside the package for this reason (`NEEDS_REAL_APPDATA`); keep it, and keep the build before that rerun, so the build's output shows as it runs.
+- **Windows' per-app GPU memory counter glitches.** `\GPU Process Memory(*)\Dedicated Usage` has reported 952 GB for one process, dwm.exe at 5.9 GB while the whole card used 2.7 GB, and dwm.exe at 11.7 GB with only 0.81 GB committed while another app really held 14.6 GB of the card, so per-app values can add up to more than the card's total. `AppUsageSampler` caps each process at its own `Total Committed`, read in the same query (`CapAtCommitted`), since no process can have more on the card than it allocated, and then drops any app's value over what the whole card uses right now plus 10% (`VramLimitBytes`), or over the card's size when the driver gives no figure. Keep both: the cap catches glitches smaller than the card's use, the filter catches them when the committed figure is missing.
+- **LibreHardwareMonitor takes ~60 ms per CPU update** and returns no temperatures without PawnIO and admin, so `HardwareSampler` stops calling it after three empty reads. With PawnIO installed, measure again before calling the sampler cheap.
+- **The card's window is always as tall as the expanded card**, anchored at its bottom-right corner with the card at its bottom (`WidgetWindow.WindowHeight`), so expanding and collapsing redraw it without a resize. Sizing it to the collapsed card made every expand show the collapsed card jumped up for one frame (the resize trap below). Collapsed, the extra height costs no measurable CPU, but a window that also held the panel cost ~2% of a core, so don't grow it further. Hover and panel placement use the card's rectangle (`CardTop`), not the window's.
+- **Never resize the see-through window on hover.** For one frame after a resize Windows shows the old picture at the new size, so the card jumped up on every panel open and vanished on close (seen in a 60 fps recording). The per-app panel therefore has its own window (`PanelWindow`), shown and hidden above the card, and hover is judged by polling the cursor (`CheckHover`), not WPF's MouseLeave. Desktop Duplication captures show such frames (ffmpeg `ddagrab`); `gdigrab` misses them.
+- **The warning-level check calls `claude -p`** with `--setting-sources ""` so the person's own hooks (such as notifications) don't fire. Keep those flags if you change the call.
+- **`install.py` closes Vitals through the `Local\Vitals.Close` event**, which Vitals creates with a security descriptor that lets the person's non-admin processes set it (`Native.CreateUserSignalEvent`), so even an admin Vitals can be asked to close; killing the process can't close an admin process from a non-admin session. Before setting it, the installer leaves its own process id in `%TEMP%\Vitals.install-pid`, and Vitals starts a hidden PowerShell that waits for that process to end and starts Vitals again with the rights it had (`App.StartAgainAfterInstall`), so an admin copy comes back as admin with no prompt. The installer can't do that itself: a non-admin process may not run the Start with Windows task. Don't remove the event or its security: without them the install stops with "Vitals didn't close".
+
+## Checking work
+
+- `Vitals.exe --render <folder>` writes PNGs of every view (collapsed, expanded, both with the per-app panel, settings, icon sizes) without showing anything on screen. Look at them after any UI change; `render/` is gitignored. Add `--demo` for made-up readings: the README's pictures (`docs/`) come from it, and a render without it shows the apps running on the PC it's made on, so never publish one.
+- For cost: run with `--no-elevate` for 60 s and read the process's CPU time; `vitals.log` records the average reading time after 60 readings. `--hidden` (tray only) and `--panel-open` (breakdown always read) isolate the parts.
+- After a change to `install.py`, run `python .github/scripts/pre_push_check.py` from the repo's root: it compares the installer's functions with the template's.
