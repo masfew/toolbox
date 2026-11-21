@@ -21,6 +21,7 @@ public partial class App : Application
     private ConfigStore? _store;
     private HardwareSampler? _hw;
     private SamplingLoop? _loop;
+    private HistoryLog? _history;
     private WidgetWindow? _widget;
     private TrayIcon? _tray;
     private SettingsWindow? _settings;
@@ -98,6 +99,10 @@ public partial class App : Application
         store.ReloadedFromDisk += () => Dispatcher.BeginInvoke(() => { _widget.ApplyConfig(); _settings?.Load(); });
 
         if (render != null) { _ = RenderViews(render, Has("--demo")); return; }
+
+        // The per-second history in %APPDATA%\Vitals\history, kept whether the widget shows or not.
+        _history = new HistoryLog();
+        _history.Start();
 
         _tray = new TrayIcon(() => _widget.IsVisible, () => _widget.Toggle(), OpenSettings, Shutdown);
         if (!Has("--hidden")) _widget.ShowWidget(); // --hidden: tray only (for measuring the idle cost)
@@ -180,6 +185,7 @@ public partial class App : Application
     {
         _tray?.Dispose();
         _loop?.Dispose();
+        _history?.Dispose();
         _hw?.Dispose();
         _store?.Dispose();
         _showEvent?.Dispose();

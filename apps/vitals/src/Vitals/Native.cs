@@ -161,9 +161,11 @@ internal sealed class PdhCounter : IDisposable
 
     public bool Collect() => Ok && PdhCollectQueryData(_query) == 0;
 
-    public double? ReadDouble()
+    /// <param name="index">Which of the query's counters to read, in the order they were given.</param>
+    public double? ReadDouble(int index = 0)
     {
-        if (!Ok || PdhGetFormattedCounterValue(_counters[0], FMT_DOUBLE | FMT_NOCAP100, out _, out var v) != 0 || v.CStatus > 1) return null;
+        if (!Ok || index < 0 || index >= _counters.Length ||
+            PdhGetFormattedCounterValue(_counters[index], FMT_DOUBLE | FMT_NOCAP100, out _, out var v) != 0 || v.CStatus > 1) return null;
         return v.Double;
     }
 

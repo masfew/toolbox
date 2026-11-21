@@ -1097,7 +1097,7 @@ def main():
         remove_app()
         remove()
         if DATA_DIR.exists():
-            print(f"Your settings and log are still in {DATA_DIR}. Delete it if you don't need them.")
+            print(f"Your settings, log and history are still in {DATA_DIR}. Delete it if you don't need them.")
     else:
         check_dependencies()
         run_setup(args.quiet, args.test, args.start_with_windows, args.claude_levels)

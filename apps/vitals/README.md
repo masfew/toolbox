@@ -1,10 +1,10 @@
 # Vitals
 
-Version 1.1.0. See the [changes](#changes) at the end.
+Version 1.2.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
-A small always-on-top widget for Windows that shows CPU, GPU, RAM and VRAM use, with the CPU and GPU temperatures, graphs of the last minute and the busiest apps on hover. It's for anyone who wants a glance at their PC's load without keeping a heavy monitoring app (such as NZXT CAM) open, and it costs about 2% of one CPU core while showing.
+A small always-on-top widget for Windows that shows CPU, GPU, RAM and VRAM use, with the CPU and GPU temperatures, graphs of the last minute and the busiest apps on hover. It also keeps a second-by-second record of the last 24 hours in a file, so after a freeze or stutter you can see what the PC was doing at that moment. It's for anyone who wants a glance at their PC's load without keeping a heavy monitoring app (such as NZXT CAM) open, and it costs about 2% of one CPU core while showing.
 
 ![Vitals expanded, with the per-app lists open above it: CPU, GPU, RAM and VRAM by app, then a row each for CPU, GPU, RAM and VRAM with a ring, a temperature or total, and a graph of the last minute](docs/expanded-hover.png)
 
@@ -108,7 +108,7 @@ Everything else is in `%APPDATA%\Vitals\config.json`, which Vitals creates on fi
 | `warnings.vram` | VRAM `amber` and `red`, as a share of the card's memory | `0.85` / `0.95` | `{"amber": 0.9, "red": 0.97}` |
 | `expanded`, `position` | Remembered by the widget | | |
 
-`vitals.log` beside it records start-ups, warning-level changes and problems.
+`vitals.log` beside it records start-ups, warning-level changes and problems, and the `history` folder beside it holds the last 24 hours of readings (see [History](#history)).
 
 ## Usage
 
@@ -137,6 +137,27 @@ When Vitals starts, it reads the CPU and GPU model names and compares them with 
 
 If Claude Code isn't installed or doesn't answer, the fallback levels stay and Vitals asks again at its next start. Set `askClaudeForWarnings` to `false` to never ask.
 
+### History
+
+Vitals writes one line a second to `%APPDATA%\Vitals\history`, one CSV file per hour named by its date and hour in local time (`2026-11-21_14.csv` holds 2:00 to 2:59 PM). It keeps the last 24 hours, about 10 to 15 MB, and deletes older files as it goes. It records whether the widget is showing or hidden in the tray, from when Vitals starts until it closes.
+
+To look into a freeze, open the hour's file in Excel or any text editor and find the time. The columns:
+
+| Column | What it is |
+|---|---|
+| `time` | Local time, to the millisecond |
+| `gap_ms` | Time since the line before. About 1000 normally; well over 1000 means Vitals itself was held up, as everything is in a system-wide freeze. Blank on the first line after Vitals starts |
+| `cpu` | CPU use, % of the whole CPU |
+| `core_max` | The busiest logical core, % |
+| `core_dpc`, `core_int` | The highest share of any one core spent handling drivers' deferred work (DPCs) and hardware interrupts. A misbehaving driver shows here, and can freeze the mouse while the CPU looks idle |
+| `gpu`, `gpu_temp`, `vram_gb` | GPU load (%), temperature (°C) and memory in use (GB), on NVIDIA cards |
+| `ram_gb` | RAM in use, GB |
+| `commit_gb`, `commit_limit_gb` | Memory promised to apps, and the most Windows can promise (RAM plus the page file). Near the limit, apps fail to get memory |
+| `hard_faults` | Pages read back from disk per second. High when RAM runs short and Windows swaps |
+| `disk_active` | The busiest physical disk, % of the time busy |
+| `disk_queue` | Requests waiting on all disks |
+| `top_cpu` | The three apps using the most CPU, as `name=percent` of the whole CPU, summed over each app's processes. Filled only when `cpu` is 50% or more, or after a gap of 2 seconds or more |
+
 ### Command-Line Arguments
 
 | Argument | Use |
@@ -158,15 +179,17 @@ Vitals is a WPF app (.NET 10) with a WinForms tray icon. It reads:
 - GPU load, temperature and VRAM from NVIDIA's `nvml.dll`, which comes with the NVIDIA driver.
 - RAM from Windows.
 - CPU, GPU, RAM and VRAM per app from Windows' performance counters, only while the per-app lists are open.
+- For the [history](#history), on a thread of its own: the CPU, per-core, memory and disk performance counters, the NVIDIA driver, and, only while the CPU is busy, every process's CPU time from one Windows call (`NtQuerySystemInformation`), much cheaper than the per-app counters.
 
-It writes only `%APPDATA%\Vitals\config.json` and `vitals.log`, and, when you turn Start with Windows on, a scheduled task named `Vitals`.
+It writes only `%APPDATA%\Vitals\config.json`, `vitals.log` and the `history` folder, and, when you turn Start with Windows on, a scheduled task named `Vitals`.
 
 Cost, measured on a desktop Intel Core i9 and NVIDIA RTX 40-series card at one reading a second:
 
 - **Widget showing:** about 2% of one CPU core (0.07% of the whole CPU), almost all of it Windows redrawing the see-through window. Reading the hardware takes under 1 ms.
 - **Per-app lists open (hovering):** about 10 ms more per reading. When they open after a pause, the first reading waits 200 ms, since CPU and GPU use per app need two readings.
-- **Hidden in the tray:** no measurable CPU.
-- **Memory:** about 175 MB while showing, about 110 MB hidden.
+- **History:** about 0.4% of one core (0.01% of the whole CPU), the same whether the widget shows or not. It adds nothing measurable to the cost while showing.
+- **Hidden in the tray:** the history's 0.4% of one core, and nothing else.
+- **Memory:** about 180 MB while showing, about 125 MB hidden.
 
 The code is in `src/Vitals/`:
 
@@ -176,6 +199,7 @@ The code is in `src/Vitals/`:
 - `SettingsWindow.xaml`: the Settings window.
 - `WarningLevels.cs`: picking warning levels for new hardware.
 - `StartupTask.cs`: the Start with Windows task.
+- `HistoryLog.cs`: the per-second history files.
 - `Config.cs`: `config.json` and the log.
 - `DemoData.cs`: the made-up readings for `--render --demo`.
 - `Setup/`: Vitals Setup (`SetupWindow.xaml` for the window, `Installer.cs` for the steps, `SetupRunner.cs` for `--setup`'s options).
@@ -215,7 +239,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/vitals` instead. If you installed from a clone and then deleted it, clone the repo again and run it from `apps/vitals` there.
 
-If Start with Windows is on, it first deletes that scheduled task, which shows Windows' administrator prompt once; if you decline it, nothing is removed. Then it closes Vitals and removes `%LOCALAPPDATA%\Programs\Vitals`, the Start menu shortcut, `~/.claude/tools/vitals` and its install record. It leaves your settings and log in `%APPDATA%\Vitals`, and says so. Delete that folder yourself if you don't need them.
+If Start with Windows is on, it first deletes that scheduled task, which shows Windows' administrator prompt once; if you decline it, nothing is removed. Then it closes Vitals and removes `%LOCALAPPDATA%\Programs\Vitals`, the Start menu shortcut, `~/.claude/tools/vitals` and its install record. It leaves your settings, log and history in `%APPDATA%\Vitals`, and says so. Delete that folder yourself if you don't need them.
 
 ## Troubleshooting
 
@@ -236,5 +260,6 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.2.0: Vitals keeps a per-second history of the last 24 hours in `%APPDATA%\Vitals\history`, one CSV file per hour: CPU, busiest core, driver (DPC and interrupt) time, GPU, VRAM, RAM, committed memory, hard faults, disk activity and queue, and the top three apps by CPU while the CPU is busy. It records while the widget is hidden too, at about 0.4% of one core. See [History](#history).
 - 1.1.0: `install.py` opens **Vitals Setup**, a standard setup window: Welcome, a page with two boxes (start Vitals when you sign in, set up there and then with Windows' administrator prompt; and let Claude Code pick the warning levels, greyed out with the reason when Claude Code isn't found), the install's steps, and a Finish page with **Start Vitals now** and the tray icon and PawnIO tips. `--quiet` installs with no window, and `--start-with-windows` and `--claude-levels` set the two choices. `--remove` now deletes the Start with Windows task itself, with one administrator prompt, instead of asking you to turn it off first. A new install starts with the background at 90% opacity (was 80%). Existing installs keep their own settings.
 - 1.0.0: First public version, with `install.py` as its installer and `--render --demo` for pictures with made-up readings.
