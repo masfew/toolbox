@@ -1,6 +1,6 @@
 # instruction-manager
 
-Version 1.4.2. See the [changes](#changes) at the end.
+Version 1.5.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -193,6 +193,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.5.0: A skill's Improving This Skill section now holds only growth rules that are the skill's own: a home project, a test every change must pass, or where new material goes when One home per rule doesn't settle it. A skill with none leaves the section out. The general points every skill used to repeat (changes go through instruction-manager, which rules belong in a project's `CLAUDE.md`) live only in the house style, so they no longer cost words on every load or drift apart between skills. An older skill's boilerplate is trimmed the next time it's edited or audited.
 - 1.4.2: Fix: `check_skill.py` no longer reports an error for frontmatter keys Claude Code reads but skill-creator's `quick_validate.py` doesn't know, such as `disable-model-invocation`, `argument-hint`, `model` and `user-invocable`. It hides them from the validator, which still checks everything else. A slash-only skill (`disable-model-invocation: true`) skips the description length checks and the missing trigger tests warning, since no prompt can load it, and `run_triggers.py` refuses to run tests on one. New offline tests: `tests/test_check_skill.py`.
 - 1.4.1: Fix: trigger tests no longer count a skill as not loading when the session looks something up first. The Artifact tool now tells sessions to call its quickstart before loading any skill for a new page, and sessions often read or search files before loading the skill the work needs, so every page-making skill was scoring as if it never loaded. A run now ends at the first tool call that does work; reading and searching files and the Artifact tool's quickstart, list and read don't end it. Scores saved before this version may be lower than a rerun's.
 - 1.4.0: Checked against Anthropic's and OpenAI's skill and CLAUDE.md guidance. The house style gains a Wording section (only what a session would get wrong without it, concrete steps that end on a done condition, a default rather than a menu, one name per thing, plain emphasis, hooks for rules with no exceptions). Descriptions put the trigger first, since Claude Code cuts long ones and drops the least-used when the list is full, and a skill meant only for its slash command uses `disable-model-invocation`. Traps most tasks meet stay in `SKILL.md`; reference files link from `SKILL.md` directly and list their sections past 100 lines. Description tuning moved to `skill/references/tuning.md` and now holds out part of the prompts so a description isn't fitted to its own tests; behaviour tests run with and without the skill. The instruction-file rules add path-scoped rules, what earns a line in `CLAUDE.md`, and hooks for must-hold rules. `check_skill.py` warns about a reference file only another reference file links to, a long reference file with no section list, and a name containing a reserved word. Fix: imports are followed four hops deep, as Claude Code's docs say, not five.

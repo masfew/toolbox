@@ -48,7 +48,7 @@ In this order, leaving out what a skill doesn't need:
 4. **The workflow**, as numbered steps.
 5. **Habits or traps** that save rounds: each a bold one-sentence claim, then what to do instead. Traps that most tasks can meet stay here, where a session reads them before it hits them; a trap that only one sub-task meets goes in that sub-task's reference file. Add one each time a session fails in a new way: it's the part of a skill that most changes what sessions do.
 6. **Files**: a table of reference files with a "Read when" column.
-7. **Improving this skill** (below).
+7. **Improving this skill**, only when the skill has growth rules of its own (below).
 
 ## Size
 
@@ -108,11 +108,13 @@ Don't restate a rule from a higher row. If three skills each end with "remind th
 
 ## Improving this skill
 
-Every skill ends with a short section saying how it grows, because sessions add to skills after almost every round and this is where drift starts:
+How skills grow in general is this skill's job, not each skill's: every change goes through the [Any change](../SKILL.md#any-change) workflow (the edit guard sends sessions there), and [One home per rule](#one-home-per-rule) says where a new rule goes. A skill that repeats either pays for the copy on every load, and the copies drift apart. So a skill ends with this section only for growth rules that are its own, since sessions add to skills after almost every round and this is where drift starts:
 
-- **A skill with a home project** (for example a `ui-design` skill and the sandbox project built to develop it) names it. In the home project, general lessons go into the skill or its references. Everywhere else the skill is read-only: suggest the addition and why, and edit only when the user explicitly says to. A finding being useful isn't permission.
-- **A skill without one** says where new material goes (which reference file, the style guide) and what doesn't belong in it.
-- Every change, in any project, goes through instruction-manager's revision workflow.
+- **A home project** (for example a `ui-design` skill and the sandbox project built to develop it): name it. In the home project, general lessons go into the skill or its references. Everywhere else the skill is read-only: suggest the addition and why, and edit only when the user explicitly says to. A finding being useful isn't permission.
+- **A test every change must pass**, such as a scenario script that needs a case for each changed command.
+- **Where new material goes, when One home per rule doesn't settle it**, such as which reference file takes new traps.
+
+A skill with none of these leaves the section out. An older skill's section that only says changes go through instruction-manager, or restates where rules go, is trimmed to what's left the next time the skill is edited or audited.
 
 ## Tests
 

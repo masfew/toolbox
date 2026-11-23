@@ -328,7 +328,7 @@ def check_links(folder, docs, files, own_name):
 
 
 def without_improving(text):
-    """The Improving This Skill section follows a shared house-style wording, so copies there are expected."""
+    """Older skills' Improving This Skill sections still share house-style boilerplate, so copies there aren't reported."""
     return re.sub(r"^## Improving this skill\b.*?(?=^## |\Z)", "", text, flags=re.S | re.M | re.I)
 
 
