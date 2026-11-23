@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.3.0. See the [changes](#changes) at the end.
+Version 2.3.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -164,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.3.1: Status updates no longer land on the wrong planned feature. Planned features renumber when their status changes, so a feature number Claude read before one update could point at a different feature in the next. Claude now targets later updates by each step's fixed id, and the plan script reminds it to whenever an update changes a planned feature's status.
 - 2.3.0: The phases of the build plan now stay in the order they were written, whatever their status: a phase finished ahead of an earlier one, or one that's blocked or skipped, keeps its place and number. Only planned features in Future Ideas still sort themselves (done, in progress, not started, skipped) and renumber. Published plans get this the next time their look is refreshed: the first time you open one after that, the page saves a snapshot by itself to switch it on. Some phases the old sort already moved may stay where they are now; ask Claude to move one back if you want it in its written place.
 - 2.2.2: A step marked skipped now stays where it is in its phase or planned feature and keeps its number, instead of moving to the end. Whole phases and planned features that are skipped still move to the end of the overview, as before.
 - 2.2.1: Version numbers after a product or model name, such as "Llama 3.2", "Qwen 2.5", "CUDA 12.4" or "Unreal Engine 5.4", stay plain text instead of turning into links to the plan's step with that number. Text already linked stays as it is. Published plans get this the next time their look is refreshed.
