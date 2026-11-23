@@ -121,6 +121,15 @@ def read_frontmatter(skill_md):
     return fields.get("name", "").strip().strip("\"'"), desc
 
 
+def slash_only(skill_md):
+    """True when the frontmatter sets disable-model-invocation: true, so Claude never loads the
+    skill on its own and no prompt can pass."""
+    text = Path(skill_md).read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
+    m = re.match(r"---\n(.*?)\n---", text, re.S)
+    return bool(m and re.search(r"^disable-model-invocation:[ \t]*[\"']?true[\"']?[ \t]*$",
+                                m.group(1), re.M | re.I))
+
+
 def broken_yaml(skill_md):
     """True when the description is unquoted and holds ': ' or ' #', which YAML can't parse."""
     text = Path(skill_md).read_text(encoding="utf-8", errors="replace")
@@ -347,6 +356,9 @@ def main():
     fm_name, current = read_frontmatter(folder / "SKILL.md")
     if fm_name and fm_name != name:
         sys.exit(f"FAILED: SKILL.md says name '{fm_name}' but the folder is '{name}'. Fix that first.")
+    if slash_only(folder / "SKILL.md"):
+        sys.exit(f"FAILED: {name} sets disable-model-invocation: true, so it runs only from /{name} "
+                 "and no prompt can load it. Trigger tests don't apply; nothing was run.")
     eval_path = Path(a.eval_set) if a.eval_set else folder / "evals" / "triggers.json"
     if not eval_path.exists():
         sys.exit(f"FAILED: {eval_path} doesn't exist. Write the trigger prompts first.")

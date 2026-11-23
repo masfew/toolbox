@@ -6,8 +6,10 @@
     python check_skill.py --show-config    # the config in effect, and the skills it covers
 
 Reports, per skill, as a plain list:
-  - frontmatter problems (and skill-creator's quick_validate.py result when found)
-  - description length against the house style
+  - frontmatter problems (and skill-creator's quick_validate.py result when found,
+    leaving out the Claude Code keys it doesn't know, such as disable-model-invocation)
+  - description length against the house style, except for slash-only skills
+    (disable-model-invocation: true), which also need no trigger tests
   - word counts against the budgets, with estimated tokens, and the change
     against the last git commit when the file has uncommitted edits
   - links that point nowhere, reference files nothing links to, and ones that
@@ -32,6 +34,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -131,6 +134,43 @@ def parse_frontmatter(fm):
     return fields, problems
 
 
+# Frontmatter keys Claude Code reads (code.claude.com/docs/en/skills) that skill-creator's
+# quick_validate.py doesn't know, so it calls them unexpected. They're removed from the copy
+# it checks. Its own set (name, description, license, allowed-tools, metadata,
+# compatibility) isn't repeated here.
+CLAUDE_CODE_KEYS = frozenset({
+    "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable",
+    "disallowed-tools", "model", "effort", "context", "agent", "background", "hooks", "paths",
+    "shell",
+})
+
+
+def is_slash_only(fields):
+    """True when the skill sets disable-model-invocation: true. Claude Code then leaves its
+    description out of every session and never loads it on its own: it runs only from /name."""
+    return fields.get("disable-model-invocation", "").strip().strip("\"'").lower() == "true"
+
+
+def without_claude_code_keys(text):
+    """SKILL.md text with the CLAUDE_CODE_KEYS entries (and lines nested under them) removed
+    from the frontmatter, or None when it has none."""
+    text = text.replace("\r\n", "\n")
+    m = re.match(r"---\n(.*?)\n---", text, re.S)
+    if not m:
+        return None
+    kept, skipping, removed = [], False, False
+    for line in m.group(1).split("\n"):
+        top = re.match(r"^([A-Za-z][\w-]*):", line)
+        if top:
+            skipping = top.group(1) in CLAUDE_CODE_KEYS
+            removed |= skipping
+        if not skipping:
+            kept.append(line)
+    if not removed:
+        return None
+    return "---\n" + "\n".join(kept) + text[m.end(1):]
+
+
 def find_quick_validate():
     pats = [HOME / "plugins" / "**" / "skill-creator" / "scripts" / "quick_validate.py",
             HOME / "skills" / "synced" / "**" / "skill-creator" / "scripts" / "quick_validate.py"]
@@ -142,12 +182,25 @@ def find_quick_validate():
 
 
 def run_quick_validate(qv, folder):
+    """Runs quick_validate.py on the skill, or on a copy of its SKILL.md without the Claude Code
+    keys it doesn't know, so those aren't reported as unexpected."""
     env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+    stripped = without_claude_code_keys(read(Path(folder) / "SKILL.md"))
+    tmp = None
     try:
+        if stripped is not None:
+            tmp = tempfile.TemporaryDirectory(prefix="check-skill-")
+            target = Path(tmp.name) / Path(folder).name
+            target.mkdir()
+            (target / "SKILL.md").write_text(stripped, encoding="utf-8", newline="\n")
+            folder = target
         r = subprocess.run([sys.executable, qv, str(folder)], capture_output=True, text=True,
                            encoding="utf-8", errors="replace", env=env, timeout=60)
     except Exception as e:  # noqa: BLE001
         return None, f"could not run quick_validate.py: {e}"
+    finally:
+        if tmp:
+            tmp.cleanup()
     out = (r.stdout + r.stderr).strip().splitlines()
     last = out[-1] if out else ""
     if r.returncode == 0:
@@ -359,15 +412,19 @@ def check_skill(folder, qv, dups, show_info):
 
     desc = fields.get("_description", "")
     n = len(desc)
+    slash_only = is_slash_only(fields)
     if n > DESC_LIMIT:
         add("ERROR", f"description: {n:,} characters, over the {DESC_LIMIT:,} limit")
+    elif slash_only:
+        add("INFO", f"description: {n:,} characters; slash-only (disable-model-invocation: true), "
+                    "so it shows only in the / menu and the description checks don't apply")
     elif n > DESC_AIM[1]:
         add("WARN", f"description: {n:,} characters, over {DESC_AIM[1]}: check each clause earns its place")
     elif n < DESC_AIM[0]:
         add("WARN", f"description: {n:,} characters, under the {DESC_AIM[0]}-character minimum")
     else:
         add("INFO", f"description: {n:,} characters (~{round(n / 4):,} tokens in every session)")
-    if desc and "not for" not in desc.lower():
+    if desc and not slash_only and "not for" not in desc.lower():
         add("INFO", "description has no \"Not for…\" naming a neighbouring skill (fine if none overlaps)")
 
     level, msg = size_line("SKILL.md body", words(body), BODY_AIM, BODY_LIMIT, git_head_words(skill_md))
@@ -413,7 +470,12 @@ def check_skill(folder, qv, dups, show_info):
 
     trig = folder / "evals" / "triggers.json"
     last = folder / "evals" / "last-run.json"
-    if not trig.exists():
+    if slash_only:
+        # Claude never loads it on its own, so no prompt can load it and trigger tests can't pass.
+        if trig.exists():
+            add("WARN", "evals/triggers.json is never run: a slash-only skill loads only from /name, "
+                        "so delete it")
+    elif not trig.exists():
         add("WARN", "no evals/triggers.json (trigger tests)")
     else:
         try:

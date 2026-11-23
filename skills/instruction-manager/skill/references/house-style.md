@@ -16,7 +16,7 @@ Name rules:
 
 - `name` matches the folder name: lowercase words joined by hyphens.
 - `description` is one line. If it contains `: ` or ` #`, wrap the whole value in double quotes. Unquoted, YAML stops reading at the colon, so sessions see only the text before it as the description, and the skill may load only when something else names it.
-- Run skill-creator's `quick_validate.py` (the check script does) after any frontmatter change.
+- Run skill-creator's `quick_validate.py` (the check script does) after any frontmatter change. It knows only the Agent Skills keys, so the check script hides the Claude Code keys from it (`disable-model-invocation`, `argument-hint`, `model`, `user-invocable` and the rest Claude Code's skills docs list).
 
 ## Description
 
@@ -24,7 +24,7 @@ The description has one job: make the skill load when it should and not when it 
 
 **First decide which kind of skill it is**, since the two need different descriptions:
 
-- **Phrase-triggered:** it loads on words the user says or a slash command, and on nothing else. The description names the words and says it never loads otherwise: "Load only when the user says "ship it" as an instruction, or types /ship. Never load it otherwise, even for a request to build and deploy in one go." Nothing more: what the skill does doesn't help a session spot two words. A skill that should run only from its slash command, never from words in a message, sets `disable-model-invocation: true` instead: Claude Code then leaves its description out of every session and never starts it on its own, which suits a workflow with side effects whose timing the user picks (a deploy, a release). Its description becomes a one-line note for the user's `/` menu.
+- **Phrase-triggered:** it loads on words the user says or a slash command, and on nothing else. The description names the words and says it never loads otherwise: "Load only when the user says "ship it" as an instruction, or types /ship. Never load it otherwise, even for a request to build and deploy in one go." Nothing more: what the skill does doesn't help a session spot two words. A skill that should run only from its slash command, never from words in a message, sets `disable-model-invocation: true` instead: Claude Code then leaves its description out of every session and never starts it on its own, which suits a workflow with side effects whose timing the user picks (a deploy, a release). Its description becomes a one-line note for the user's `/` menu, with no length aim and no trigger tests, since no prompt can load it.
 - **Situation-triggered:** it loads on what the task is about. Use these parts, in this order, and only the ones the trigger tests need:
   1. **The job, in a few words**, from the user's side: "How to write release notes for the docs site", "Checks a recipe's units and scales servings". Name the job, not its steps.
   2. **"Use it whenever…"** with the situations and the words the user actually uses ("asks why the build is slow, hangs, stalls"), not abstract categories.
@@ -120,7 +120,7 @@ Tests live inside the skill folder, in `evals/`, so they move with the skill and
 
 | File | What it holds | Who has one |
 |---|---|---|
-| `evals/triggers.json` | About 10 prompts that should load the skill and 10 near-misses that shouldn't, as `[{"query": "...", "should_trigger": true}, ...]`, the format skill-creator's `run_eval.py` and `run_loop.py` read | Every skill |
+| `evals/triggers.json` | About 10 prompts that should load the skill and 10 near-misses that shouldn't, as `[{"query": "...", "should_trigger": true}, ...]`, the format skill-creator's `run_eval.py` and `run_loop.py` read | Every skill except slash-only ones (`disable-model-invocation: true`) |
 | `evals.json` | 2 to 4 behaviour tests with checks, in skill-creator's `evals.json` schema (its schemas reference file). Run each with the skill and without it (or with the previous version): a check that passes both ways proves nothing about the skill and is dropped | Only skills whose output quality matters |
 | `last-run.json` | The latest trigger run at the top level (date, a hash of the description it tested, `tier`, `model`, runs per query, `seconds`, passed and total, and the queries that failed) and the latest run of each tier under `tiers` | Every skill with `triggers.json` |
 
