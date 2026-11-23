@@ -203,6 +203,11 @@ def main():
             fail("give at least one STEP=STATUS, --outcome, --note or change")
         rec = db.record(steps=steps, notes=notes, major=major, **ops)
         save(args[0], rec, describe(rec))
+        if any(re.fullmatch(r"F\d+(\.\d+)?", k, re.I) for k in steps):
+            # Planned features re-sort by status, and each record's numbers resolve after the ones before it
+            # are replayed, so an F number read before this record can name a different feature in the next one.
+            print("- note: planned features may renumber once this record is saved. In any later record, target "
+                  "steps and features by the doc id plan.py outline prints (s-..., p-...), or rerun outline first.")
     elif c == "build":
         m = model(args[0] if args else a.db)
 
