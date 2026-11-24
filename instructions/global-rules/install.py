@@ -10,8 +10,9 @@ Installs the global-rules instructions for Claude Code. Safe to rerun.
     python install.py --instructions     add the import lines without asking
     python install.py --no-instructions  leave the import lines out (or take them out)
 
-The rule files, in the rules folder: decide-dont-ask, subagent-model-and-effort,
-next-step-buttons.
+The rule files, in the rules folder: decide-dont-ask and subagent-model-and-effort.
+next-step-buttons was folded into decide-dont-ask in 2.0.0; a rerun swaps its
+import line for decide-dont-ask's.
 
 What it does:
 1. Checks that Python is new enough.
@@ -87,7 +88,10 @@ NEEDS_REAL_APPDATA = False
 INSTRUCTIONS = ""  # set in main() from the rule files chosen
 
 # The rule files in the rules folder, in the order their import lines go in.
-RULES = ["decide-dont-ask", "subagent-model-and-effort", "next-step-buttons"]
+RULES = ["decide-dont-ask", "subagent-model-and-effort"]
+# Rule files that were folded into another, and where their rules went. A rerun replaces
+# a retired file's import line with its new home's, and --only accepts the old name.
+RETIRED = {"next-step-buttons": "decide-dont-ask"}
 
 # Steps only the person can do, listed after "Setup complete": accounts,
 # secrets typed into a hidden prompt, clicks in other apps. Keep each one a
@@ -871,8 +875,13 @@ def import_line(name):
 
 
 def chosen_rules(only):
-    """The rule files to import: --only's, else the ones already in CLAUDE.md, else all."""
+    """The rule files to import: --only's, else the ones already in CLAUDE.md, else all.
+    A retired file's name stands for the file its rules moved into."""
     if only:
+        for name in only:
+            if name in RETIRED:
+                print(f"note: {name} was folded into {RETIRED[name]} in 2.0.0, so {RETIRED[name]} is installed in its place")
+        only = [RETIRED.get(name, name) for name in only]
         unknown = [name for name in only if name not in RULES]
         if unknown:
             fail(f"no rule file called {', '.join(unknown)}. The rule files are: {', '.join(RULES)}.")
@@ -880,7 +889,8 @@ def chosen_rules(only):
     span = find_block(read_claude_md())
     if span:
         block = read_claude_md()[span[0]:span[1]]
-        kept = [name for name in RULES if import_line(name) in block]
+        had = {RETIRED.get(name, name) for name in [*RULES, *RETIRED] if import_line(name) in block}
+        kept = [name for name in RULES if name in had]
         if kept:
             return kept
     return list(RULES)

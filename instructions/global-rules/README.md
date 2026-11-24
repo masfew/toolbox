@@ -1,18 +1,17 @@
 # global-rules
 
-Version 1.5.0. See the [changes](#changes) at the end.
+Version 2.0.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
-Rules for every Claude Code session, added to your `~/.claude/CLAUDE.md` one file at a time. They cut what wastes the most time when you run sessions without watching them: sessions that stop to ask about choices they could make themselves, subagents that run on the largest model for work a small one does as well, and next-step buttons that do more than their label says.
+Rules for every Claude Code session, added to your `~/.claude/CLAUDE.md` one file at a time. They cut what wastes the most time when you run sessions without watching them: sessions that stop to ask about choices they could make themselves, subagents that run on the largest model for work a small one does as well, and buttons or question options that do more than their label says.
 
-There are three rule files. Install any of them:
+There are two rule files. Install either or both:
 
 | File | What it changes |
 |---|---|
-| `rules/decide-dont-ask.md` | Claude makes implementation choices itself and names them in the reply, and asks only when you'd notice the result, it reaches outside the project (including a run that would use a large share of your plan's usage limits), it could be unsafe, or it isn't confident. A question you ask gets an answer rather than an offer to do something. When it does ask, the context comes first and the question last |
+| `rules/decide-dont-ask.md` | Claude makes implementation choices itself and names them in the reply, and asks only when you'd notice the result, it reaches outside the project (including a run that would use a large share of your plan's usage limits), it could be unsafe, or it isn't confident. A question you ask gets an answer rather than an offer to do something. When it does ask, the context comes first and the question last, and each option (or next-step button in the desktop app) does exactly what its label says, with one action per option |
 | `rules/subagent-model-and-effort.md` | Every subagent Claude starts gets a model and effort picked from a table by the kind of work: a small model for finding and reading, a mid-size one for summaries and routine edits, the largest only when the result has to match a full session. Claude decides whether a task needs subagents at all, and asks before more than 10 for one task, more than 5 on the largest model, or a test run that starts Claude sessions |
-| `rules/next-step-buttons.md` | Each button in the Claude desktop app's next-step box does exactly what its label says and nothing more, with one action per button: "Commit" commits, and opening a pull request waits for its own button once the commit is done. In the terminal, the same goes for the options of a question |
 
 Before and after, for a session asked to add a "clear finished" button to a to-do app:
 
@@ -49,10 +48,10 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install global
 1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all. Then `python --version` (`python3 --version` on macOS and Linux) shows the version.
 2. Tells you what each rule file changes (the table in [What It Does](#what-it-does)), and asks which you want: all of them, or only some.
 3. Shows you the import lines the install adds to `~/.claude/CLAUDE.md` (in [Install](#install) step 2) and asks whether to add them.
-4. Runs the install from `instructions/global-rules` (`python3` on macOS and Linux), with `--only` followed by the names of the files you chose, and checks it ends with **Setup complete** and that `~/.claude/CLAUDE.md` now holds one line per file. For example, all three (PowerShell, or bash with `python3` on macOS and Linux):
+4. Runs the install from `instructions/global-rules` (`python3` on macOS and Linux), with `--only` followed by the names of the files you chose, and checks it ends with **Setup complete** and that `~/.claude/CLAUDE.md` now holds one line per file. For example, both (PowerShell, or bash with `python3` on macOS and Linux):
 
    ```bash
-   python install.py --instructions --only decide-dont-ask subagent-model-and-effort next-step-buttons
+   python install.py --instructions --only decide-dont-ask subagent-model-and-effort
    ```
 
    or only the subagent rules: `python install.py --instructions --only subagent-model-and-effort`. Naming the files every time also works on a rerun, when you add or drop one later.
@@ -71,10 +70,9 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install global
      ```markdown
      @~/.claude/tools/global-rules/rules/decide-dont-ask.md
      @~/.claude/tools/global-rules/rules/subagent-model-and-effort.md
-     @~/.claude/tools/global-rules/rules/next-step-buttons.md
      ```
 
-     Claude Code reads each imported file as if its text were in `CLAUDE.md`. `--only` followed by one or more file names (such as `--only decide-dont-ask next-step-buttons`) adds just those lines. `--instructions` or `--no-instructions` answers the question ahead of time. With no terminal to ask in (as when Claude Code runs the install without either), it leaves them out and says how to add them.
+     Claude Code reads each imported file as if its text were in `CLAUDE.md`. `--only` followed by one or more file names (such as `--only decide-dont-ask`) adds just those lines. `--instructions` or `--no-instructions` answers the question ahead of time. With no terminal to ask in (as when Claude Code runs the install without either), it leaves them out and says how to add them.
    - saves what it installed to `~/.claude/tools/global-rules.install.json`
 3. Start a new Claude Code session.
 
@@ -84,7 +82,7 @@ The install is safe to rerun. It never adds a line twice, keeps the files you ch
 
 | Setting | What it does | Default | Example |
 |---|---|---|---|
-| `--only` | Which rule files to import, one or more names separated by spaces. It replaces the earlier choice, so use it to add or drop a file later | All of them on a first install; on a rerun, the ones already imported | `python install.py --only subagent-model-and-effort`, or `--only decide-dont-ask subagent-model-and-effort next-step-buttons` for all three |
+| `--only` | Which rule files to import, one or more names separated by spaces. It replaces the earlier choice, so use it to add or drop a file later | All of them on a first install; on a rerun, the ones already imported | `python install.py --only subagent-model-and-effort`, or `--only decide-dont-ask subagent-model-and-effort` for both |
 
 To change the rules themselves, see [Adding Your Own Cases](#adding-your-own-cases).
 
@@ -97,13 +95,12 @@ There's nothing to run once it's installed. You'll see the difference in what se
 - **A question it does need to ask** comes after the explanation: what it found and what each option changes, then the question.
 - **A search across a large codebase** goes to a subagent on the small model at low effort. Whether to use subagents, and how many up to 10, is Claude's call, even when you say "use subagents if it helps".
 - **A big fan-out or test run**, meaning more than 10 subagents for one task, more than 5 on the largest model, or any test or eval that starts Claude sessions, waits for your go-ahead first, since it can use a large share of a smaller plan's limits. Checks that start no sessions go ahead without asking.
-- **A "Commit" button** commits and nothing else. If a pull request or a deploy follows, it gets its own button in the next box, once the commit is done.
+- **A "Commit" option or button** commits and nothing else. If a pull request or a deploy follows, it's offered on its own once the commit is done.
 
 ## How It Works
 
-- `rules/decide-dont-ask.md` holds three sections: "Questions get answers, not action cards", "Decide, don't ask" and "Context first, question last". They're installed together, since the last one says how a question is asked once the second says one is needed.
+- `rules/decide-dont-ask.md` holds three sections: "Questions get answers, not action cards", "Decide, don't ask" and "Context first, question last". They're installed together, since the last one says how a question is asked once the second says one is needed, including that each option or button does only what its label says. That rule has no exceptions; to join two steps in one option (say, commit and push), add that as a case of your own, as [Adding Your Own Cases](#adding-your-own-cases) shows.
 - `rules/subagent-model-and-effort.md` holds the "Subagent model and effort" section and its table.
-- `rules/next-step-buttons.md` holds the "Next-step buttons do only what they say" section. It has no exceptions; to join two steps on one button (say, commit and push), add that as a case of your own, as [Adding Your Own Cases](#adding-your-own-cases) shows.
 - The rules mention the Claude desktop app's next-step box and session cards where they apply, and say what to do instead in the terminal.
 
 Everything the install adds points at `~/.claude/tools/global-rules`, never at the folder you installed from: the import lines in `~/.claude/CLAUDE.md`. Only `~/.claude/tools/global-rules` itself points at that folder (or holds a copy of it). The install also keeps a record of what it added, in `~/.claude/tools/global-rules.install.json`. A rerun reads it first and takes out anything the earlier install added that the new one doesn't, and `--remove` reads it to undo everything.
@@ -163,7 +160,7 @@ This removes everything the install added: the import lines in `~/.claude/CLAUDE
 |---|---|---|
 | Sessions still stop to ask about small choices | The session started before the install, or the import lines were left out | Start a new session. Check `~/.claude/CLAUDE.md` holds the lines; if not, rerun `python install.py --instructions` |
 | "left this tool's lines out" after the install | There was no terminal to ask in, as when Claude Code runs it | Rerun with `--instructions` |
-| `FAILED: no rule file called ...` | The name after `--only` isn't one of the rule files | Use `decide-dont-ask`, `subagent-model-and-effort` or `next-step-buttons` |
+| `FAILED: no rule file called ...` | The name after `--only` isn't one of the rule files | Use `decide-dont-ask` or `subagent-model-and-effort` |
 | Claude asks about something you'd rather it decided | Your own instructions or the conversation say to consult you more, which wins over these rules, or the choice falls in one of the four cases | Say so in the conversation, or add a case of your own as [Adding Your Own Cases](#adding-your-own-cases) shows |
 | `FAILED: ~/.claude/tools/global-rules exists but isn't this tool` | Something else is in that folder | Move it elsewhere, then rerun |
 
@@ -173,6 +170,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.0.0: `rules/next-step-buttons.md` is gone: its rules are one bullet in the "Context first, question last" section of `rules/decide-dont-ask.md` (each option or next-step button does exactly what its label says, one action per option, separate questions for separate changes). Most of the file was about the desktop app's next-step box; the bullet keeps what applies to every question. **To do:** after `git pull`, rerun `python install.py` from this folder, which takes the old import line out of `~/.claude/CLAUDE.md` (and adds `decide-dont-ask` if you had only the buttons file). Until then that line points at a file that no longer exists. `--only next-step-buttons` still works and installs `decide-dont-ask`.
 - 1.5.0: Two exceptions in case 2 of "Decide, don't ask", where sessions asked though you'd want them to go ahead: one short session on a small model to check a fact (a probe costing a cent or so) isn't a test run, and installing the tools the project's own tool manifest already lists (a `rokit.toml`, `package.json` or similar) isn't installing outside the project. The subagent rule's test-run line points to the probe exception. Nothing to do: `git pull` picks it up.
 - 1.4.0: "Questions get answers, not action cards" now covers proposals: when you ask for one, the session sends it in the reply and stops, with no question or button asking whether to apply it. Nothing to do: `git pull` picks it up.
 - 1.3.0: The subagent rule now starts with when subagents help, says whether to use any is the session's call ("use subagents if it helps" doesn't require them), and drops "fewer subagents save more than cheaper ones", which made sessions avoid them for everyday work. The limit is now a hard line: up to 10 subagents for one task, at most 5 on the largest model, are the session's call, and more than that, or any test or eval that starts Claude sessions, needs your go-ahead. Case 2 of "Decide, don't ask" says the same, in place of "dozens of sessions or subagents". Nothing to do: `git pull` picks it up.

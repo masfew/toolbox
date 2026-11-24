@@ -32,5 +32,6 @@ Whenever you ask the user something (a question tool such as `AskUserQuestion`, 
 
 - Write the context in the reply text first, in the same message, before the tool call that asks: what you found, what each option would change, and the answer to anything they just asked. The question always comes at the very end.
 - A question card holds only its short text and button labels. Never rely on those, or on the next-step box's recap, to carry the explanation.
+- **Each option does one thing.** Picking an option, or a next-step button in the desktop app (whose message the user never sees), does exactly what its label says and nothing it doesn't show. Changes that affect different behaviours get separate questions even when they fix the same problem, and when more work naturally follows (commit, then a pull request), offer only the first step.
 - Nothing written after a question shows until the user answers it. So never say "below" or "explained below" about text that would come after a question.
 - With no question tool or box (in the terminal, or mid-turn), number the questions at the end of the reply, each with its options and your recommendation, so the user can answer "1 yes, 2 B".
