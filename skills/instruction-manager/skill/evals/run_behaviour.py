@@ -345,7 +345,8 @@ def grade_changed_description(calls, texts, final, root, cfg, extra):
     checked = any("check_skill.py" in cmd_of(c) and "release-notes" in cmd_of(c) for c in pre)
     dry = any("run_triggers" in cmd_of(c) and "--dry-run" in cmd_of(c) for c in pre)
     runs = real_trigger_runs(calls)
-    recommended = bool(seg and "Recommended" in seg["standard"] and "Recommended" not in seg["quick"])
+    # Case doesn't matter: "Standard (recommended)" marks the recommendation as well as the label form.
+    recommended = bool(seg and "recommended" in seg["standard"].lower() and "recommended" not in seg["quick"].lower())
     return [
         (checked, "ran check_skill.py" if checked else "no check_skill.py on release-notes"),
         (dry, "ran --dry-run" if dry else "no --dry-run before asking"),

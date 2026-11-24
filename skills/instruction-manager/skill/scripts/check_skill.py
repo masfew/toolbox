@@ -462,6 +462,13 @@ def check_skill(folder, qv, dups, show_info):
                     "since a file found that way may be read only in part")
     if (folder / "history").is_dir() and "history" not in kept and "history/" not in body:
         add("WARN", "history/ exists but SKILL.md doesn't say it's kept on purpose")
+    # House style, Folder layout: SKILL.md is the only file at the top of the skill folder.
+    loose = sorted(p.name for p in folder.iterdir()
+                   if p.is_file() and p.name != "SKILL.md" and not p.name.upper().startswith("LICENSE")
+                   and not p.name.startswith("."))
+    if loose:
+        add("WARN", f"{', '.join(loose)} beside SKILL.md: move {'it' if len(loose) == 1 else 'them'} into "
+                    "references/ (read when needed), scripts/ (run), assets/ (copied or published) or evals/ (tests)")
 
     if dups is not None:
         for src, s, j in dups.matches(name, without_improving(body)):

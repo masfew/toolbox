@@ -1,6 +1,6 @@
 # Tuning a description
 
-Read this when a description has to be written or fixed against its trigger tests: New skill step 7, a lower score in Any change step 6, or an audit's description fixes. Ask how to test once, before the first run of the task ([test-tiers.md](test-tiers.md)); the answer covers every run below.
+Read this when a description has to be written or fixed against its trigger tests: New skill step 5, a lower score in Any change step 5, or an audit's description fixes. Ask how to test once, before the first run of the task ([test-tiers.md](test-tiers.md)); the answer covers every run below.
 
 1. **Run the whole `evals/triggers.json`** against the current description. Each failed prompt shows what loaded instead.
 2. **Hold some prompts out.** Copy about 40% of them, should-load and near-miss in the same proportion as the whole file, to a scratch file, and the rest to another. Tune only on the rest (`--eval-set <the rest>`), and don't read why a held-out prompt failed. A description fitted to the prompts it was tuned on passes them and generalises to nothing; the held-out ones show whether it generalises.

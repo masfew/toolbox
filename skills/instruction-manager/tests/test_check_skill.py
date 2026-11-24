@@ -114,5 +114,22 @@ class SlashOnly(unittest.TestCase):
         self.assertFalse(run_triggers.slash_only(skill("normal-rt", 'description: "x"') / "SKILL.md"))
 
 
+class FolderLayout(unittest.TestCase):
+    def test_file_beside_skill_md_is_flagged(self):
+        f = skill("loose", 'description: "Checks things."')
+        write(f / "guide.md", "# Guide\n")
+        write(f / "tool.py", "print(1)\n")
+        warns = [w for w in messages(report(f), "WARN") if "beside SKILL.md" in w]
+        self.assertEqual(len(warns), 1, warns)
+        self.assertIn("guide.md, tool.py", warns[0])
+
+    def test_subfolders_and_license_are_fine(self):
+        f = skill("tidy", 'description: "Checks things."')
+        write(f / "references" / "guide.md", "# Guide\n")
+        write(f / "scripts" / "tool.py", "print(1)\n")
+        write(f / "LICENSE.txt", "MIT\n")
+        self.assertFalse([w for w in messages(report(f), "WARN") if "beside SKILL.md" in w])
+
+
 if __name__ == "__main__":
     unittest.main()

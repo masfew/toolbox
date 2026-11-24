@@ -1,6 +1,6 @@
 # instruction-manager
 
-Version 1.5.0. See the [changes](#changes) at the end.
+Version 1.6.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -113,11 +113,12 @@ python -I ~/.claude/skills/instruction-manager/scripts/run_triggers.py ~/.claude
 
 | File | What it does |
 |---|---|
-| `skill/SKILL.md` | The new-skill and any-change workflows for skills, and the rule to ask before any test that starts sessions |
-| `skill/references/house-style.md` | The rules every skill follows: what goes in a description (only what makes the skill load when it should), word budgets, layout, wording, one home per rule, links, the test files |
+| `skill/SKILL.md` | Which file to read for each request, the new-skill and any-change workflows for skills, and the rule to ask before any test that starts sessions |
+| `skill/references/house-style.md` | The rules every skill follows: the folder layout (`SKILL.md` alone, with `references/`, `scripts/`, `assets/` and `evals/`), what goes in a description (only what makes the skill load when it should), word budgets, layout, wording, one home per rule, links, the test files |
 | `skill/references/tuning.md` | Tuning a description against its trigger tests, with held-out prompts and a trimming pass |
 | `skill/references/instruction-files.md` | The rules and change workflow for global instructions, project `CLAUDE.md` files and READMEs sessions follow |
 | `skill/references/audit.md` | Auditing one skill, all of them, or instruction files |
+| `skill/references/config.md` | The config file's keys and defaults, and what the edit guard does |
 | `skill/references/test-tiers.md` | The Quick, Standard and Full test tiers, and the question the skill asks before running tests |
 | `skill/scripts/check_skill.py` | Fast checks for skills, no sessions started: frontmatter, sizes, links, copied sentences, test files |
 | `skill/scripts/check_instructions.py` | Fast checks for instruction files: size with imports against the budget, broken imports, links and paths, skill names that aren't installed, copied sentences, and which tested sections changed. `--all` finds every project `CLAUDE.md` from the folders your sessions have run in |
@@ -193,6 +194,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.6.0: The house style now follows the shape of the trimmed better-plans 2.4.0. A skill folder holds `SKILL.md` alone, with `references/`, `scripts/`, `assets/` and `evals/` beside it, and `check_skill.py` warns about any other file at the top. `SKILL.md` gains a Conventions paragraph that names a repeated call or format once, and can route several kinds of request through a table that gives each one's first calls. Traps sit in the step where a session meets them, and rare cases go in a reference file. The Wording section adds: say it once, let the scripts' own output speak, keep a command's reason to a clause, decide from state instead of adding questions, and no fixed report shapes. Descriptions can carry a load note for a deferred tool, and each listed trigger is written as something done to the skill's own object. Audits go through `SKILL.md` one step at a time and show a rewrite as rendered Markdown. This skill's own `SKILL.md` is restructured the same way: 1,913 to 1,105 words, with the config table moved to `references/config.md`.
 - 1.5.0: A skill's Improving This Skill section now holds only growth rules that are the skill's own: a home project, a test every change must pass, or where new material goes when One home per rule doesn't settle it. A skill with none leaves the section out. The general points every skill used to repeat (changes go through instruction-manager, which rules belong in a project's `CLAUDE.md`) live only in the house style, so they no longer cost words on every load or drift apart between skills. An older skill's boilerplate is trimmed the next time it's edited or audited.
 - 1.4.2: Fix: `check_skill.py` no longer reports an error for frontmatter keys Claude Code reads but skill-creator's `quick_validate.py` doesn't know, such as `disable-model-invocation`, `argument-hint`, `model` and `user-invocable`. It hides them from the validator, which still checks everything else. A slash-only skill (`disable-model-invocation: true`) skips the description length checks and the missing trigger tests warning, since no prompt can load it, and `run_triggers.py` refuses to run tests on one. New offline tests: `tests/test_check_skill.py`.
 - 1.4.1: Fix: trigger tests no longer count a skill as not loading when the session looks something up first. The Artifact tool now tells sessions to call its quickstart before loading any skill for a new page, and sessions often read or search files before loading the skill the work needs, so every page-making skill was scoring as if it never loaded. A run now ends at the first tool call that does work; reading and searching files and the Artifact tool's quickstart, list and read don't end it. Scores saved before this version may be lower than a rerun's.
