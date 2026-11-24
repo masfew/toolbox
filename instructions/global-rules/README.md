@@ -1,6 +1,6 @@
 # global-rules
 
-Version 2.0.0. See the [changes](#changes) at the end.
+Version 2.0.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -11,7 +11,7 @@ There are two rule files. Install either or both:
 | File | What it changes |
 |---|---|
 | `rules/decide-dont-ask.md` | Claude makes implementation choices itself and names them in the reply, and asks only when you'd notice the result, it reaches outside the project (including a run that would use a large share of your plan's usage limits), it could be unsafe, or it isn't confident. A question you ask gets an answer rather than an offer to do something. When it does ask, the context comes first and the question last, and each option (or next-step button in the desktop app) does exactly what its label says, with one action per option |
-| `rules/subagent-model-and-effort.md` | Every subagent Claude starts gets a model and effort picked from a table by the kind of work: a small model for finding and reading, a mid-size one for summaries and routine edits, the largest only when the result has to match a full session. Claude decides whether a task needs subagents at all, and asks before more than 10 for one task, more than 5 on the largest model, or a test run that starts Claude sessions |
+| `rules/subagent-model-and-effort.md` | Every subagent Claude starts gets a model and effort picked from a table by the kind of work: a small model for finding and reading, a mid-size one for summaries and routine edits, the largest only when the result has to match a full session. Claude decides whether a task needs subagents at all, and asks before more than 10 for one task or more than 5 on the largest model. Asking before a test run that starts Claude sessions is in `decide-dont-ask.md` |
 
 Before and after, for a session asked to add a "clear finished" button to a to-do app:
 
@@ -170,6 +170,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.0.1: The subagent rule is shorter, with no change to which model and effort a subagent gets. It drops what Claude Code's own Agent tool description now says (when subagents help, and doing small lookups directly), and leaves asking before a test run that starts Claude sessions to case 2 of "Decide, don't ask", which already had it. It keeps the 10 and 5 subagent limit, so it still works installed on its own. Case 2 now says a test run that starts Claude sessions needs a go-ahead "even a cheap one on a small model", since without the subagent rule repeating it, sessions sometimes ran a small Haiku test suite unasked. Nothing to do: `git pull` picks it up.
 - 2.0.0: `rules/next-step-buttons.md` is gone: its rules are one bullet in the "Context first, question last" section of `rules/decide-dont-ask.md` (each option or next-step button does exactly what its label says, one action per option, separate questions for separate changes). Most of the file was about the desktop app's next-step box; the bullet keeps what applies to every question. **To do:** after `git pull`, rerun `python install.py` from this folder, which takes the old import line out of `~/.claude/CLAUDE.md` (and adds `decide-dont-ask` if you had only the buttons file). Until then that line points at a file that no longer exists. `--only next-step-buttons` still works and installs `decide-dont-ask`.
 - 1.5.0: Two exceptions in case 2 of "Decide, don't ask", where sessions asked though you'd want them to go ahead: one short session on a small model to check a fact (a probe costing a cent or so) isn't a test run, and installing the tools the project's own tool manifest already lists (a `rokit.toml`, `package.json` or similar) isn't installing outside the project. The subagent rule's test-run line points to the probe exception. Nothing to do: `git pull` picks it up.
 - 1.4.0: "Questions get answers, not action cards" now covers proposals: when you ask for one, the session sends it in the reply and stops, with no question or button asking whether to apply it. Nothing to do: `git pull` picks it up.
