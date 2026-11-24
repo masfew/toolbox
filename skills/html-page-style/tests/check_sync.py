@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Checks that artifact-style's house.css and the better-plans skill's plan.css use
-the same colour and font tokens, so plan pages and other Artifact pages look
+Checks that html-page-style's house.css and the better-plans skill's plan.css use
+the same colour and font tokens, so plan pages and other pages look
 like one set. Only useful when better-plans is installed too.
 
     python -I check_sync.py                 find plan.css by itself
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-HOUSE = HERE.parent / "skill" / "house.css"
+HOUSE = HERE.parent / "skill" / "assets" / "house.css"
 PLAN_PLACES = [
     HERE.parent.parent / "better-plans" / "skill" / "assets" / "plan.css",
     Path.home() / ".claude" / "tools" / "better-plans" / "skill" / "assets" / "plan.css",

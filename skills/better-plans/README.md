@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.4.0. See the [changes](#changes) at the end.
+Version 2.4.1. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -18,7 +18,7 @@ Every plan page has the same parts:
 
 - Claude Code with Artifacts (the desktop app or claude.ai/code), signed in to an account that can publish Artifact pages with a page database. Plan pages declare the `db`, `user` and `artifact` capabilities; an account without them can't publish a plan.
 - Python 3.9 or newer, for the installer and the skill's scripts
-- Optional: [artifact-style](https://github.com/masfew/toolbox#artifact-style), which gives every other Artifact page the same look as plan pages. The install offers it.
+- Optional: [html-page-style](https://github.com/masfew/toolbox#html-page-style), which gives every other page the same look as plan pages. The install offers it.
 - Optional, for changing the skill: Node.js, which two of the tests use
 - Tested on Windows 11. macOS and Linux: untested.
 
@@ -31,7 +31,7 @@ cd skills/better-plans
 python install.py
 ```
 
-It asks whether to add a few lines to `~/.claude/CLAUDE.md` (say yes, see [Install](#install)), then whether to install artifact-style too, and ends with **Setup complete**. Start a new Claude Code session.
+It asks whether to add a few lines to `~/.claude/CLAUDE.md` (say yes, see [Install](#install)), then whether to install html-page-style too, and ends with **Setup complete**. Start a new Claude Code session.
 
 ## Install with Claude Code
 
@@ -42,9 +42,9 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
 1. Checks Python 3.9 or newer is installed, and asks before installing it if it's missing, with the command from [Install](#install) step 1. On Windows, run `Get-Command python` (PowerShell) first: if it points into `WindowsApps`, `python` may be the Python install manager, whose first run downloads and installs Python, so tell the person and wait for a yes before running `python` at all.
 2. Asks you two questions with its question tool, before running anything:
    - whether to add the lines in [Install](#install) step 2 to `~/.claude/CLAUDE.md`, which make every session use the skill for plans
-   - whether to install artifact-style too, the matching look for every other Artifact page (plans look the same either way)
-3. Runs `python install.py` from `skills/better-plans` with your answers as flags: `--instructions` or `--no-instructions`, and `--with-artifact-style` or `--no-artifact-style` (`python3` on macOS and Linux). For example, `python install.py --instructions --with-artifact-style`.
-4. Checks it ends with **Setup complete**, that `~/.claude/skills/better-plans/SKILL.md` now exists. If you chose artifact-style, also that `~/.claude/skills/artifact-style/SKILL.md` exists.
+   - whether to install html-page-style too, the matching look for every other page (plans look the same either way)
+3. Runs `python install.py` from `skills/better-plans` with your answers as flags: `--instructions` or `--no-instructions`, and `--with-html-page-style` or `--no-html-page-style` (`python3` on macOS and Linux). For example, `python install.py --instructions --with-html-page-style`.
+4. Checks it ends with **Setup complete**, that `~/.claude/skills/better-plans/SKILL.md` now exists. If you chose html-page-style, also that `~/.claude/skills/html-page-style/SKILL.md` exists.
 
 **You do:**
 
@@ -68,7 +68,7 @@ Say to Claude Code: *"Clone https://github.com/masfew/toolbox and install better
 
      They make the skill apply to every plan you ask for, plan mode included, rather than only when its description happens to match what you asked. A page you ask for without calling it a plan (a strategy, proposal or draft to review) stays an ordinary page. `--instructions` or `--no-instructions` answers ahead of time. With no terminal to ask in (as when Claude Code runs the install without either), it leaves them out and says how to add them.
    - saves what it installed to `~/.claude/tools/better-plans.install.json`
-   - asks whether to install [artifact-style](https://github.com/masfew/toolbox#artifact-style) too, if it's in the same clone and not installed yet. Yes runs artifact-style's own `install.py`, which asks about its own `CLAUDE.md` lines. `--with-artifact-style` or `--no-artifact-style` answers ahead of time; with no terminal and neither flag, it leaves artifact-style out and says how to add it.
+   - asks whether to install [html-page-style](https://github.com/masfew/toolbox#html-page-style) too, if it's in the same clone and not installed yet. Yes runs html-page-style's own `install.py`, which asks about its own `CLAUDE.md` lines. `--with-html-page-style` or `--no-html-page-style` answers ahead of time; with no terminal and neither flag, it leaves html-page-style out and says how to add it.
 3. Start a new Claude Code session.
 
 The install is safe to rerun. It never adds an entry twice, and it leaves the rest of `CLAUDE.md` alone, backing it up before any change. A rerun over an install from before 2.0.0 also takes the old light plans hook out of `~/.claude/settings.json`, backing that file up first.
@@ -145,7 +145,7 @@ python install.py --remove
 
 If you installed from a release zip and deleted the unzipped folder, run the same command from `~/.claude/tools/better-plans` instead.
 
-This removes everything the install added: the skill link, the lines in `~/.claude/CLAUDE.md` (and the light plans hook in `~/.claude/settings.json`, for an install from before 2.0.0), `~/.claude/tools/better-plans` and its install record, even if the install was made from a different folder. Files are backed up before they're changed, and the `CLAUDE.md.bak-<date>-<time>` and `settings.json.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them. It leaves artifact-style installed; remove that with its own `install.py --remove`. Your published plans stay as they are.
+This removes everything the install added: the skill link, the lines in `~/.claude/CLAUDE.md` (and the light plans hook in `~/.claude/settings.json`, for an install from before 2.0.0), `~/.claude/tools/better-plans` and its install record, even if the install was made from a different folder. Files are backed up before they're changed, and the `CLAUDE.md.bak-<date>-<time>` and `settings.json.bak-<date>-<time>` backups it and the install made stay in place; delete them yourself if you don't need them. It leaves html-page-style installed; remove that with its own `install.py --remove`. Your published plans stay as they are.
 
 ## Troubleshooting
 
@@ -164,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.4.1: The companion look is now called html-page-style (it was artifact-style), so the install offers it by its new name and takes `--with-html-page-style` and `--no-html-page-style`; the old flags still work. Nothing to rerun for better-plans itself.
 - 2.4.0: The skill's own instructions are about a third shorter (2,730 to 1,760 words), so each plan request loads less, and its folder is tidier: `SKILL.md` sits alone, with the scripts in `skill/scripts/`, the template, `plan.css` and `plan.js` in `skill/assets/` and the other instructions in `skill/references/`. When you add something to a plan without saying where, Claude now decides from the plan's progress (the core plan until work starts, a future idea after) instead of sometimes asking. Plans and their pages are unchanged. **Rerun `python install.py` after updating** only if you copied the skill rather than linking it.
 - 2.3.1: Status updates no longer land on the wrong planned feature. Planned features renumber when their status changes, so a feature number Claude read before one update could point at a different feature in the next. Claude now targets later updates by each step's fixed id, and the plan script reminds it to whenever an update changes a planned feature's status.
 - 2.3.0: The phases of the build plan now stay in the order they were written, whatever their status: a phase finished ahead of an earlier one, or one that's blocked or skipped, keeps its place and number. Only planned features in Future Ideas still sort themselves (done, in progress, not started, skipped) and renumber. Published plans get this the next time their look is refreshed: the first time you open one after that, the page saves a snapshot by itself to switch it on. Some phases the old sort already moved may stay where they are now; ask Claude to move one back if you want it in its written place.

@@ -44,6 +44,14 @@
   "should_trigger": true
  },
  {
+  "query": "write the dependency audit up as a standalone html report file i can open in my browser and email to the team",
+  "should_trigger": true
+ },
+ {
+  "query": "put the migration status on a local page in the sidebar so i can keep an eye on it: 14 of 20 tables moved, orders and invoices blocked on a lock",
+  "should_trigger": true
+ },
+ {
   "query": "make a plan for adding dark mode to quill notes",
   "should_trigger": false
  },
@@ -81,6 +89,10 @@
  },
  {
   "query": "fix the css in my website repo so the header stops overlapping on mobile",
+  "should_trigger": false
+ },
+ {
+  "query": "add a settings page to my react app with toggles for email and push notifications",
   "should_trigger": false
  }
 ]

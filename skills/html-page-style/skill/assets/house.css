@@ -1,4 +1,4 @@
-/* artifact-style: the user's house look for every hand-written Artifact page, published as house.css beside the page.
+/* html-page-style: the user's house look for every hand-written HTML page, published as house.css beside the page.
    Colours and fonts match better-plans' plan.css (tests/check_sync.py checks that), so plans and other pages look like one set.
    Change the look here, never in one page. Layout: one centred reading column - a header (eyebrow, title, lede), then sections. */
 :root {

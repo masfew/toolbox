@@ -1,6 +1,6 @@
 ---
 name: better-plans
-description: "Makes, reads and updates the user's plan pages. Use it whenever the user asks for a plan or roadmap by name, a plan-mode plan is approved, a brief says to read the plan, or the user wants something done to an existing plan: mark step statuses or outcomes, add steps or ideas, bring in the future ideas they accepted, rejected or reordered, build the phases they ticked, or save a snapshot of its page. Not for a strategy, proposal or draft page they didn't call a plan (artifact-style). If ArtifactData is deferred, load it with ToolSearch in the same message as this skill."
+description: "Makes, reads and updates the user's plan pages. Use it whenever the user asks for a plan or roadmap by name, a plan-mode plan is approved, a brief says to read the plan, or the user wants something done to an existing plan: mark step statuses or outcomes, add steps or ideas, bring in the future ideas they accepted, rejected or reordered, build the phases they ticked, or save a snapshot of its page. Not for a strategy, proposal or draft page they didn't call a plan (html-page-style). If ArtifactData is deferred, load it with ToolSearch in the same message as this skill."
 ---
 
 # Better plans

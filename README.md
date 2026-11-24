@@ -12,7 +12,7 @@ The tools are grouped by kind, and each kind has its own folder in the repo: `sk
 
 | Tool | What it does | Tested on |
 |---|---|---|
-| <a id="artifact-style"></a>[artifact-style](skills/artifact-style/) | Skill that gives every Artifact page Claude writes by hand (write-ups, handoffs, reports, runbooks, small tools) one shared look, soft greys, one blue accent, status colours and IBM Plex fonts in light and dark mode, instead of each session picking its own palette | Windows 11 (macOS and Linux untested) |
+| <a id="html-page-style"></a><a id="artifact-style"></a>[html-page-style](skills/html-page-style/) | Skill that gives every HTML page Claude writes by hand (Artifacts, local pages and standalone files: write-ups, handoffs, reports, runbooks, small tools) one shared look, soft greys, one blue accent, status colours and IBM Plex fonts in light and dark mode, instead of each session picking its own palette | Windows 11 (macOS and Linux untested) |
 | <a id="better-plans"></a>[better-plans](skills/better-plans/) | Skill that publishes every plan Claude writes as an Artifact page from one fixed template (overview, step cards, statuses, future idea cards you accept or reject) and updates the same page in place | Windows 11 (macOS and Linux untested) |
 
 ### Extensions

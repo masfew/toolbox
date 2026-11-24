@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-24",
+  "tier": "standard",
+  "description_sha256": "466d9eb04691c6eb28dce2e4715047333246df860e53e760374a4abaf2c0d328",
+  "description_chars": 869,
+  "model": "default",
+  "runs_per_query": 3,
+  "runs_made": 49,
+  "seconds": 75,
+  "passed": 23,
+  "total": 24,
+  "should_load_rate": 0.926,
+  "near_miss_rate": 0.0,
+  "failed": [
+    {
+      "query": "put the migration status on a local page in the sidebar so i can keep an eye on it: 14 of 20 tables moved, orders and invoices blocked on a lock",
+      "should_trigger": true,
+      "triggers": 1,
+      "runs": 3
+    }
+  ],
+  "tiers": {
+    "standard": {
+      "date": "2026-11-24",
+      "tier": "standard",
+      "description_sha256": "466d9eb04691c6eb28dce2e4715047333246df860e53e760374a4abaf2c0d328",
+      "description_chars": 869,
+      "model": "default",
+      "runs_per_query": 3,
+      "runs_made": 49,
+      "seconds": 75,
+      "passed": 23,
+      "total": 24,
+      "should_load_rate": 0.926,
+      "near_miss_rate": 0.0,
+      "failed": [
+        {
+          "query": "put the migration status on a local page in the sidebar so i can keep an eye on it: 14 of 20 tables moved, orders and invoices blocked on a lock",
+          "should_trigger": true,
+          "triggers": 1,
+          "runs": 3
+        }
+      ]
+    }
+  }
+}

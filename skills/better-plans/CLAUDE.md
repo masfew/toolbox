@@ -131,4 +131,4 @@ Added in 1.4.0 (25 Oct 2026). `building.md` is the procedure; `dbplan.py` (`buil
 
 ## Shared palette
 
-`plan.css`'s colour and font tokens are shared with artifact-style's `house.css` (`skills/artifact-style/skill/` in this repo), the look of every other Artifact page. Change both in the same edit, then run `python -I skills/artifact-style/tests/check_sync.py` from the repo's root, which fails when they differ. The `plan-css-sync` job in the `secret-scan` workflow runs it on every push.
+`plan.css`'s colour and font tokens are shared with html-page-style's `house.css` (`skills/html-page-style/skill/` in this repo), the look of every other page. Change both in the same edit, then run `python -I skills/html-page-style/tests/check_sync.py` from the repo's root, which fails when they differ. The `plan-css-sync` job in the `secret-scan` workflow runs it on every push.

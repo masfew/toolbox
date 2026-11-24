@@ -8,8 +8,9 @@ Installs the better-plans skill for Claude Code. Safe to rerun.
     python install.py --remove              undo everything the install added
     python install.py --instructions        add the CLAUDE.md lines without asking
     python install.py --no-instructions     leave the CLAUDE.md lines out (or take them out)
-    python install.py --with-artifact-style also install artifact-style, without asking
-    python install.py --no-artifact-style   don't install artifact-style, and don't ask
+    python install.py --with-html-page-style  also install html-page-style, without asking
+    python install.py --no-html-page-style    don't install html-page-style, and don't ask
+    (--with-artifact-style and --no-artifact-style, its old name, still work)
 
 What it does:
 1. Checks that Python is new enough.
@@ -29,10 +30,10 @@ What it does:
    to ask in (as when Claude Code runs the install) and neither flag, it leaves
    them out and prints the command that adds them.
 5. Saves what it installed to ~/.claude/tools/better-plans.install.json.
-6. Offers artifact-style, the matching look for every other Artifact page, if
-   it's in the same clone and not installed yet. --with-artifact-style and
-   --no-artifact-style answer ahead of time; with no terminal and neither flag,
-   it skips it and prints the command that adds it. Yes runs artifact-style's
+6. Offers html-page-style, the matching look for every other page, if
+   it's in the same clone and not installed yet. --with-html-page-style and
+   --no-html-page-style answer ahead of time; with no terminal and neither flag,
+   it skips it and prints the command that adds it. Yes runs html-page-style's
    own install.py, which --remove here leaves alone.
 
 On a rerun it reads that record first and takes out whatever the earlier
@@ -805,13 +806,13 @@ def print_human_steps():
             print(f"  {n}. {text}")
 
 
-# --- 10. The artifact-style companion --------------------------------------
+# --- 10. The html-page-style companion --------------------------------------
 
-COMPANION = "artifact-style"
+COMPANION = "html-page-style"
 
 
 def find_companion():
-    """artifact-style's install.py in the same clone, wherever its kind folder is, or None."""
+    """html-page-style's install.py in the same clone, wherever its kind folder is, or None."""
     root = next((d for d in TOOL_DIR.parents if (d / ".git").exists()), None)
     if root is None:
         return None
@@ -820,17 +821,17 @@ def find_companion():
 
 
 def ask_companion():
-    """Asks whether to install artifact-style too. Returns True or False, or None
+    """Asks whether to install html-page-style too. Returns True or False, or None
     when there's no terminal to ask in."""
     if not has_terminal():
         return None
-    print(f"\n{COMPANION} gives every other Artifact page (write-ups, reports, handoffs) the same look as")
+    print(f"\n{COMPANION} gives every other page (write-ups, reports, handoffs) the same look as")
     print("plan pages. Plans look the same either way.")
     return input(f"Also install {COMPANION}? [Y/n] ").strip().lower() not in ("n", "no")
 
 
 def offer_companion(choice, mode, instructions):
-    """Installs artifact-style when choice is True, asks when it's None and there's
+    """Installs html-page-style when choice is True, asks when it's None and there's
     a terminal, and otherwise says how to add it later."""
     if choice is False:
         return
@@ -846,7 +847,7 @@ def offer_companion(choice, mode, instructions):
         choice = ask_companion()
     if choice is None:
         print(f"\nLeft {COMPANION} out, since there was no terminal to ask in. To add it, rerun this with "
-              "--with-artifact-style.")
+              "--with-html-page-style.")
         return
     if not choice:
         return
@@ -929,7 +930,7 @@ def remove():
 
 
 def main():
-    # differs from the template: offers artifact-style after the install
+    # differs from the template: offers html-page-style after the install
     p = argparse.ArgumentParser(description=f"Install or remove {TOOL_NAME}.")
     action = p.add_mutually_exclusive_group()
     action.add_argument("--copy", action="store_const", const="copy", dest="action",
@@ -945,10 +946,10 @@ def main():
         choice.add_argument("--no-instructions", action="store_const", const=False, dest="instructions",
                             help=f"leave the tool's lines out of {CLAUDE_MD}, or take them out")
     companion = p.add_mutually_exclusive_group()
-    companion.add_argument("--with-artifact-style", action="store_const", const=True, dest="companion",
-                           help="also install artifact-style, without asking")
-    companion.add_argument("--no-artifact-style", action="store_const", const=False, dest="companion",
-                           help="don't install artifact-style, and don't ask")
+    companion.add_argument("--with-html-page-style", "--with-artifact-style", action="store_const", const=True, dest="companion",
+                           help="also install html-page-style, without asking")
+    companion.add_argument("--no-html-page-style", "--no-artifact-style", action="store_const", const=False, dest="companion",
+                           help="don't install html-page-style, and don't ask")
     args = p.parse_args()
     if os.environ.get(OUTSIDE_PACKAGE):  # the rerun outside the app's package: its output goes back through a file
         sys.stdout = sys.stderr = open(os.environ[OUTSIDE_PACKAGE], "w", encoding="utf-8", buffering=1)

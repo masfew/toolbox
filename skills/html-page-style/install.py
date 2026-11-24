@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Installs the artifact-style skill for Claude Code. Safe to rerun.
+Installs the html-page-style skill for Claude Code. Safe to rerun.
 
     python install.py                    install, or update an earlier install
     python install.py --copy             install a copy instead of a link
@@ -11,22 +11,24 @@ Installs the artifact-style skill for Claude Code. Safe to rerun.
 
 What it does:
 1. Checks that Python is new enough.
-2. Puts the tool at one fixed place, ~/.claude/tools/artifact-style, so nothing
+2. Puts the tool at one fixed place, ~/.claude/tools/html-page-style, so nothing
    else depends on where this folder is.
    - In a git clone it links there (a directory junction on Windows, a
      symlink elsewhere), so a `git pull` updates the tool straight away.
    - Anywhere else (an unzipped release) it copies this folder there, so this
      folder can be deleted afterwards.
    --copy or --link overrides the choice.
-3. Installs the skill as ~/.claude/skills/artifact-style, a link to the skill
-   folder in ~/.claude/tools/artifact-style where the system allows it, or a
+3. Installs the skill as ~/.claude/skills/html-page-style, a link to the skill
+   folder in ~/.claude/tools/html-page-style where the system allows it, or a
    copy if not.
-4. Adds two lines to ~/.claude/CLAUDE.md, between marker lines, telling every
-   session to load the skill before writing an Artifact page, after showing
+4. Adds four lines to ~/.claude/CLAUDE.md, between marker lines, telling every
+   session to load the skill before writing an HTML page, after showing
    them and asking. --instructions and --no-instructions answer ahead of
    time. With no terminal to ask in (as when Claude Code runs the install)
    and neither flag, it leaves them out and prints the command that adds them.
-5. Saves what it installed to ~/.claude/tools/artifact-style.install.json.
+5. Saves what it installed to ~/.claude/tools/html-page-style.install.json.
+6. Takes out an install made under the tool's old name, artifact-style (its
+   links, record and CLAUDE.md lines), keeping the answer about the lines.
 
 On a rerun it reads that record first and takes out whatever the earlier
 install added that this one doesn't, so a rerun from a moved or renamed
@@ -52,12 +54,12 @@ import time
 import uuid
 from pathlib import Path
 
-TOOL_NAME = "artifact-style"
+TOOL_NAME = "html-page-style"
 MIN_PYTHON = (3, 9)
 
 # Files and folders to install: path in this folder -> path under ~/.claude.
 # Example: {"my-style.md": "output-styles/my-style.md", "skill": "skills/my-skill"}
-FILES = {"skill": "skills/artifact-style"}
+FILES = {"skill": "skills/html-page-style"}
 
 # Hooks to add to settings.json: (event, matcher or None, command).
 # {tool} in the command becomes ~/.claude/tools/<tool-name> as a full path, so
@@ -83,8 +85,9 @@ NEEDS_REAL_APPDATA = False
 # between marker lines. Keep it to a few lines that say when to use the tool.
 # Example: "- Before writing any plan, load the example-tool skill."
 INSTRUCTIONS = (
-    "- Before writing any HTML Artifact page by hand that isn't a plan made with better-plans,\n"
-    "  load the artifact-style skill along with artifact-design, and follow it for every colour and font.\n"
+    "- Before writing any HTML page by hand to be viewed (an Artifact, a local page or a standalone file)\n"
+    "  that isn't a plan made with better-plans, load the html-page-style skill (and artifact-design for an\n"
+    "  Artifact), and follow it for every colour and font.\n"
     "  A strategy, proposal or draft is one of these pages unless the user asked for it as a plan."
 )
 
@@ -787,6 +790,39 @@ def write_record(mode, files, settings_created, startup, instructions, claude_md
 
 # --- 9. Steps for the person -----------------------------------------------
 
+# differs from the template: takes out an install made under the old name.
+OLD_NAME = "artifact-style"
+OLD_START, OLD_END = f"<!-- {OLD_NAME}: start", f"<!-- {OLD_NAME}: end -->"
+
+
+def old_name_block(text):
+    """The (start, end) of the old name's CLAUDE.md block in text, or None."""
+    start = text.find(OLD_START)
+    end = text.find(OLD_END, start)
+    return (start, end + len(OLD_END)) if start >= 0 and end >= 0 else None
+
+
+def remove_old_name():
+    """Removes the artifact-style skill link, tool link, record and CLAUDE.md block, where they exist."""
+    removed = []
+    for path in (CLAUDE_DIR / "skills" / OLD_NAME, TOOLS_DIR / OLD_NAME):
+        # A link, or a copy an artifact-style install made; anything else there is left alone.
+        if is_link(path) or (path / "SKILL.md").is_file() or (path / "skill" / "SKILL.md").is_file():
+            remove_path(path)
+            removed.append(str(path))
+    old_record = TOOLS_DIR / f"{OLD_NAME}.install.json"
+    if old_record.exists():
+        old_record.unlink()
+        removed.append(str(old_record))
+    text = read_claude_md()
+    span = old_name_block(text)
+    if span:
+        write_claude_md(drop_block(text, span))
+        removed.append(f"its lines in {CLAUDE_MD}")
+    if removed:
+        print(f"took out the install made under the old name, {OLD_NAME}: " + ", ".join(removed))
+
+
 def print_human_steps():
     if HUMAN_STEPS:
         print("\nStill to do yourself, one at a time:")
@@ -797,6 +833,7 @@ def print_human_steps():
 # --- Install and remove ----------------------------------------------------
 
 def install(mode, instructions=None):
+    # differs from the template: takes out an install made under the old name, artifact-style
     if not is_link(STABLE_DIR) and same_path(os.path.realpath(STABLE_DIR), TOOL_DIR):
         fail(f"this is the installed copy at {STABLE_DIR}. Run install.py from the tool's own "
              "folder (a clone or an unzipped release) instead. To uninstall, run it here with --remove.")
@@ -810,6 +847,7 @@ def install(mode, instructions=None):
         stop_processes()  # a running copy would keep its files and folder in use
 
     mode = install_stable_dir(mode)
+    remove_old_name()
     old_files = {f["path"]: f for f in (old or {}).get("files", [])}
     files = []
     for rel_src, rel_dst in FILES.items():
@@ -866,6 +904,7 @@ def remove():
 
 
 def main():
+    # differs from the template: keeps the old name's answer about the CLAUDE.md lines
     p = argparse.ArgumentParser(description=f"Install or remove {TOOL_NAME}.")
     action = p.add_mutually_exclusive_group()
     action.add_argument("--copy", action="store_const", const="copy", dest="action",
@@ -884,6 +923,8 @@ def main():
     if os.environ.get(OUTSIDE_PACKAGE):  # the rerun outside the app's package: its output goes back through a file
         sys.stdout = sys.stderr = open(os.environ[OUTSIDE_PACKAGE], "w", encoding="utf-8", buffering=1)
     instructions = getattr(args, "instructions", None)
+    if args.action != "remove" and instructions is None and old_name_block(read_claude_md()):
+        instructions = True  # the old name's install had the lines
     if args.action != "remove" and INSTRUCTIONS and instructions is None and not find_block(read_claude_md()):
         instructions = ask_instructions()  # asked here, since the rerun below has no terminal
 
