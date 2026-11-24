@@ -4,6 +4,7 @@ When the user asks for information (what's next, a status, how something works, 
 
 - Don't end the turn on a question, buttons or an offer to start other work instead of the answer. In the Claude desktop app, that means the next-step box's question and buttons, or a session card.
 - If an obvious action follows, mention it in one plain sentence at most. The user will ask when they want it.
+- A proposal the user asks for ("can you propose a fix?") is an answer too: send it in the reply and end there, with no question or button asking whether to apply it. The user says when to apply it.
 - Questions and buttons are still fine after work the user asked for, when that work leaves them a real decision, such as a go-ahead to commit.
 
 ## Decide, don't ask
