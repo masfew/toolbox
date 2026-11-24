@@ -8,13 +8,6 @@ Each tool lives in its own folder, works on its own, and has a README that cover
 
 The tools are grouped by kind, and each kind has its own folder in the repo: `skills/`, `instructions/`, `extensions/` and `apps/`. A folder is only there once it holds a tool.
 
-### Skills
-
-| Tool | What it does | Tested on |
-|---|---|---|
-| <a id="html-page-style"></a><a id="artifact-style"></a>[html-page-style](skills/html-page-style/) | Skill that gives every HTML page Claude writes by hand (Artifacts, local pages and standalone files: write-ups, handoffs, reports, runbooks, small tools) one shared look, soft greys, one blue accent, status colours and IBM Plex fonts in light and dark mode, instead of each session picking its own palette | Windows 11 (macOS and Linux untested) |
-| <a id="better-plans"></a>[better-plans](skills/better-plans/) | Skill that publishes every plan Claude writes as an Artifact page from one fixed template (overview, step cards, statuses, future idea cards you accept or reject) and updates the same page in place | Windows 11 (macOS and Linux untested) |
-
 ### Extensions
 
 Extensions add to an app you already use, which runs them for you: Claude Code or another program. For Claude Code they're mods, plugins that change its own interface or behaviour and install with one command and no clone, as [Installing a Mod](#installing-a-mod) says, or hooks, programs it runs on its own events (such as a session finishing or asking a question) that their installer adds to your `~/.claude/settings.json`.

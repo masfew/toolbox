@@ -1,8 +1,0 @@
-{
-  "desc": "Timers that start from a recipe step and ring even when the recipe is closed.",
-  "feature": "cooking-timers",
-  "kind": "phase",
-  "name": "Cooking Timers",
-  "short": "Cooking Timers",
-  "sort": 3000
-}
