@@ -31,7 +31,7 @@ Instructions are text every Claude Code session follows: rules their installer a
 | Tool | What it does | Tested on |
 |---|---|---|
 | <a id="get-to-the-point"></a>[get-to-the-point](instructions/get-to-the-point/) | Output style that makes every reply quick to read: what matters first, plain words, no play-by-play, technical depth only when it helps, and numbered rules you can point a reply at ("point 13"). Built for running several sessions side by side | Windows 11 (macOS and Linux untested) |
-| <a id="global-rules"></a>[global-rules](instructions/global-rules/) | Rules you can add one file at a time: sessions make implementation choices themselves and ask only about what you'd notice, what reaches outside the project, what would use a large share of your plan's limits or what could be unsafe, every subagent gets a model and effort matched to its work, and each question option or next-step button does only what its label says | Windows 11 (macOS and Linux untested) |
+| <a id="global-rules"></a>[global-rules](instructions/global-rules/) | A rule for every session: each subagent runs on a model and effort matched to its work (a small model for finding and reading, the largest only when needed), and big fan-outs or test runs wait for your go-ahead | Windows 11 (macOS and Linux untested) |
 
 ### Apps
 

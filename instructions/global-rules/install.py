@@ -10,9 +10,8 @@ Installs the global-rules instructions for Claude Code. Safe to rerun.
     python install.py --instructions     add the import lines without asking
     python install.py --no-instructions  leave the import lines out (or take them out)
 
-The rule files, in the rules folder: decide-dont-ask and subagent-model-and-effort.
-next-step-buttons was folded into decide-dont-ask in 2.0.0; a rerun swaps its
-import line for decide-dont-ask's.
+The rule file, in the rules folder: subagent-model-and-effort. decide-dont-ask
+and next-step-buttons were removed in 3.0.0; a rerun takes out their import lines.
 
 What it does:
 1. Checks that Python is new enough.
@@ -88,10 +87,10 @@ NEEDS_REAL_APPDATA = False
 INSTRUCTIONS = ""  # set in main() from the rule files chosen
 
 # The rule files in the rules folder, in the order their import lines go in.
-RULES = ["decide-dont-ask", "subagent-model-and-effort"]
-# Rule files that were folded into another, and where their rules went. A rerun replaces
-# a retired file's import line with its new home's, and --only accepts the old name.
-RETIRED = {"next-step-buttons": "decide-dont-ask"}
+RULES = ["subagent-model-and-effort"]
+# Rule files that were removed, with the version that removed them. A rerun takes out their
+# import lines, and --only skips them with a note (or stops, when they're all it names).
+REMOVED = {"decide-dont-ask": "3.0.0", "next-step-buttons": "3.0.0"}
 
 # Steps only the person can do, listed after "Setup complete": accounts,
 # secrets typed into a hidden prompt, clicks in other apps. Keep each one a
@@ -874,14 +873,22 @@ def import_line(name):
     return f"@~/.claude/tools/{TOOL_NAME}/rules/{name}.md"
 
 
-def chosen_rules(only):
+def removed_note(names):
+    return f"{', '.join(names)} {'was' if len(names) == 1 else 'were'} removed from {TOOL_NAME} in {REMOVED[names[0]]}"
+
+
+def chosen_rules(only, removing=False):
     """The rule files to import: --only's, else the ones already in CLAUDE.md, else all.
-    A retired file's name stands for the file its rules moved into."""
+    Removed files are left out, with a note; --remove doesn't need a choice."""
+    if removing:
+        return list(RULES)
     if only:
-        for name in only:
-            if name in RETIRED:
-                print(f"note: {name} was folded into {RETIRED[name]} in 2.0.0, so {RETIRED[name]} is installed in its place")
-        only = [RETIRED.get(name, name) for name in only]
+        gone = [name for name in only if name in REMOVED]
+        only = [name for name in only if name not in REMOVED]
+        if gone and not only:
+            fail(f"{removed_note(gone)}. The rule file left is {', '.join(RULES)}.")
+        if gone:
+            print(f"note: {removed_note(gone)}, so only {', '.join(only)} is installed")
         unknown = [name for name in only if name not in RULES]
         if unknown:
             fail(f"no rule file called {', '.join(unknown)}. The rule files are: {', '.join(RULES)}.")
@@ -889,8 +896,14 @@ def chosen_rules(only):
     span = find_block(read_claude_md())
     if span:
         block = read_claude_md()[span[0]:span[1]]
-        had = {RETIRED.get(name, name) for name in [*RULES, *RETIRED] if import_line(name) in block}
-        kept = [name for name in RULES if name in had]
+        kept = [name for name in RULES if import_line(name) in block]
+        gone = [name for name in REMOVED if import_line(name) in block]
+        if gone and not kept:
+            fail(f"your install imported only rule files that are gone: {removed_note(gone)}. "
+                 f"Run `python install.py --remove` to take {TOOL_NAME} out, or "
+                 f"`python install.py --only {' '.join(RULES)}` to keep what's left.")
+        if gone:
+            print(f"note: taking out the import lines for {', '.join(gone)}, removed from {TOOL_NAME} in {REMOVED[gone[0]]}")
         if kept:
             return kept
     return list(RULES)
@@ -918,7 +931,7 @@ def main():
     for name in RULES:
         if not (TOOL_DIR / "rules" / f"{name}.md").is_file():
             fail(f"{TOOL_DIR / 'rules' / (name + '.md')} is missing. Is this the complete {TOOL_NAME} folder?")
-    INSTRUCTIONS = "\n".join(import_line(name) for name in chosen_rules(args.only))
+    INSTRUCTIONS = "\n".join(import_line(name) for name in chosen_rules(args.only, args.action == "remove"))
     if os.environ.get(OUTSIDE_PACKAGE):  # the rerun outside the app's package: its output goes back through a file
         sys.stdout = sys.stderr = open(os.environ[OUTSIDE_PACKAGE], "w", encoding="utf-8", buffering=1)
     instructions = getattr(args, "instructions", None)
