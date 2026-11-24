@@ -4,7 +4,7 @@ Instructions for Claude Code sessions working in this repo. The root README says
 
 ## Installing a Tool
 
-When someone asks you to install a tool from this repo ("clone the toolbox and install get-to-the-point"):
+When someone asks you to install a tool from this repo ("clone the toolbox and install global-rules"):
 
 1. **Find the tool** by its row in the root README's Tools tables. The row links to its folder, `<kind>/<tool>/`. If the name they gave matches no row, list the closest names and ask which one they meant.
 2. **Read the tool's README in full** before running anything, above all Requirements, Install with Claude Code and Install.

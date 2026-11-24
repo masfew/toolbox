@@ -26,11 +26,10 @@ Extensions add to an app you already use, which runs them for you: Claude Code o
 
 ### Instructions
 
-Instructions are text every Claude Code session follows: rules their installer adds to your `~/.claude/CLAUDE.md`, or an output style that shapes how Claude writes its replies.
+Instructions are text every Claude Code session follows: rules their installer adds to your `~/.claude/CLAUDE.md`.
 
 | Tool | What it does | Tested on |
 |---|---|---|
-| <a id="get-to-the-point"></a>[get-to-the-point](instructions/get-to-the-point/) | Output style that makes every reply quick to read: what matters first, plain words, no play-by-play, technical depth only when it helps, and numbered rules you can point a reply at ("point 13"). Built for running several sessions side by side | Windows 11 (macOS and Linux untested) |
 | <a id="global-rules"></a>[global-rules](instructions/global-rules/) | A rule for every session: each subagent runs on a model and effort matched to its work (a small model for finding and reading, the largest only when needed), and big fan-outs or test runs wait for your go-ahead | Windows 11 (macOS and Linux untested) |
 
 ### Apps
@@ -45,7 +44,7 @@ Apps are programs you start yourself, outside Claude Code. Claude Code can still
 
 ## Linking to a Tool
 
-To share a tool, link to its row in the Tools tables above: `https://github.com/masfew/toolbox#<tool>`, for example [`https://github.com/masfew/toolbox#get-to-the-point`](https://github.com/masfew/toolbox#get-to-the-point). To share a version you can download, link to the [releases page](https://github.com/masfew/toolbox/releases).
+To share a tool, link to its row in the Tools tables above: `https://github.com/masfew/toolbox#<tool>`, for example [`https://github.com/masfew/toolbox#global-rules`](https://github.com/masfew/toolbox#global-rules). To share a version you can download, link to the [releases page](https://github.com/masfew/toolbox/releases).
 
 Prefer the row link to a link to the tool's folder. The row link and the release names use only the tool's name, so they keep working if a tool's folder ever moves.
 
@@ -53,7 +52,7 @@ Prefer the row link to a link to the tool's folder. The row link and the release
 
 Claude Code can install any tool here for you. Open it in the folder you want the clone in and say, with the tool's name from the Tools tables:
 
-> Clone https://github.com/masfew/toolbox and install get-to-the-point.
+> Clone https://github.com/masfew/toolbox and install global-rules.
 
 Claude clones the repo, finds the tool's row and its README, and installs it. Every tool's README has an **Install with Claude Code** section with two lists:
 
