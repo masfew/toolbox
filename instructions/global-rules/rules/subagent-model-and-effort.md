@@ -14,5 +14,5 @@ What uses up a plan's limits is the model and the count. A subagent (the Agent t
 - When the work fits two rows, pick the cheaper one. If a subagent's result comes back thin or wrong, rerun that one subagent a row up.
 - An agent type whose definition sets its own model keeps that model unless the work needs a different row; still pass `effort`.
 - Don't start a subagent for what two or three direct tool calls can do, since each starts with a large fresh context, and don't repeat a run that will come out the same.
-- Up to 10 subagents for one task, at most 5 of them on `opus`, are the session's call. Before starting more, or any test run that starts Claude sessions, ask first, saying how many, on which model and why.
+- Up to 10 subagents for one task, at most 5 of them on `opus`, are the session's call. Before starting more, or any test run that starts Claude sessions (beyond the one-session probe "Decide, don't ask" allows), ask first, saying how many, on which model and why.
 - Briefs for other sessions needn't repeat this table; name a model or effort only when the work needs another.

@@ -1,6 +1,6 @@
 # global-rules
 
-Version 1.4.0. See the [changes](#changes) at the end.
+Version 1.5.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -173,6 +173,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 1.5.0: Two exceptions in case 2 of "Decide, don't ask", where sessions asked though you'd want them to go ahead: one short session on a small model to check a fact (a probe costing a cent or so) isn't a test run, and installing the tools the project's own tool manifest already lists (a `rokit.toml`, `package.json` or similar) isn't installing outside the project. The subagent rule's test-run line points to the probe exception. Nothing to do: `git pull` picks it up.
 - 1.4.0: "Questions get answers, not action cards" now covers proposals: when you ask for one, the session sends it in the reply and stops, with no question or button asking whether to apply it. Nothing to do: `git pull` picks it up.
 - 1.3.0: The subagent rule now starts with when subagents help, says whether to use any is the session's call ("use subagents if it helps" doesn't require them), and drops "fewer subagents save more than cheaper ones", which made sessions avoid them for everyday work. The limit is now a hard line: up to 10 subagents for one task, at most 5 on the largest model, are the session's call, and more than that, or any test or eval that starts Claude sessions, needs your go-ahead. Case 2 of "Decide, don't ask" says the same, in place of "dozens of sessions or subagents". Nothing to do: `git pull` picks it up.
 - 1.2.0: A third rule file, `rules/next-step-buttons.md`: each next-step button does exactly what its label says, with one action per button, and the same goes for a question's options in the terminal. A first install takes it with the other two. An existing install keeps the files it chose until you rerun with `--only`, so to add it: `python install.py --only decide-dont-ask subagent-model-and-effort next-step-buttons` (or with only the files you want).
