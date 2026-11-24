@@ -39,8 +39,8 @@ For every change to an existing skill, even a one-line rule added in the middle 
 
 1. **Read what the change touches**: `SKILL.md`, the reference files it affects and the Files table. Run `check_skill.py <folder>` for the starting numbers.
 2. **Respect a home project.** If the skill's Improving section names one and you're not in it, suggest the change and why, and edit only when the user says to.
-3. **Look for a rule that already covers it** (`grep -ri` over the config's skill folders and global instruction files). Edit that rule rather than adding a second; raise a contradiction with the user rather than letting both stand.
-4. **Put it in its one home** (house-style.md, One home per rule) with a short reason, then rerun `check_skill.py`: no new `ERROR`, and over the aim, move or cut something in the same edit.
+3. **Look for a rule that already covers it** (`grep -ri` over the config's skill folders and global instruction files). Edit that rule rather than adding a second, after reading its entry in the skill's notes so the edit keeps working for the case it was written for; raise a contradiction with the user rather than letting both stand.
+4. **Put it in its one home** (house-style.md, One home per rule) with a reason only if it passes Rules and reasons, and its evidence in the skill's notes, then rerun `check_skill.py`: no new `ERROR`, and over the aim, move or cut something in the same edit.
 5. **Only if the description changed:** make sure there's a saved score of the tier you'll use (with no `evals/triggers.json`, write one first; with no saved run of that tier, run the old description with `--description "<old text>"` first). Ask how to test, then run `run_triggers.py <folder> --tier <chosen> --compare --save`. A lower score blocks the edit until it's explained or fixed ([references/tuning.md](references/tuning.md)).
 6. **Only if a rule with a behaviour test changed:** on Full, rerun the test in `evals/evals.json` that covers it (the same question as step 5).
 

@@ -75,8 +75,16 @@ After a compaction Claude Code puts back only the first 5,000 tokens of each ski
 
 ## Rules and reasons
 
-- **Every rule carries a short reason**, so a later session can tell whether it still applies: "The service rate-limits uploads to 10 a minute, so batch them". A rule without one is kept after it stops being true, or dropped without anyone knowing what it protected.
-- **Dates and evidence only when they're the reason** ("measured over ~120 transitions", "verified live 2026-10-08"). Trial narratives and who decided what go in the skill's plan or README, not in `SKILL.md`, which pays for them on every load.
+A skill holds the rules and the short reasons a session needs to apply them. The evidence behind a rule lives beside the skill, where sessions never load it.
+
+- **A reason goes in only when a capable newcomer would misapply the rule without it**, and it stays a clause, not a sentence of its own. That's when it:
+  - **covers cases the rule doesn't name:** "batch uploads, since the service allows 10 a minute" also covers a retry loop;
+  - **shows where the rule stops:** "run the migration only on staging, whose data is disposable" also allows a disposable local copy;
+  - **settles which of two rules wins:** "ask before renaming a command, since users type it" says why this choice is asked when the skill otherwise decides.
+
+  An obvious rule (a path, a file format, a step any session takes) needs no reason.
+- **Evidence goes in the skill's notes, never in the skill or its reference files.** Where a rule was seen, what was measured, dates, project names and who decided ("in the billing app, 7 of 7 runs stalled") go in a file beside the skill folder: the tool's README, or `notes/<skill>.md` at the root of a repo that holds several skills. File each entry under its rule's heading, and remove it with the rule.
+- **Keep the version a fact was last checked on** ("on version 4.2"), or the date when the thing has no version (a live service): a session uses it to judge whether the fact still holds.
 - **When a rule changes, change it in place**, never with a second rule that contradicts or refines the first.
 
 ## Wording
@@ -89,10 +97,9 @@ A skill is read once and stays in context, and the model reading it is capable, 
 - **Match firmness to how fragile the step is:** exact commands for steps that break or destroy things, the goal and its limits for steps that need judgement.
 - **A default, not a menu.** Name the one way and when to do otherwise.
 - **One name for each thing**, used everywhere.
-- **Plain emphasis.** State the rule and its reason instead of `MUST` or capitals: current models over-apply a shouted rule. One that must hold every time belongs in a hook.
+- **Plain emphasis.** State the rule, with its reason when it has one, instead of `MUST` or capitals: current models over-apply a shouted rule. One that must hold every time belongs in a hook.
 - **Say it once.** A call or format the steps repeat is defined in Conventions and named after that; a rule the description, the global instructions or a reference file already states isn't repeated in the body.
 - **Let the scripts speak.** What a script prints by itself (its warnings, the files it wrote, what to do next) needs no line in the skill. Keep a script's option table only when a step sends the call in the same message as others, where a `--help` call would cost a round trip.
-- **Keep a command's reason to a clause** ("so a failed `add` doesn't go on to a push"). The full story goes in the tool's `CLAUDE.md` or README, for the people changing the skill.
 - **Decide from state, don't add questions.** Where the user's rules tell sessions to decide, give the deciding rule ("while every step is Not started, add it to the core plan; after that, as a future idea") instead of "ask when unsure". Questions stay for what only the user can answer: what they'd notice, spending, and anything unsafe.
 - **No fixed report shapes.** The user's output style governs replies. A step that ends in a report names only what a session would otherwise leave out (another session's commits that went along, a change left out and why).
 
