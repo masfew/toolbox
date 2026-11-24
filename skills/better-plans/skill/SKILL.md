@@ -134,4 +134,4 @@ One or two sentences on what it would add.
 
 ## Improving this skill
 
-The tool folder's `CLAUDE.md` holds the standing traps and how to test. Keep each request's first calls in the routing table, since a reference `Read` in a message of its own costs a round trip, and run `python -I tests/run_all.py` from the tool folder after any change to the scripts or `plan.js`.
+The tool folder's `CLAUDE.md` holds the standing traps and how to test. After any change to the scripts or `plan.js`, run `python -I tests/run_all.py` from the tool folder.
