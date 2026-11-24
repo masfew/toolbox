@@ -51,6 +51,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ASSETS = HERE.parent / "assets"   # template.html, plan.css, plan.js
 sys.path.insert(0, str(HERE))   # python -I leaves the script's own folder off the path
 import dbplan as db  # noqa: E402
 import htmlplan as hp  # noqa: E402
@@ -343,7 +344,7 @@ def main():
         page = Path(a.out) if a.out else src.with_suffix(".html")
         if page.resolve() == src.resolve():
             fail("the page would overwrite the source: give the source another extension, such as .txt, or pass --out")
-        entries, html, counts, warn = db.new_plan(src, (HERE / "template.html").read_text(encoding="utf-8"))
+        entries, html, counts, warn = db.new_plan(src, (ASSETS / "template.html").read_text(encoding="utf-8"))
         page.parent.mkdir(parents=True, exist_ok=True)
         with open(page, "w", encoding="utf-8", newline="\n") as f:
             f.write(html)
@@ -380,7 +381,7 @@ def main():
         m = model(a.db or args[0])
         if not a.out:
             fail("snapshot needs --out PAGE")
-        html = db.snapshot(m, (HERE / "template.html").read_text(encoding="utf-8"))
+        html = db.snapshot(m, (ASSETS / "template.html").read_text(encoding="utf-8"))
         with open(a.out, "w", encoding="utf-8", newline="\n") as f:
             f.write(html)
         print(f"Wrote {a.out}: version {m.version}.")

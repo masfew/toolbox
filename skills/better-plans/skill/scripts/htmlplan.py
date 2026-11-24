@@ -48,6 +48,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ASSETS = HERE.parent / "assets"   # template.html, plan.css, plan.js
 sys.path.insert(0, str(HERE))   # python -I leaves the script's own folder off the path
 from apply_selections import (LABELS, FILES_NOTE, PILL, Page, block_end, copy_files, db_notes, fail,  # noqa: E402
                               fold_statuses, is_split, load_statuses, phase_status, pill, set_status, text_of,
@@ -639,7 +640,7 @@ def main():
     if a.command == "new":
         today = datetime.date.fromisoformat(a.date) if a.date else datetime.date.today()
         new_page(a.page, a.out, today, datetime.date.fromisoformat(a.created) if a.created else None, a.version,
-            (HERE / "template.html").read_text(encoding="utf-8"))
+            (ASSETS / "template.html").read_text(encoding="utf-8"))
         if a.files:
             copy_files(a.files)
         return
@@ -660,7 +661,7 @@ def main():
         return
     today = datetime.date.fromisoformat(a.date) if a.date else datetime.date.today()
     s, ver, label, changes, new, stale = finish(s, a.status, a.major, today,
-                                                (HERE / "template.html").read_text(encoding="utf-8"), records)
+                                                (ASSETS / "template.html").read_text(encoding="utf-8"), records)
     if a.db:
         changes += db_notes(new, stale, has_meta)
     dest = Path(a.out or a.page)

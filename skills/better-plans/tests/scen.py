@@ -6,7 +6,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SKILL = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE.parent / "skill"
 BASE = Path(sys.argv[2]) if len(sys.argv) > 2 else HERE / "sample-db"
-sys.path.insert(0, str(SKILL))
+SCRIPTS = SKILL / "scripts"
+sys.path.insert(0, str(SCRIPTS))
 import dbplan as db  # noqa: E402
 
 plan0, st0, fe0 = db.load_dir(BASE)
@@ -14,7 +15,7 @@ results = []
 
 
 def run(*args):
-    p = subprocess.run([sys.executable, "-I", str(SKILL / "plan.py"), *map(str, args)], capture_output=True, text=True, encoding="utf-8")
+    p = subprocess.run([sys.executable, "-I", str(SCRIPTS / "plan.py"), *map(str, args)], capture_output=True, text=True, encoding="utf-8")
     if p.returncode:
         raise SystemExit(f"plan.py {' '.join(map(str, args))} failed: {p.stderr or p.stdout}")
     return p.stdout

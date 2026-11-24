@@ -1,6 +1,6 @@
-// node parity.js [PLANJS] CASES.json (PLANJS defaults to ../skill/plan.js; CASES from scen.py with DUMP=<file>): plan.js's buildModel + buildContent (cleaning left out) and foldPlan against plan.py's.
+// node parity.js [PLANJS] CASES.json (PLANJS defaults to ../skill/assets/plan.js; CASES from scen.py with DUMP=<file>): plan.js's buildModel + buildContent (cleaning left out) and foldPlan against plan.py's.
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const args = process.argv.slice(2), CASES = args.pop(), PLANJS = args[0] || path.join(__dirname, '..', 'skill', 'plan.js');
+const args = process.argv.slice(2), CASES = args.pop(), PLANJS = args[0] || path.join(__dirname, '..', 'skill', 'assets', 'plan.js');
 let src = fs.readFileSync(PLANJS, 'utf8');
 src = src.replace("if (!main) return;", "");
 const end = src.lastIndexOf('})();');

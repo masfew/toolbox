@@ -1,6 +1,6 @@
 # Making a plan
 
-The rules for building a plan page and its sections, for a new plan and for steps, phases or sections added to one. Headings and the update steps are in SKILL.md, and the Future Ideas section's markup and behaviour in [ideas.md](ideas.md).
+The rules for building a plan page and its sections, for a new plan and for steps, phases or sections added to one. Title case and the update steps are in SKILL.md, and the Future Ideas section's markup and behaviour in [ideas.md](ideas.md).
 
 A new plan isn't written as HTML. Claude writes a short **plan source** (the plan's own words under light headings, below) and `plan.py new` builds the page from it: the template around it, the header with the version and dates, the overview table, the progress label, phase statuses, the phase and step cards, back links and the Future Ideas board. So there's no template to read and no overview to keep in step with the cards.
 
@@ -8,10 +8,10 @@ A new plan isn't written as HTML. Claude writes a short **plan source** (the pla
 
 1. **Write the plan and publish it.** Work out the plan's content following the core sections below and, in the same message, send these three calls in this order (calls in one message run one after another):
    - `Write` the plan source to `<scratchpad>/<project>-<topic>-plan.txt` (in the project instead, if the user wants the page there).
-   - Bash: `python -I <skill folder>/plan.py new <scratchpad>/<project>-<topic>-plan.txt --files <scratchpad>`. It writes the page beside the source as `<project>-<topic>-plan.html` (the plan's first snapshot), its entries as `<scratchpad>/seed/_plan.json` and `<scratchpad>/seed/_seed.json` (it names a `_seed2.json` too for a very large plan), and copies `plan.css` and `plan.js` into the scratchpad, since the Artifact tool only publishes supporting files from the session's working directory or scratchpad.
+   - Bash: `python -I <skill folder>/scripts/plan.py new <scratchpad>/<project>-<topic>-plan.txt --files <scratchpad>`. It writes the page beside the source as `<project>-<topic>-plan.html` (the plan's first snapshot), its entries as `<scratchpad>/seed/_plan.json` and `<scratchpad>/seed/_seed.json` (it names a `_seed2.json` too for a very large plan), and copies `plan.css` and `plan.js` into the scratchpad, since the Artifact tool only publishes supporting files from the session's working directory or scratchpad.
    - Artifact publish:
      - `file_path` is the page, `<scratchpad>/<project>-<topic>-plan.html`.
-     - The title is the project or game name plus the topic, in title case (see Headings in SKILL.md), for example "Recipe Box Search Plan". It's the source's `#` line, which the script puts in both the `<title>` and the `<h1>`; pass the same text as `title`.
+     - The title is the project or game name plus the topic, in title case (see The plan source in SKILL.md), for example "Recipe Box Search Plan". It's the source's `#` line, which the script puts in both the `<title>` and the `<h1>`; pass the same text as `title`.
      - The `description` gives the project folder path and the date.
      - The `icon` is `checklist`.
      - `files: {"plan.css": "<scratchpad>/plan.css", "plan.js": "<scratchpad>/plan.js"}`, which publishes the styles and script beside the page.

@@ -1,11 +1,11 @@
-// node autosnap.js [PLANJS DBDIR] (defaults ../skill/plan.js and sample-db): the page's automatic snapshot (Scheduled Snapshots F1.2) run for real against a fake
+// node autosnap.js [PLANJS DBDIR] (defaults ../skill/assets/plan.js and sample-db): the page's automatic snapshot (Scheduled Snapshots F1.2) run for real against a fake
 // database, user and publish shared between "tabs". Each tab is plan.js in its own vm context with a minimal DOM;
 // cleaning and swapping are stubbed as in parity.js, and timers run 50x faster. Checks: an up-to-date plan and a recently
 // snapshotted one don't publish, a day-old or 31-records-behind one publishes once and says so, a viewer who can't edit
 // never writes, two tabs (with and without the store's lease) publish once, a cache-only first answer waits for the
 // store, and the "saved automatically" line after the reload.
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const SRC = fs.readFileSync(process.argv[2] || path.join(__dirname, '..', 'skill', 'plan.js'), 'utf8'), DB = process.argv[3] || path.join(__dirname, 'sample-db');
+const SRC = fs.readFileSync(process.argv[2] || path.join(__dirname, '..', 'skill', 'assets', 'plan.js'), 'utf8'), DB = process.argv[3] || path.join(__dirname, 'sample-db');
 const FAST = 50, DAY = 864e5;
 
 function loadDir(dir) {

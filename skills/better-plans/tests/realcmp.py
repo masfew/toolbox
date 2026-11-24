@@ -3,8 +3,9 @@ import difflib, importlib.util, json, sys
 from pathlib import Path
 
 def load(skill, name):
-    spec = importlib.util.spec_from_file_location(name, Path(skill) / "dbplan.py")
-    mod = importlib.util.module_from_spec(spec); sys.path.insert(0, skill); spec.loader.exec_module(mod); sys.path.pop(0)
+    folder = Path(skill) / "scripts" if (Path(skill) / "scripts").is_dir() else Path(skill)   # skills before 2.4.0 kept scripts at the top
+    spec = importlib.util.spec_from_file_location(name, folder / "dbplan.py")
+    mod = importlib.util.module_from_spec(spec); sys.path.insert(0, str(folder)); spec.loader.exec_module(mod); sys.path.pop(0)
     return mod
 old, new = load(sys.argv[1], "dbold"), load(sys.argv[2], "dbnew")
 sys.stdout.reconfigure(encoding="utf-8")

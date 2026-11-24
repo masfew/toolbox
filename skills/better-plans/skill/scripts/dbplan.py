@@ -1472,7 +1472,7 @@ def strict(where, text, inline=False):
     bad = check_html(text, inline)
     if bad:
         fail(f"{where}: the page won't show " + "; ".join(bad[:5]) + ". Use the plan's own tags and classes "
-             "(see Content in SKILL.md) and send it again")
+             "(see The plan source in SKILL.md) and send it again")
     return text
 
 

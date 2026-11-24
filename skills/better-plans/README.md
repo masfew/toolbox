@@ -1,6 +1,6 @@
 # better-plans
 
-Version 2.3.1. See the [changes](#changes) at the end.
+Version 2.4.0. See the [changes](#changes) at the end.
 
 ## What It Does
 
@@ -99,10 +99,10 @@ On the page, a round button in the bottom-right corner takes you to the next ste
 
 ## How It Works
 
-- `skill/SKILL.md` is what every request loads: which file to read for which request, headings, record and lookup updates, reading a plan for context, and the plan source format. The other `skill/*.md` files are read only when a request needs them: `making.md` (new plans), `ideas.md` and `selections.md` (the Future Ideas board), `building.md` (building ticked phases), `snapshots.md`, `batches.md`, and `older-plans.md` and `older-selections.md` (plans published before the database pages, which are HTML pages republished to change them).
-- **Making a plan:** Claude writes a short plan source (title, summary, sections, phases, steps and ideas under light headings), and `skill/plan.py new` builds the page and the plan's database entries from it. Claude publishes the page with `skill/plan.css` and `skill/plan.js` beside it and saves the entries in one write.
-- **Updating a plan:** every update is one small record in the page's database (its `statuses` collection), written by `skill/plan.py record`. Records name steps by number or by name, as you'd say them. The page replays the records over the plan's entries and works out every number itself. `skill/dbplan.py` holds the plan model and page builder, and `skill/plan.js` has their twin for the page; tests keep the two identical.
-- **The look and behaviour** live in `skill/plan.css` and `skill/plan.js`, published beside each plan. A published plan keeps the copies it was published with; ask Claude to refresh a plan's look to give it newer ones.
+- `skill/SKILL.md` is what every request loads: which file to read for which request, record and lookup updates, reading a plan for context, and the plan source format. The files in `skill/references/` are read only when a request needs them: `making.md` (new plans), `ideas.md` and `selections.md` (the Future Ideas board), `building.md` (building ticked phases), `snapshots.md`, `batches.md`, and `older-plans.md` and `older-selections.md` (plans published before the database pages, which are HTML pages republished to change them).
+- **Making a plan:** Claude writes a short plan source (title, summary, sections, phases, steps and ideas under light headings), and `skill/scripts/plan.py new` builds the page and the plan's database entries from it. Claude publishes the page with `skill/assets/plan.css` and `skill/assets/plan.js` beside it and saves the entries in one write.
+- **Updating a plan:** every update is one small record in the page's database (its `statuses` collection), written by `skill/scripts/plan.py record`. Records name steps by number or by name, as you'd say them. The page replays the records over the plan's entries and works out every number itself. `skill/scripts/dbplan.py` holds the plan model and page builder, and `skill/assets/plan.js` has their twin for the page; tests keep the two identical.
+- **The look and behaviour** live in `skill/assets/plan.css` and `skill/assets/plan.js`, published beside each plan. A published plan keeps the copies it was published with; ask Claude to refresh a plan's look to give it newer ones.
 - `skill/evals/triggers.json` holds 20 test prompts, 10 that should load the skill and 10 near-misses that shouldn't, for checking the description after a change.
 - `tests/` holds the test suite (`python -I tests/run_all.py`), with a made-up plan in `tests/sample-db`. `CLAUDE.md` in this folder has the notes for anyone changing the skill.
 
@@ -164,6 +164,7 @@ MIT. See the [LICENSE](https://github.com/masfew/toolbox/blob/main/LICENSE) file
 
 ## Changes
 
+- 2.4.0: The skill's own instructions are about a third shorter (2,730 to 1,760 words), so each plan request loads less, and its folder is tidier: `SKILL.md` sits alone, with the scripts in `skill/scripts/`, the template, `plan.css` and `plan.js` in `skill/assets/` and the other instructions in `skill/references/`. When you add something to a plan without saying where, Claude now decides from the plan's progress (the core plan until work starts, a future idea after) instead of sometimes asking. Plans and their pages are unchanged. **Rerun `python install.py` after updating** only if you copied the skill rather than linking it.
 - 2.3.1: Status updates no longer land on the wrong planned feature. Planned features renumber when their status changes, so a feature number Claude read before one update could point at a different feature in the next. Claude now targets later updates by each step's fixed id, and the plan script reminds it to whenever an update changes a planned feature's status.
 - 2.3.0: The phases of the build plan now stay in the order they were written, whatever their status: a phase finished ahead of an earlier one, or one that's blocked or skipped, keeps its place and number. Only planned features in Future Ideas still sort themselves (done, in progress, not started, skipped) and renumber. Published plans get this the next time their look is refreshed: the first time you open one after that, the page saves a snapshot by itself to switch it on. Some phases the old sort already moved may stay where they are now; ask Claude to move one back if you want it in its written place.
 - 2.2.2: A step marked skipped now stays where it is in its phase or planned feature and keeps its number, instead of moving to the end. Whole phases and planned features that are skipped still move to the end of the overview, as before.

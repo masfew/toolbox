@@ -22,9 +22,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 HOUSE = HERE.parent / "skill" / "house.css"
 PLAN_PLACES = [
-    HERE.parent.parent / "better-plans" / "skill" / "plan.css",
-    Path.home() / ".claude" / "tools" / "better-plans" / "skill" / "plan.css",
-    Path.home() / ".claude" / "skills" / "better-plans" / "plan.css",
+    HERE.parent.parent / "better-plans" / "skill" / "assets" / "plan.css",
+    Path.home() / ".claude" / "tools" / "better-plans" / "skill" / "assets" / "plan.css",
+    Path.home() / ".claude" / "skills" / "better-plans" / "assets" / "plan.css",
+    Path.home() / ".claude" / "skills" / "better-plans" / "plan.css",   # better-plans before 2.4.0
 ]
 
 # The three token blocks, in order: light :root, dark media query, [data-theme="dark"].

@@ -9,7 +9,8 @@ import tempfile
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parent.parent / "skill"
-sys.path.insert(0, str(SKILL))
+SCRIPTS = SKILL / "scripts"
+sys.path.insert(0, str(SCRIPTS))
 import dbplan as db  # noqa: E402
 
 PLAN = {
@@ -55,7 +56,7 @@ check("dbplan: outline without --show hides the sentence", "sentence: Moves the 
 if shutil.which("node"):
     # Run plan.js's model code under node: expose buildModel and resolve, don't start the page (boot, database),
     # and swap textOf, the one model function that needs a DOM, for a tag-stripping stand-in.
-    js = (SKILL / "plan.js").read_text(encoding="utf-8")
+    js = (SKILL / "assets" / "plan.js").read_text(encoding="utf-8")
     for old, new in [("if (!main) return;", "globalThis.__pl = { buildModel: buildModel, resolve: resolve };"),
                      ("var teardown = boot();\n  startDatabase();", ""),
                      ("function textOf(html) { return parse(html).textContent.trim(); }",

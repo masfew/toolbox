@@ -19,6 +19,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent / "skill"
+SCRIPTS, ASSETS = SKILL / "scripts", SKILL / "assets"
 DB = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "sample-db"
 FINISHED = ("done", "skipped")
 ACTIVE = ("progress", "blocked")   # the phases that start open
@@ -140,13 +141,13 @@ def main():
         return 0
     work = Path(tempfile.mkdtemp())
     page = work / "index.html"
-    r = subprocess.run([sys.executable, "-I", str(SKILL / "plan.py"), "snapshot", str(DB), "--out", str(page)],
+    r = subprocess.run([sys.executable, "-I", str(SCRIPTS / "plan.py"), "snapshot", str(DB), "--out", str(page)],
                        capture_output=True, text=True, encoding="utf-8")
     if r.returncode:
         print("FAIL plan.py snapshot: " + (r.stderr or r.stdout).strip()[-300:])
         return 1
     for f in ("plan.js", "plan.css"):
-        shutil.copy(SKILL / f, work / f)
+        shutil.copy(ASSETS / f, work / f)
     base = page.read_text(encoding="utf-8")
     run = Run(browser, work)
 

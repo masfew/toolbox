@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ASSETS = HERE.parent / "assets"   # template.html, plan.css, plan.js
 START = "<!-- PLAN CONTENT START"
 END = "<!-- PLAN CONTENT END -->"
 OLD_DECISIONS = {"keep": "accept", "remove": "reject"}
@@ -163,7 +164,7 @@ def copy_files(folder):
     folder = Path(folder).resolve()
     folder.mkdir(parents=True, exist_ok=True)
     for name in ("plan.css", "plan.js"):
-        shutil.copyfile(HERE / name, folder / name)
+        shutil.copyfile(ASSETS / name, folder / name)
     files = {name: (folder / name).as_posix() for name in ("plan.css", "plan.js")}
     print("Copied plan.css and plan.js. Publish with files: " + json.dumps(files))
 
@@ -628,7 +629,7 @@ def main():
     ap.add_argument("--db", metavar="FOLDER", help="the statuses folder ArtifactData list wrote with out_dir: step statuses saved since the last publish, folded in first")
     ap.add_argument("--plans", help="JSON of steps for accepted features (apply)")
     ap.add_argument("--out", help="where to write the updated page (apply); default: overwrite the page")
-    ap.add_argument("--template", default=str(HERE / "template.html"))
+    ap.add_argument("--template", default=str(ASSETS / "template.html"))
     ap.add_argument("--major", action="store_true", help="force a major version bump, e.g. when an edit added or removed steps")
     ap.add_argument("--date", help="Last updated date, YYYY-MM-DD; default today")
     ap.add_argument("--files", metavar="FOLDER", help="apply: also copy plan.css and plan.js into FOLDER (your scratchpad) "
